@@ -45,6 +45,21 @@ export const AUDIT_ACTIONS = [
   "boost",
   "view_as",
   "report_resolved",
+  /*
+     Board 4h `B4` and `B2`. Handing a report to a colleague and putting one in
+     front of an ops lead are neither of them a decision about the report, and
+     filing either under `report_resolved` would say a complaint was closed when
+     it is still open. They are two names because they are opposite facts: one
+     puts a name on a row, the other takes the name off and raises it.
+  */
+  "report_assigned",
+  "report_escalated",
+  /*
+     Board 4h `B11`. A detection threshold, which is a decision about what the
+     queue will hold tomorrow rather than about anything in it today — the same
+     distinction `queue_rules_tuned` makes for board 4b.
+  */
+  "report_detectors_tuned",
   "queue_decided",
   /*
      Board 4b. Asking a seller for a document and handing a submission to a
@@ -185,6 +200,7 @@ export const ACTION_FOR_CAPABILITY = {
   "report.resolve": "report_resolved",
   "queue.decide": "queue_decided",
   "queue.rules": "queue_rules_tuned",
+  "report.detectors": "report_detectors_tuned",
   "subscription.credit": "credit_issued",
   "placement.boost": "boost",
   "taxonomy.write": "taxonomy_changed",
@@ -250,7 +266,19 @@ export const PAIRED_ACTIONS = {
      other two close one. Filing a finding under `report_resolved` would say the
      opposite of what occurred.
   */
-  "report.resolve": ["report_resolved", "review_dispute_resolved", "incentive_logged"],
+  /*
+     Board 4h adds two. A report is assigned, escalated and eventually decided,
+     and those are three different things to have happened to it — `B4`'s owner
+     column and `B2`'s escalation both leave the report open, and the log would
+     be unreadable if either filed as a resolution.
+  */
+  "report.resolve": [
+    "report_resolved",
+    "review_dispute_resolved",
+    "incentive_logged",
+    "report_assigned",
+    "report_escalated",
+  ],
   "business.close": ["closure_noticed", "closure_withdrawn", "closure_reopened"],
   "account.suspend": ["account_suspended", "account_reinstated"],
   "queue.decide": ["queue_decided", "queue_docs_requested", "queue_reassigned"],

@@ -54,7 +54,17 @@ export type RecordReport =
   | {
       kind: "resolved";
       filedAt: Date;
-      outcome: "seller_corrected" | "upheld" | "no_action";
+      /*
+         Every outcome the enum holds, including `duplicate`.
+
+         Board 4h's collapse never groups a report that points at one enquiry —
+         two buyers reporting one supplier after two different accepted quotes
+         are two complaints — so this record cannot be shown a duplicate today.
+         It is in the union anyway: a type that quietly depends on a rule in
+         another module is a type that goes wrong the day the rule moves, and
+         the word costs one catalogue entry.
+      */
+      outcome: "seller_corrected" | "upheld" | "no_action" | "duplicate";
       reason: string;
       resolvedAt: Date;
     };

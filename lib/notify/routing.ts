@@ -244,6 +244,14 @@ export const BUYER_DEFAULT: RoutingPreference = {
        it where they are already comparing them.
     */
     message_received: ["in_app"],
+    /*
+       Board 4h `Q5`. Email and in-app: the answer to a report somebody filed
+       days ago is a thing to read, not a thing to act on, and a closed case has
+       no business buzzing a phone. Email is on the list rather than in-app
+       alone because most people who report a wrong telephone number never come
+       back to the site, and a reply they never see is the same as no reply.
+    */
+    report_resolved: ["email", "in_app"],
   },
   quiet: { enabled: true, fromHour: 21, toHour: 7, onSunday: true },
   highValueOverrideAed: null,

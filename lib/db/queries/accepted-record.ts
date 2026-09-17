@@ -263,7 +263,7 @@ function reviewState(
 function reportState(
   report: {
     createdAt: Date;
-    outcome: "seller_corrected" | "upheld" | "no_action" | null;
+    outcome: "seller_corrected" | "upheld" | "no_action" | "duplicate" | null;
     outcomeReason: string | null;
     resolvedAt: Date | null;
   } | null,

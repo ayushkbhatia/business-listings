@@ -154,6 +154,14 @@ async function recruit(db: PrismaClient, spec: Recruit) {
 
   const prefix = `${spec.areaSlug.split("-")[0]}-${spec.categorySlug.split("-")[0]}`;
 
+  /*
+     Two digits of exchange, stable per page, so the listings this page creates
+     cannot collide with another page's. See the note on `phone` below.
+  */
+  const band = String(
+    30 + ([...`${spec.areaSlug}|${spec.categorySlug}`].reduce((sum, ch) => sum + ch.charCodeAt(0), 0) % 60),
+  );
+
   const existing = await db.business.count({
     where: {
       primaryCategoryId: category.id,
@@ -239,8 +247,19 @@ async function recruit(db: PrismaClient, spec: Recruit) {
             ...(i % 3 === 2
               ? {}
               : {
-                  phone: `+9714${String(2000000 + i * 37).slice(0, 7)}`,
-                  whatsapp: `+9715${String(2000000 + i * 37).slice(0, 7)}`,
+                  /*
+                     Board 4h found this: `i` restarts at each recruited page,
+                     so `2000000 + i * 37` gave three different firms in three
+                     different areas the same landline — and the shared-number
+                     sweep filed fifteen reports about a fixture rather than
+                     about anything a buyer would meet.
+
+                     The page's own prefix goes into the exchange digits, so two
+                     pages cannot land on one number, and it stays deterministic:
+                     two seeds agree, which is what a screenshot diff depends on.
+                  */
+                  phone: `+9714${band}${String(10_000 + i * 7).slice(-5)}`,
+                  whatsapp: `+9715${band}${String(10_000 + i * 7).slice(-5)}`,
                   phoneVerified: true,
                 }),
             /*

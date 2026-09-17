@@ -4,6 +4,7 @@ import { ADMIN_NAV } from "@/components/structure/nav-config";
 import { can } from "@/lib/auth/can";
 import { prisma } from "@/lib/db/client";
 import { queueCount } from "@/lib/moderation/queue";
+import { reportQueueHealth } from "@/lib/reports/queue";
 import type { StaffSeat } from "@/lib/auth/staff";
 import { t } from "@/lib/i18n";
 
@@ -51,9 +52,14 @@ export async function getAdminNavBadges(seat: StaffSeat): Promise<Record<string,
     // Board 4b: every kind the queue holds, counted the way the queue counts it,
     // so the badge and the page's "All" chip are the same number.
     wanted.queue ? queueCount() : Promise.resolve(null),
-    wanted.reports
-      ? prisma.supplierReport.count({ where: { outcome: null } })
-      : Promise.resolve(null),
+    /*
+       Board 4h. The badge counts what the board holds, which is supplier
+       reports *and* review disputes, collapsed the way the queue collapses
+       them. It counted open `supplier_report` rows alone, so the badge and the
+       screen's own header disagreed on two counts at once: disputes were
+       missing, and three buyers reporting one telephone number were three.
+    */
+    wanted.reports ? reportQueueHealth().then((health) => health.open) : Promise.resolve(null),
   ]);
 
   const badges: Record<string, number> = {};

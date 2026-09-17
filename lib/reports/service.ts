@@ -6,6 +6,8 @@ import { staffMutation } from "@/lib/audit/staff-mutation";
 import { auditScopeFor } from "@/lib/auth/subject";
 import type { Actor } from "@/lib/auth/roles";
 import type { $Enums } from "@/lib/db/generated/client";
+import { onReportResolved } from "@/lib/notify/events";
+import { collapses } from "./collapse";
 
 /**
  * Board 4h — supplier reports.
@@ -120,7 +122,7 @@ export async function priorsFor(businessId: string, subjectField: string | null)
 }
 
 export type ResolveResult =
-  | { ok: true }
+  | { ok: true; alsoClosed: number }
   /**
    * The reason, as a key. Never a sentence.
    *
@@ -142,6 +144,28 @@ export interface ResolveReportInput {
 }
 
 /**
+ * The outcomes a person chooses. `duplicate` is not one of them.
+ *
+ * A duplicate is written by the platform — either by this function, closing the
+ * rest of a collapsed group along with the report a moderator decided, or by
+ * `markDuplicate` in `./decide.ts`, which takes the report it duplicates as an
+ * argument. Offering `duplicate` as a fourth button with nothing to point at
+ * would produce rows whose `duplicateOfId` is null, which the check constraint
+ * refuses and which would be meaningless if it did not.
+ */
+export const CHOSEN_OUTCOMES = [
+  "seller_corrected",
+  "upheld",
+  "no_action",
+] as const satisfies readonly ReportOutcome[];
+
+export type ChosenOutcome = (typeof CHOSEN_OUTCOMES)[number];
+
+export function isChosenOutcome(value: string): value is ChosenOutcome {
+  return (CHOSEN_OUTCOMES as readonly string[]).includes(value);
+}
+
+/**
  * Resolve one, with an outcome and a reason.
  *
  * `report.resolve` is moderator or ops lead. The outcome is one of three and
@@ -156,7 +180,16 @@ export async function resolveReport(
 ): Promise<ResolveResult> {
   const report = await prisma.supplierReport.findUnique({
     where: { id: input.reportId },
-    select: { id: true, outcome: true, subjectBusinessId: true, kind: true },
+    select: {
+      id: true,
+      outcome: true,
+      subjectBusinessId: true,
+      kind: true,
+      subjectField: true,
+      enquiryId: true,
+      reviewId: true,
+      createdAt: true,
+    },
   });
   if (!report) {
     return { ok: false, error: "not_found" };
@@ -164,6 +197,34 @@ export async function resolveReport(
   if (report.outcome) {
     return { ok: false, error: "already_resolved", outcome: report.outcome };
   }
+
+  /*
+     Board 4h `B6` — the rest of the collapsed group.
+
+     The queue shows three buyers reporting one telephone number as one row with
+     a count, so a decision on that row is a decision on all three. Recomputed
+     here rather than passed in from the screen: a list of ids arriving from a
+     client is a list a client could have widened, and the group is one indexed
+     read.
+
+     Only reports **filed after** this one, which is the same rule the collapse
+     uses to pick the work item. A report filed earlier is its own work item and
+     a decision on a later one does not reach back to close it.
+  */
+  const siblings = collapses(report)
+    ? await prisma.supplierReport.findMany({
+        where: {
+          subjectBusinessId: report.subjectBusinessId,
+          kind: report.kind,
+          subjectField: report.subjectField,
+          outcome: null,
+          id: { not: report.id },
+          createdAt: { gte: report.createdAt },
+        },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        select: { id: true },
+      })
+    : [];
 
   await prisma.$transaction(async (tx) => {
     await staffMutation(
@@ -181,15 +242,267 @@ export async function resolveReport(
             outcome: input.outcome,
             outcomeReason: input.reason,
             resolvedAt: now,
+            resolvedById: input.actor.id,
           },
           select: { outcome: true, resolvedAt: true },
         });
-        return { result: true, before: { outcome: null }, after };
+
+        /*
+           The duplicates take the same decision and say whose it was. They are
+           not separately audited: one decision was made, the audit row above
+           records it, and `duplicateOfId` on each of these is the pointer from
+           the record to that decision. A row per duplicate would say a
+           moderator made three decisions in one afternoon that they did not.
+        */
+        if (siblings.length > 0) {
+          await tx.supplierReport.updateMany({
+            where: { id: { in: siblings.map((row) => row.id) } },
+            data: {
+              outcome: "duplicate",
+              duplicateOfId: report.id,
+              outcomeReason: input.reason,
+              resolvedAt: now,
+              resolvedById: input.actor.id,
+            },
+          });
+        }
+
+        return {
+          result: true,
+          before: { outcome: null },
+          after: { ...after, duplicatesClosed: siblings.length },
+        };
       },
     );
   });
 
-  return { ok: true };
+  /*
+     Board 4h `Q5` — *"does the reporter ever hear back?"*
+
+     Until this line, no: 46 open items, a 2.4-day median and no notification in
+     the model. It sends to every reporter in the group, not only the one whose
+     row a moderator happened to open — three people asked and three people are
+     owed the answer. Outside the transaction and fire-and-forget: a carrier
+     being down must not roll back a decision.
+  */
+  await onReportResolved({ reportIds: [report.id, ...siblings.map((row) => row.id)] });
+
+  return { ok: true, alsoClosed: siblings.length };
+}
+
+/* ── One report, in full ──────────────────────────────────────────────────── */
+
+/**
+ * Board 4h `B5` — *"`Investigate` needs a destination."*
+ *
+ * The board's primary action on its oldest, reddest row went nowhere: `4b` has
+ * `4c` at `/admin/queue/:id` and this queue had a detail route that answered
+ * only for the one report kind carrying an enquiry — every other row 404'd.
+ *
+ * This is the read behind the destination, and it answers for every kind. What
+ * a moderator needs and nothing more: the claim, the measurement, who filed it,
+ * what else has been said about this business and this field, the rest of the
+ * group the row stands for, and — where the report is about one — the review or
+ * the accepted record. The decision itself is taken here and audited by the same
+ * `resolveReport` the queue has always used, so there is still one place a
+ * report is closed and one audit trail for it.
+ */
+export async function reportDetail(reportId: string) {
+  const report = await prisma.supplierReport.findUnique({
+    where: { id: reportId },
+    select: {
+      id: true,
+      kind: true,
+      subjectField: true,
+      detail: true,
+      evidence: true,
+      detector: true,
+      outcome: true,
+      outcomeReason: true,
+      resolvedAt: true,
+      escalatedAt: true,
+      escalationReason: true,
+      createdAt: true,
+      reviewId: true,
+      enquiryId: true,
+      duplicateOfId: true,
+      subjectBusinessId: true,
+      reporter: { select: { id: true, fullName: true } },
+      assignee: { select: { id: true, fullName: true } },
+      escalatedBy: { select: { id: true, fullName: true } },
+      resolvedBy: { select: { id: true, fullName: true } },
+      subjectBusiness: {
+        select: {
+          id: true,
+          displayName: true,
+          slug: true,
+          suspendedAt: true,
+          closedAt: true,
+          closureRequestedAt: true,
+          licenceExpiry: true,
+          verificationTier: true,
+        },
+      },
+      enquiry: { select: { ref: true } },
+      review: {
+        select: {
+          id: true,
+          overall: true,
+          body: true,
+          createdAt: true,
+          removedAt: true,
+          removalReason: true,
+          heldAt: true,
+          sellerReply: true,
+          replyRemovedAt: true,
+          buyer: { select: { fullName: true } },
+        },
+      },
+    },
+  });
+  if (!report) return null;
+
+  const [priors, group, duplicatesClosed] = await Promise.all([
+    priorsFor(report.subjectBusinessId, report.subjectField),
+    /*
+       The rest of the work item. Same rule as the collapse and the resolve: the
+       group is the open reports about this business, this kind and this field
+       filed no earlier than this one.
+    */
+    collapses(report)
+      ? prisma.supplierReport.findMany({
+          where: {
+            subjectBusinessId: report.subjectBusinessId,
+            kind: report.kind,
+            subjectField: report.subjectField,
+            outcome: null,
+            id: { not: report.id },
+            createdAt: { gte: report.createdAt },
+          },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+          select: {
+            id: true,
+            detail: true,
+            createdAt: true,
+            detector: true,
+            reporter: { select: { fullName: true } },
+          },
+        })
+      : Promise.resolve([]),
+    /* What this report already closed, where it has been decided. */
+    prisma.supplierReport.count({ where: { duplicateOfId: report.id } }),
+  ]);
+
+  return { report, priors, group, duplicatesClosed };
+}
+
+export type ReportDetail = NonNullable<Awaited<ReturnType<typeof reportDetail>>>;
+
+/**
+ * One dispute, in full, for the detail screen beside it.
+ *
+ * A separate read from `reportDetail` and a separate route, because the two
+ * rows are different in every field. What they share is the frame: the same
+ * breadcrumb, the same owner control, the same audit promise.
+ */
+export async function disputeDetail(disputeId: string) {
+  const dispute = await prisma.reviewDispute.findUnique({
+    where: { id: disputeId },
+    select: {
+      id: true,
+      ground: true,
+      detail: true,
+      outcome: true,
+      outcomeReason: true,
+      resolvedAt: true,
+      createdAt: true,
+      reviewId: true,
+      raisedBy: { select: { id: true, fullName: true } },
+      decidedBy: { select: { id: true, fullName: true } },
+      assignee: { select: { id: true, fullName: true } },
+      business: {
+        select: { id: true, displayName: true, slug: true, suspendedAt: true },
+      },
+      review: {
+        select: {
+          id: true,
+          overall: true,
+          quotedAccurate: true,
+          onTime: true,
+          asDescribed: true,
+          responsiveness: true,
+          body: true,
+          createdAt: true,
+          removedAt: true,
+          removalReason: true,
+          heldAt: true,
+          sellerReply: true,
+          sellerRepliedAt: true,
+          replyRemovedAt: true,
+          businessId: true,
+          buyer: { select: { fullName: true } },
+          enquiry: { select: { ref: true, contactReleasedToBusinessId: true } },
+        },
+      },
+    },
+  });
+  if (!dispute) return null;
+
+  /*
+     Board 11c `B6`, read where the spec asks for it (`B9`): whether this review
+     already carries an incentive finding. The seller's dispute and our own
+     finding about the same review are two different records, and a moderator
+     deciding one should be able to see the other.
+  */
+  const incentiveFinding = await prisma.supplierReport.findFirst({
+    where: { reviewId: dispute.reviewId, kind: "review_integrity" },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    select: { id: true, detail: true, createdAt: true, outcome: true },
+  });
+
+  return {
+    dispute,
+    incentiveFinding,
+    fromAcceptedQuote:
+      dispute.review.enquiry.contactReleasedToBusinessId === dispute.review.businessId,
+  };
+}
+
+export type DisputeDetail = NonNullable<Awaited<ReturnType<typeof disputeDetail>>>;
+
+/**
+ * Board 11c `B6` — the incentivised-review log, readable here (`B9`).
+ *
+ * *"One record per finding, against the account. Without it the sentence is a
+ * bluff."* The sentence is the one every review request carries: *we never
+ * offer an incentive for a review and neither can you — an incentivised review
+ * is removed and logged against your account.* `logIncentiveFinding` writes the
+ * record and `/admin/reviews` could see it; this board, which the build note
+ * names, could not.
+ *
+ * Open and closed together, newest first. A finding that has been acted on is
+ * still the log — the whole point of the promise is that it outlives the
+ * removal.
+ */
+export async function incentiveFindings(limit = 25) {
+  const rows = await prisma.supplierReport.findMany({
+    where: { kind: "review_integrity", reviewId: { not: null } },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: limit,
+    select: {
+      id: true,
+      detail: true,
+      outcome: true,
+      createdAt: true,
+      reporter: { select: { fullName: true } },
+      subjectBusiness: { select: { displayName: true, slug: true } },
+      review: { select: { id: true, overall: true, removedAt: true } },
+    },
+  });
+  const total = await prisma.supplierReport.count({
+    where: { kind: "review_integrity", reviewId: { not: null } },
+  });
+  return { rows, total };
 }
 
 /* ── Evidence: the thread behind an accepted-quote report ─────────────────── */

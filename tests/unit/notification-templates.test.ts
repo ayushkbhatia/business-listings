@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { TEMPLATES } from "../../prisma/seed-notification-templates.mjs";
 import { draftProblems } from "@/lib/notify/draft";
 import { EVENT_PARAMS, forbiddenPlaceholders, sampleParams } from "@/lib/notify/params";
@@ -109,7 +109,30 @@ describe("the backfill migration mirrors the catalogue", () => {
      added after it needs a new migration, and this test is where that is
      noticed. It compares every field the SQL writes.
   */
-  const sql = readFileSync("prisma/migrations/20261027091000_notification_template_backfill/migration.sql", "utf8");
+  /*
+     Every backfill file, not only the first one.
+
+     The original is frozen — Prisma checksums an applied migration — so a
+     template added to the catalogue after it needs a migration of its own, and
+     this test is where that is noticed. Reading the directory rather than a
+     list means the next one is covered by existing, rather than by somebody
+     remembering to add a path here. Board 4h's `report_resolved` pair is the
+     first to arrive this way.
+  */
+  const sql = readdirSync("prisma/migrations", { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort()
+    .map((name) => {
+      try {
+        return readFileSync(`prisma/migrations/${name}/migration.sql`, "utf8");
+      } catch {
+        return "";
+      }
+    })
+    // Selected by what the file does, not by what it is called.
+    .filter((text) => text.includes('INSERT INTO "notification_template"'))
+    .join("\n");
   const quote = (value: string | undefined) => (value === undefined ? "NULL" : `'${value.replace(/'/g, "''")}'`);
 
   for (const template of TEMPLATES) {

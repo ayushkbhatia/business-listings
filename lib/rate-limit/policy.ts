@@ -82,6 +82,22 @@ export const RATE_POLICIES = {
      where there is one, so an office behind one address is not one buyer.
   */
   contact_lead: { limit: 20, windowMs: 60 * MINUTE, cooldownMs: 0 },
+  /*
+     Board `4h`. The storefront's *Report this listing*, which a signed-out
+     visitor may use — the whole point of it is that the person who found the
+     wrong telephone number does not have an account.
+
+     That makes it the one write on the public side with no session behind it,
+     so the limit is what stands between the moderation queue and a script. Six
+     an hour is more than anybody reports in a sitting and far less than it
+     takes to bury a queue; the cooldown stops the double-submit that a slow
+     page produces, which here would file the same complaint twice and cost a
+     moderator the second read.
+
+     Keyed on the account where there is one, so an office behind one address is
+     not one reporter.
+  */
+  listing_report: { limit: 6, windowMs: 60 * MINUTE, cooldownMs: 20_000 },
 } as const satisfies Record<string, RatePolicy>;
 
 export type RateBucket = keyof typeof RATE_POLICIES;
