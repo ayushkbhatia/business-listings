@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
 import { takeSlot } from "@/lib/placement/service";
+import { priceScopes, runDemandBands } from "@/lib/placement/demand";
 import { PermissionError } from "@/lib/auth/errors";
 import type { Actor, Role } from "@/lib/auth/roles";
 
@@ -36,6 +37,7 @@ let eligiblePlanId: string;
 let ineligiblePlanId: string;
 const madeBusinesses: string[] = [];
 const madePlans: string[] = [];
+const madeCategories: string[] = [];
 const stamp = () => `${Date.now().toString(36)}${Math.floor(performance.now())}`;
 
 async function makePlan(sponsoredEligible: boolean): Promise<string> {
@@ -101,13 +103,26 @@ afterAll(async () => {
   for (const id of madePlans.splice(0)) {
     await prisma.plan.deleteMany({ where: { id } });
   }
+  /*
+     The categories this file made, and everything hanging off them: a scope's
+     demand band, its click counter and its position rows all cascade from the
+     category, so one delete takes the lot.
+  */
+  for (const id of madeCategories.splice(0)) {
+    await prisma.category.deleteMany({ where: { id } });
+  }
   await prisma.$disconnect();
 });
 
 describe("a slot is sold to a plan that includes one, and to nobody else", () => {
   it("refuses an owner whose plan is not sponsored-eligible", async () => {
     const { businessId, ownerId } = await makeSeller(ineligiblePlanId);
-    const result = await takeSlot(actor(ownerId, businessId, "seller_owner"), businessId, categoryId);
+    const result = await takeSlot(
+      actor(ownerId, businessId, "seller_owner"),
+      businessId,
+      categoryId,
+      "dubai",
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -132,15 +147,26 @@ describe("a slot is sold to a plan that includes one, and to nobody else", () =>
       select: { id: true },
     });
 
-    const result = await takeSlot(actor(ownerId, businessId, "seller_owner"), businessId, ownCategory.id);
+    const result = await takeSlot(
+      actor(ownerId, businessId, "seller_owner"),
+      businessId,
+      ownCategory.id,
+      "dubai",
+    );
     expect(result).toMatchObject({ ok: true, queued: false });
 
     const slot = await prisma.placementSlot.findFirstOrThrow({ where: { businessId } });
     expect(slot.categoryId).toBe(ownCategory.id);
-    // The national slot. The emirate dimension is designed and unbuilt, and
-    // board 11e (step 6.3) is where it lands — pinned here so it is a change
-    // somebody makes rather than one that happens.
-    expect(slot.emirate).toBeNull();
+    /*
+       One trade in one emirate, which is the inventory board `11e` sells and
+       which landed with the demand pricing. It used to be the national slot,
+       pinned here as a limitation; the national scope is now read-only —
+       `takeSlot` refuses to create another one.
+    */
+    expect(slot.emirate).toBe("dubai");
+    // And the band it was sold in, stored beside the price it was sold at.
+    expect(slot.band).not.toBeNull();
+    expect(slot.monthlyPriceAed).toBeGreaterThanOrEqual(300);
 
     await prisma.placementSlot.deleteMany({ where: { businessId } });
     await prisma.category.deleteMany({ where: { id: ownCategory.id } });
@@ -151,7 +177,7 @@ describe("a slot is sold to a plan that includes one, and to nobody else", () =>
     // `placement.purchase` is owner and finance. A sales seat is neither, and
     // the capability is asserted before the plan is even read.
     await expect(
-      takeSlot(actor(ownerId, businessId, "seller_sales"), businessId, categoryId),
+      takeSlot(actor(ownerId, businessId, "seller_sales"), businessId, categoryId, "dubai"),
     ).rejects.toBeInstanceOf(PermissionError);
   }, 30_000);
 
@@ -163,9 +189,226 @@ describe("a slot is sold to a plan that includes one, and to nobody else", () =>
       actor(mine.ownerId, mine.businessId, "seller_owner"),
       theirs.businessId,
       categoryId,
+      "dubai",
     );
     expect(result).toMatchObject({ ok: false });
     const slots = await prisma.placementSlot.count({ where: { businessId: theirs.businessId } });
     expect(slots).toBe(0);
+  }, 30_000);
+});
+
+/**
+ * Board `11e` — the inventory and the price, which arrived together.
+ *
+ * A slot used to be one category, everywhere, at a flat AED 450. It is now one
+ * trade in one emirate at a price cut from what buyers did there, and the two
+ * halves of that are what these assert: that the scope is really the unit, and
+ * that the figure a seller is charged is the one they were quoted and stays it.
+ */
+describe("one trade in one emirate is the unit", () => {
+  const freshCategory = async (): Promise<string> => {
+    const mark = stamp();
+    const category = await prisma.category.create({
+      data: { slug: `placement-scope-${mark}`, name: `Placement scope ${mark}`, code: "PLS" },
+      select: { id: true },
+    });
+    madeCategories.push(category.id);
+    return category.id;
+  };
+
+  it("sells the same trade twice, in two emirates", async () => {
+    /*
+       The whole point of the emirate dimension. Under the national model the
+       second of these was refused — one slot per category, everywhere — and a
+       Sharjah supplier could be locked out of their own city by a Dubai one.
+    */
+    const scope = await freshCategory();
+    const first = await makeSeller(eligiblePlanId);
+    const second = await makeSeller(eligiblePlanId);
+
+    expect(
+      await takeSlot(actor(first.ownerId, first.businessId, "seller_owner"), first.businessId, scope, "dubai"),
+    ).toMatchObject({ ok: true, queued: false });
+    expect(
+      await takeSlot(actor(second.ownerId, second.businessId, "seller_owner"), second.businessId, scope, "sharjah"),
+    ).toMatchObject({ ok: true, queued: false });
+
+    const slots = await prisma.placementSlot.findMany({
+      where: { categoryId: scope },
+      select: { emirate: true },
+    });
+    expect(slots.map((slot) => slot.emirate).sort()).toEqual(["dubai", "sharjah"]);
+  }, 30_000);
+
+  it("queues the second seller for the same emirate rather than selling it twice", async () => {
+    const scope = await freshCategory();
+    const first = await makeSeller(eligiblePlanId);
+    const second = await makeSeller(eligiblePlanId);
+
+    await takeSlot(actor(first.ownerId, first.businessId, "seller_owner"), first.businessId, scope, "dubai");
+    const queued = await takeSlot(
+      actor(second.ownerId, second.businessId, "seller_owner"),
+      second.businessId,
+      scope,
+      "dubai",
+    );
+    expect(queued).toMatchObject({ ok: true, queued: true });
+
+    expect(await prisma.placementSlot.count({ where: { categoryId: scope } })).toBe(1);
+    const line = await prisma.placementWaitlist.findMany({ where: { categoryId: scope } });
+    expect(line).toHaveLength(1);
+    expect(line[0]!.emirate).toBe("dubai");
+  }, 30_000);
+
+  it("sells one slot when two sellers press the button at once (B9)", async () => {
+    /*
+       The race the advisory lock closes.
+
+       This was a read followed by a write with nothing between them, and the
+       comment above it claimed a partial unique index enforced the rule — the
+       index it named is on `placement_waitlist`, not on `placement_slot`.
+       Both callers would have seen the scope free and both would have bought
+       it, and `getSponsoredBusinessId` carries its own comment about what it
+       does on the day that has happened.
+    */
+    const scope = await freshCategory();
+    const first = await makeSeller(eligiblePlanId);
+    const second = await makeSeller(eligiblePlanId);
+
+    const [a, b] = await Promise.all([
+      takeSlot(actor(first.ownerId, first.businessId, "seller_owner"), first.businessId, scope, "dubai"),
+      takeSlot(actor(second.ownerId, second.businessId, "seller_owner"), second.businessId, scope, "dubai"),
+    ]);
+
+    expect(await prisma.placementSlot.count({ where: { categoryId: scope } })).toBe(1);
+    // One sale and one queue place, in whichever order they arrived.
+    const outcomes = [a, b].map((result) => (result.ok ? result.queued : "refused"));
+    expect([...outcomes].sort()).toEqual([false, true]);
+  }, 30_000);
+
+  it("refuses a country-wide purchase, which is no longer a thing we sell", async () => {
+    const scope = await freshCategory();
+    const seller = await makeSeller(eligiblePlanId);
+    const result = await takeSlot(
+      actor(seller.ownerId, seller.businessId, "seller_owner"),
+      seller.businessId,
+      scope,
+      null,
+    );
+    expect(result).toMatchObject({ ok: false });
+    expect(await prisma.placementSlot.count({ where: { categoryId: scope } })).toBe(0);
+  }, 30_000);
+
+  it("lets a legacy country-wide slot block an emirate underneath it", async () => {
+    /*
+       Slots bought before the emirate existed still run, and one of them covers
+       every emirate in its category. Selling Dubai under it would sell a slot
+       `getSponsoredBusinessId` would never give the buyer — it takes the
+       earliest live slot over the scope, which is the national one.
+    */
+    const scope = await freshCategory();
+    const holder = await makeSeller(eligiblePlanId);
+    const other = await makeSeller(eligiblePlanId);
+    await prisma.placementSlot.create({
+      data: {
+        businessId: holder.businessId,
+        categoryId: scope,
+        emirate: null,
+        monthlyPriceAed: 450,
+        startsOn: new Date(Date.now() - 86_400_000),
+        endsOn: new Date(Date.now() + 10 * 86_400_000),
+      },
+    });
+
+    const result = await takeSlot(
+      actor(other.ownerId, other.businessId, "seller_owner"),
+      other.businessId,
+      scope,
+      "dubai",
+    );
+    expect(result).toMatchObject({ ok: true, queued: true });
+    expect(await prisma.placementSlot.count({ where: { categoryId: scope } })).toBe(1);
+  }, 30_000);
+});
+
+describe("the price is the band's, and it is frozen at booking", () => {
+  it("stamps the band and the price it was sold at", async () => {
+    const mark = stamp();
+    const category = await prisma.category.create({
+      data: { slug: `placement-price-${mark}`, name: `Placement price ${mark}`, code: "PLP" },
+      select: { id: true },
+    });
+    madeCategories.push(category.id);
+
+    // A scope with real traffic behind it, banded by the real classifier.
+    const day = new Date();
+    day.setUTCHours(0, 0, 0, 0);
+    const seller = await makeSeller(eligiblePlanId);
+    await prisma.categoryPositionDay.create({
+      data: {
+        businessId: seller.businessId,
+        categoryId: category.id,
+        emirate: "dubai",
+        day,
+        position: 1,
+        impressions: 9_000,
+      },
+    });
+    await runDemandBands();
+
+    const banded = await prisma.scopeDemandBand.findFirstOrThrow({
+      where: { categoryId: category.id, emirate: "dubai" },
+    });
+    const card = await prisma.placementBand.findUniqueOrThrow({ where: { band: banded.band } });
+
+    const result = await takeSlot(
+      actor(seller.ownerId, seller.businessId, "seller_owner"),
+      seller.businessId,
+      category.id,
+      "dubai",
+    );
+    expect(result).toMatchObject({ ok: true, queued: false });
+
+    const slot = await prisma.placementSlot.findFirstOrThrow({
+      where: { businessId: seller.businessId, categoryId: category.id },
+    });
+    expect(slot.band).toBe(banded.band);
+    expect(slot.monthlyPriceAed).toBe(card.monthlyPriceAed);
+
+    /*
+       And it stays. A band moves on the first of each month; the slot does not
+       — an invoice line that re-derived its own price would restate a charge
+       that has already been sent.
+    */
+    await prisma.placementBand.update({
+      where: { band: banded.band },
+      data: { monthlyPriceAed: card.monthlyPriceAed + 111 },
+    });
+    const after = await prisma.placementSlot.findFirstOrThrow({ where: { id: slot.id } });
+    expect(after.monthlyPriceAed).toBe(card.monthlyPriceAed);
+    await prisma.placementBand.update({
+      where: { band: banded.band },
+      data: { monthlyPriceAed: card.monthlyPriceAed },
+    });
+  }, 60_000);
+
+  it("prices an unmeasured scope at the floor, and says it is unmeasured", async () => {
+    // The cold-start state, and it is a designed one: nobody has visited this
+    // trade, so it is band 1 at the floor and the row says so rather than
+    // printing a nought that reads as a measurement.
+    const mark = stamp();
+    const category = await prisma.category.create({
+      data: { slug: `placement-quiet-${mark}`, name: `Placement quiet ${mark}`, code: "PLQ" },
+      select: { id: true },
+    });
+    madeCategories.push(category.id);
+
+    const [price] = await priceScopes([{ categoryId: category.id, emirate: "fujairah" }]);
+    expect(price?.band).toBe(1);
+    expect(price?.measuredTo).toBeNull();
+    expect(price?.appearances).toBeNull();
+
+    const floor = await prisma.placementBand.findUniqueOrThrow({ where: { band: 1 } });
+    expect(price?.monthlyPriceAed).toBe(floor.monthlyPriceAed);
   }, 30_000);
 });

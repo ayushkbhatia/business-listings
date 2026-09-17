@@ -525,8 +525,17 @@ The pattern underneath all five: **a sale with no ledger row.**
   asked, revenue by licence emirate, and a finance export. `mrr_movement` gained a cause and a
   pointer to the change it carried out. Placement is reported beside MRR at list price, pro rata,
   never inside it. The subscription list's unmapped fields are untouched and still owed.
-- [ ] **6.3 `11e`** — build the sale D2 defines: plan gate, billing line, ender on cancel and
-  downgrade, waitlist writer, the emirate dimension.
+- [x] **6.3 `11e`** — the sale D2 defines, closed out. The plan gate, the billing line, the three
+  enders and the waitlist writer landed with D2; this board added the two halves that were left.
+  **The emirate is the inventory**: a slot is one trade in one emirate, enforced at booking by an
+  advisory lock on the scope — the check was a read-then-write and the partial unique index its
+  comment cited is on the waitlist table, which 9.6 caught. **The price is measured**: every scope
+  is cut into one of ten demand bands from appearances and clicks over a trailing quarter, recut on
+  the first of each month, priced `300 × 1.1^(band − 1)` from a rate card the owner edits at
+  `/admin/placement`. Clicks needed a counter and now have one. The band and the price are frozen
+  onto the booking, so a change never re-prices a slot somebody holds. VAT is its own line and the
+  only total says `incl. VAT`; the start date is derived; the waiting list tells everybody and the
+  first to answer takes it.
 - [ ] **6.4 `4h`** — the off-platform panel has no control and no outcome path. Four of seven
   report kinds have no producer.
 - [x] **6.5 `11i`** — the closure and retention promises the legal pages already publish.
@@ -632,9 +641,13 @@ the only large piece and the only one selling something it does not deliver.
   event, the terminal state and the trust signal.
 - [ ] **9.5 Standing: 29 scheduled jobs, no run persisted.** Two crons, 29 steps, no row written
   anywhere. If the nightly stops firing nothing changes appearance and nobody is told.
-- [ ] **9.6 Standing: the sale path has no test.** `rg -l "lib/placement" tests/` returns nothing,
-  and `takeSlot`'s comment claims a unique index that is on the wrong table. Three
-  `lib/billing/` files feeding live admin screens are likewise untested.
+- [x] **9.6 Standing: the sale path has no test.** Closed by 6.3. `lib/placement` now has three test
+  files — the band ladder and the two arithmetic decisions inside the classifier as unit tests, and
+  the sale, the queue, the race and the frozen price as integration ones. `takeSlot`'s comment
+  claimed a unique index that is on `placement_waitlist` rather than on `placement_slot`; the rule is
+  now held by an advisory lock on the scope, and the race is a test that fails without it. The race
+  test also found the check could not see a slot whose start was microseconds later than the
+  caller's clock. Three `lib/billing/` files feeding live admin screens are still untested.
 - [ ] **9.7 Standing: reconcile the three registers.** 129 route files, ~100 rows in
   `docs/routes.md`, 48 in `lib/dev/surfaces.ts`. `/admin/questions` is in neither and has zero
   tests. Board `12i` exists in the tree and appears zero times in the epic, so the 100-board total
@@ -662,7 +675,7 @@ the only large piece and the only one selling something it does not deliver.
 | `13c` | Report a listing | not started | medium | The admin queue is built; both live entry points go to the verification policy. | 9.1 |
 | `4h` | Reports, flags & disputes | partial | medium | The off-platform panel has no control and no outcome path. | 6.4 |
 | `4g` | Subscriptions & revenue | built | small | One Dubai month from the ledger; every ratio prints its formula, NRR excludes new business, placement stays out of MRR. | 6.2 |
-| `11e` | Sponsored placement | scaffold ↓ | medium | A slot is created at 450 AED with no invoice, no charge, no ledger row — and no plan gate. | 6.3 |
+| `11e` | Sponsored placement | built | large | One trade in one emirate, priced from measured demand in ten bands, frozen at booking, with an editable rate card. | 6.3 |
 | `11i` | Close account | scaffold | large | Terms and privacy publish a closure promise and eight retention windows; nothing implements either. | 6.5 |
 | `7a` | Auth — four states | built | 14 Sep 2026 | Password sign-in, reset grants, sign-up fallback, suspension writer. | 3.1 |
 | `7b` | Buyer company account | scaffold | medium | A tenant table with no writer: `User.buyerCompanyId` is null for every non-seeded user. | 3.7 |

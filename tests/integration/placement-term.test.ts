@@ -360,14 +360,23 @@ describe("the credit an annual seller actually receives", () => {
 });
 
 describe("ending a slot", () => {
-  it("stops it, and tells whoever is first in the queue", async () => {
+  it("stops it, and tells everybody in the queue", async () => {
     const holder = await makeSeller();
     const waiting = await makeSeller();
     const alsoWaiting = await makeSeller();
     const now = new Date();
 
     const slot = await giveSlot(holder, new Date(now.getTime() + 20 * 86_400_000));
-    // Two in the queue, in the order they joined. Only the first is told.
+    /*
+       Two in the queue, in the order they joined, and **both** are told.
+
+       The release rule ratified on 17 Sep 2026: everybody waiting hears the day
+       the slot frees and the first to answer takes it. It used to be the front
+       of the queue alone, which held a slot open for somebody who might have
+       lost interest — a slot nobody has and nobody is paying for. The order is
+       still recorded and still shown, because it tells a seller how many people
+       they are racing; it no longer decides anything on its own.
+    */
     await prisma.placementWaitlist.create({
       data: { businessId: waiting, categoryId, createdAt: new Date(now.getTime() - 60_000) },
     });
@@ -394,18 +403,22 @@ describe("ending a slot", () => {
     });
     expect(told.notifiedAt).not.toBeNull();
 
-    const notTold = await prisma.placementWaitlist.findFirstOrThrow({
+    const second = await prisma.placementWaitlist.findFirstOrThrow({
       where: { businessId: alsoWaiting, categoryId },
     });
-    expect(notTold.notifiedAt).toBeNull();
+    expect(second.notifiedAt).not.toBeNull();
+
+    // And the ender reports the whole list, so the caller can send to all of
+    // them once the transaction has committed.
+    expect([...ended[0]!.told].sort()).toEqual([waiting, alsoWaiting].sort());
   }, 60_000);
 
   it("ends a slot scoped to an emirate, which the buying screen cannot even see", async () => {
     /*
-       `slotsFor` and `takeSlot` are national-only until the per-emirate picker
-       lands. The ender must not inherit that blind spot — the seed carries a
-       Dubai slot, so a seller keeping the top of a category after cancelling is
-       a case that exists rather than one being defended against.
+       The ender covers an emirate-scoped slot, which is now every slot sold —
+       the seed also carries a Dubai one from before the picker landed. A seller
+       keeping the top of a category after cancelling is a case that exists
+       rather than one being defended against.
     */
     const holder = await makeSeller();
     const now = new Date();
@@ -437,6 +450,11 @@ describe("ending a slot", () => {
        seeded Dubai slot was shown that category as "Available, AED 450 a
        month" — their own slot, invisible, at the wrong price, with a button
        offering to sell them a second one.
+
+       Two prices now, and they mean different things: `monthlyPriceAed` is what
+       this scope would cost to take today, from its band, and `paidMonthlyAed`
+       is what the holder is actually on. The second is the one that must come
+       off the row.
     */
     const scope = await freshCategory();
     const holder = await makeSeller();
@@ -452,11 +470,11 @@ describe("ending a slot", () => {
       },
     });
 
-    const view = await slotsFor(holder, [scope], now);
+    const view = await slotsFor(holder, [{ categoryId: scope, emirate: "dubai" }], now);
     expect(view[0]?.mine).toBe(true);
     expect(view[0]?.emirate).toBe("dubai");
-    // From the row, not from `SLOT_MONTHLY_AED`.
-    expect(view[0]?.monthlyPriceAed).toBe(1200);
+    // From the row they bought, not from today's band.
+    expect(view[0]?.paidMonthlyAed).toBe(1200);
   }, 60_000);
 
   it("does nothing to a slot that already ended", async () => {
@@ -506,7 +524,11 @@ describe("the cancellation that reaches its date takes the slot with it", () => 
     expect(live).toBe(0);
 
     // And the seller who was waiting is told, on the screen that reads it.
-    const view = await slotsFor(waiting, [scope], new Date(now.getTime() + 1000));
+    const view = await slotsFor(
+      waiting,
+      [{ categoryId: scope, emirate: null }],
+      new Date(now.getTime() + 1000),
+    );
     expect(view[0]?.freed).toBe(true);
   }, 60_000);
 });

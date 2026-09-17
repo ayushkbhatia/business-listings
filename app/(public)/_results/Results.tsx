@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import type { Emirate } from "@/lib/db/generated/client";
 import { recordCategoryPositions, recordSearchImpressions } from "@/lib/analytics/record";
+import { ResultClicks } from "./ResultClicks";
 import { FilterRail } from "@/components/structure";
 import { t } from "@/lib/i18n";
 import {
@@ -290,49 +291,60 @@ export async function Results({ query, basePath, category, tray = [], search = "
           <CompareTray tray={tray} basePath={basePath} search={search} />
         </div>
 
-        <div className="mt-4">
-          {total === 0 ? (
-            <ZeroResult
-              rfqHref={category ? `/rfq/new?category=${category.slug}` : "/rfq/new"}
-              query={query}
-              basePath={basePath}
-              suggestion={suggestion}
-              facetLabel={(key) => {
-                const fixed = FIXED_FACET_LABELS[key as keyof typeof FIXED_FACET_LABELS];
-                if (fixed) return t(fixed);
-                return facets.find((group) => group.key === key)?.label ?? key;
-              }}
-              categoryName={category?.name}
-              categoryHref={category ? `/c/${category.slug}` : undefined}
-              alert={
-                /*
-                   Criterion 8. Only where there are words to watch for — an
-                   alert on an empty query would fire on the next product
-                   anybody lists, which is the false positive that loses the
-                   buyer on the one message they get.
-                */
-                query.q.trim().length > 0 ? (
-                  <AlertForm
-                    query={query.q}
-                    {...(category ? { categoryId: category.id } : {})}
-                    {...(query.emirate ? { emirate: query.emirate } : {})}
-                    create={setAlert}
-                  />
-                ) : null
-              }
-            />
-          ) : (
-            <ResultsList
-              query={query}
-              basePath={basePath}
-              businesses={businesses}
-              products={products}
-              specFields={specTemplate?.fields}
-              tray={tray}
-              search={search}
-            />
-          )}
-        </div>
+        {/*
+           Board `11e` — the click half of the demand signal, delegated.
+
+           Wrapped here rather than inside `ResultsSurface`, because this is
+           where the category is known: the surface takes a query, and the scope
+           is the category plus the emirate filter — exactly the pair
+           `recordCategoryPositions` counted appearances against a few lines
+           above. Both halves of the signal therefore describe the same scope.
+        */}
+        <ResultClicks categoryId={category?.id ?? null} emirate={query.emirate ?? null}>
+          <div className="mt-4">
+            {total === 0 ? (
+              <ZeroResult
+                rfqHref={category ? `/rfq/new?category=${category.slug}` : "/rfq/new"}
+                query={query}
+                basePath={basePath}
+                suggestion={suggestion}
+                facetLabel={(key) => {
+                  const fixed = FIXED_FACET_LABELS[key as keyof typeof FIXED_FACET_LABELS];
+                  if (fixed) return t(fixed);
+                  return facets.find((group) => group.key === key)?.label ?? key;
+                }}
+                categoryName={category?.name}
+                categoryHref={category ? `/c/${category.slug}` : undefined}
+                alert={
+                  /*
+                     Criterion 8. Only where there are words to watch for — an
+                     alert on an empty query would fire on the next product
+                     anybody lists, which is the false positive that loses the
+                     buyer on the one message they get.
+                  */
+                  query.q.trim().length > 0 ? (
+                    <AlertForm
+                      query={query.q}
+                      {...(category ? { categoryId: category.id } : {})}
+                      {...(query.emirate ? { emirate: query.emirate } : {})}
+                      create={setAlert}
+                    />
+                  ) : null
+                }
+              />
+            ) : (
+              <ResultsList
+                query={query}
+                basePath={basePath}
+                businesses={businesses}
+                products={products}
+                specFields={specTemplate?.fields}
+                tray={tray}
+                search={search}
+              />
+            )}
+          </div>
+        </ResultClicks>
       </div>
     </div>
   );

@@ -415,6 +415,37 @@ export const TEMPLATES: TemplateSeed[] = [
     actionPath: "/dashboard/hours",
     status: "live",
   },
+  /*
+     Board `11e` `B10`. The waiting list's whole point, and until now it was a
+     column the promote screen read — so a seller who did not open that screen
+     never learned the slot had freed.
+
+     It states the price, because a slot's price follows measured demand and is
+     recut monthly: somebody who joined this queue in July may be reading this in
+     November, and "it is free" without a figure is an invitation to commit to a
+     number they last saw four months ago. And it says plainly that the list was
+     told together, because the alternative — a seller assuming they were first
+     and finding the slot gone — is worse than the race itself.
+  */
+  {
+    event: "placement_slot_freed",
+    channel: "email",
+    kind: "neutral",
+    subject: "The sponsored slot for {scope} is free",
+    body: "The sponsored slot you asked about — {scope} — has come free. It is AED {price} a month plus VAT. Everybody on the waiting list has been sent this, and the first to take it gets it.",
+    actionLabel: "Take the slot",
+    actionPath: "/dashboard/promote",
+    status: "live",
+  },
+  {
+    event: "placement_slot_freed",
+    channel: "in_app",
+    kind: "neutral",
+    body: "{scope} is free — AED {price} a month plus VAT. Everybody waiting was told, so it is first come.",
+    actionLabel: "Take the slot",
+    actionPath: "/dashboard/promote",
+    status: "live",
+  },
   {
     event: "ramadan_dates_moved",
     channel: "in_app",

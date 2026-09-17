@@ -83,6 +83,15 @@ describe("what an event supplies", () => {
       // assumed to be read where it was written — and a buyer who has gone
       // quiet is by definition not looking at the thread.
       "message_received",
+      /*
+         Board `11e` `B10`. The waiting list's release rule — everybody on it is
+         told the day the slot frees, and the first to answer takes it — only
+         works if everybody is actually told. Until this, `notifiedAt` was a
+         stamp the promote screen read, so a seller who did not open that screen
+         learned nothing. Sent by `endPlacementsFor`'s three callers through
+         `announceFreedPlacements`, after the transaction commits.
+      */
+      "placement_slot_freed",
       "quote_accepted",
       /*
          Board 7e §2's added row, and the fourth event sent from a schedule.
@@ -132,7 +141,7 @@ describe("what an event supplies", () => {
   it("covers every event in the enum, so none is missing a row", () => {
     // `satisfies Record<NotificationEvent, …>` enforces this at compile time;
     // this fails loudly if somebody widens the enum and the type is loosened.
-    expect(Object.keys(EVENT_PARAMS)).toHaveLength(17);
+    expect(Object.keys(EVENT_PARAMS)).toHaveLength(18);
   });
 
   it("does not claim to emit the alert it only records", () => {

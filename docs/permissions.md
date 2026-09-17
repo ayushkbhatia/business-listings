@@ -76,6 +76,7 @@ reading `Business.leadEscalationMinutes` and sending once per enquiry.
 | Suspend an account | ✓ | — | — |
 | Issue a subscription credit | — | — | ✓ |
 | Edit plans & entitlements, and add a plan (board 12e) | ✓ | — | ✓ |
+| Set the sponsored-placement rate card (board 11e) | ✓ | — | ✓ |
 | Export finance data | — | — | ✓ |
 | Adjust search ranking weights | ✓ | — | — |
 | Manual boost / demote a listing | ✓ | — | — |

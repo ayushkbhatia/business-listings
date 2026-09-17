@@ -139,7 +139,7 @@ and it is the one that argues back.
 /dashboard/billing/cancel/confirm       Cancel — reason & confirm            [11j]  built h3 wave 4
 /dashboard/billing/invoice/:id          Tax invoice                          [11g]  built h3 wave 4
 /dashboard/billing/invoice/:id/pdf      The stored PDF, byte for byte        [11g]  built h3 wave 4
-/dashboard/promote                      Sponsored placement                  [11e]
+/dashboard/promote                      Sponsored placement — one trade, one emirate [11e]  built 11e
 /dashboard/settings                     Settings & notifications              [7e]  built h2s5 (alerts only)
 /dashboard/account/close                Close account — the board             [11i]  built h3 wave 4
 /dashboard/account/close/confirm        Close account — confirm               [11i]  built h3 wave 4
@@ -189,6 +189,7 @@ and it is the one that argues back.
 /admin/subscriptions                    Subscriptions                         [4g]  built h4s5
 /admin/invoices                         Invoices & credits                   [12e]  built h4s5
 /admin/plans                            Plan config — the matrix, add a plan [12e]  built 12e
+/admin/placement                        Placement rate card, ten demand bands [11e]  built 11e
 /admin/dunning                          Failed payments — the one list       [12e]  built 12e
 /admin/revenue                          Revenue — one Dubai month, ?period=   [4g]  built 4g
 /admin/revenue/export                   The month as CSV, formulas and filter [4g]  built 4g
@@ -261,6 +262,30 @@ anywhere counted a buyer looking at a product.
 - `Enquiry.emirate` is new. The composer always collected it and `fanout` always
   routed on it; the write kept only the free-text area beside it. A null renders
   as `Not stated` rather than a country guessed from an IP.
+
+### Board `11e` note — a slot is a trade in a place, and its price is measured
+
+Sponsored placement was one slot per category, everywhere, at a flat AED 450.
+The 17 Sep board sells a **scope** — one trade in one emirate — and prices it
+from what buyers did there. Four things follow, and three are above:
+
+- **`/dashboard/promote` sells emirate-scoped slots only.** The column stays
+  nullable because slots bought before the emirate existed still run and still
+  render; `takeSlot` refuses to create another country-wide one, because a
+  national slot silently covers seven scopes and prices none of them.
+- **`/admin/placement` is the rate card** — ten demand bands, priced from a
+  floor and a step the owner can move without a deploy. It sets what a rung
+  costs and never which rung a trade is on: that is cut monthly from measured
+  traffic, which is what makes the price defensible to the seller paying it.
+- **Two new counters feed it.** Appearances were already recorded by
+  `recordCategoryPositions` on every results load; clicks were attributable to
+  no page at all until `result_clicked`, a browser beacon carrying the trade and
+  the emirate and no business id — this counts demand for a scope, never
+  performance of a listing.
+- **The waiting list tells everybody.** `placement_slot_freed` goes to the whole
+  queue the day a slot ends and the first to answer takes it, which is the
+  release rule ratified on 17 Sep. The position is still recorded and shown; it
+  no longer decides anything on its own.
 
 ### Board `12e` note — plan config, and the route that went with the VAT export
 

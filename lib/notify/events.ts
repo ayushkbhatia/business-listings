@@ -1069,6 +1069,47 @@ export async function onLicenceExpiring(input: {
  * `lib/trade/ramadan-shift-job.ts` — `notify()` deduplicates nothing, and the
  * sweep runs daily.
  */
+/**
+ * A sponsored slot somebody was waiting for has come free. Board `11e` `B10`.
+ *
+ * **Everybody on the queue, not the first in it.** The release rule ratified on
+ * 17 September is that the whole waiting list is told and the first to answer
+ * takes the slot — a slot held open for somebody who has lost interest is a
+ * slot nobody has and nobody is paying for. So this takes the list.
+ *
+ * Carries what the slot costs *today*. A slot's price follows measured demand
+ * and is recut monthly, so the figure somebody saw when they joined the queue
+ * may not be the figure they would be committing to now; the invoice history
+ * carries a jump from 1,100 to 1,400 across one such gap.
+ */
+export async function onPlacementSlotFreed(input: {
+  businessIds: readonly string[];
+  scope: string;
+  priceAed: string;
+}): Promise<void> {
+  if (input.businessIds.length === 0) return;
+
+  await safely("placement_slot_freed", async () => {
+    const owners = await prisma.user.findMany({
+      where: { businessId: { in: [...input.businessIds] }, roles: { has: "seller_owner" } },
+      select: { id: true, businessId: true },
+    });
+
+    for (const owner of owners) {
+      if (!owner.businessId) continue;
+      await notify({
+        event: "placement_slot_freed",
+        businessId: owner.businessId,
+        recipientUserId: owner.id,
+        params: withParams("placement_slot_freed", {
+          scope: input.scope,
+          price: input.priceAed,
+        }),
+      });
+    }
+  });
+}
+
 export async function onRamadanDatesMoved(input: {
   businessId: string;
   year: number;

@@ -38,15 +38,21 @@ describe("no price on a public surface", () => {
   it("QuoteLine.unitPrice is the only product price in the schema", () => {
     expect(modelBody("QuoteLine")).toMatch(/^\s*unitPrice\s+Decimal/m);
 
-    // Three price fields exist and each earns it:
+    // Four price fields exist and each earns it:
     //   unitPrice           a supplier's price, private to one quote
-    //   monthlyPriceAed     what we charge a seller, ours not theirs
+    //   monthlyPriceAed     what we charge a seller, ours not theirs — a plan,
+    //                       a sponsored slot, and a band on the placement rate
+    //                       card, which are all the same kind of number
+    //   basePriceAed        the floor of that rate card. Ours, and board `11e`
+    //                       made it a row so the owner can move it without a
+    //                       deploy
     //   targetUnitPriceAed  what a buyer hopes to pay, their own budget,
     //                       private to the enquiry and never public
-    // Nothing else may be added without the same kind of justification.
+    // Nothing else may be added without the same kind of justification. None of
+    // these is a price on a product, which is the rule this file guards.
     const priceFields = [...code.matchAll(/^\s*(\w*[Pp]rice\w*)\s+\w/gm)].map((m) => m[1]);
     expect(new Set(priceFields)).toEqual(
-      new Set(["unitPrice", "monthlyPriceAed", "targetUnitPriceAed"]),
+      new Set(["unitPrice", "monthlyPriceAed", "basePriceAed", "targetUnitPriceAed"]),
     );
   });
 });

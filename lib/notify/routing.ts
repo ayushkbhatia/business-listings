@@ -67,6 +67,14 @@ import type { NotificationEvent } from "@/lib/db/generated/enums";
 export const PLATFORM_FLOOR: Readonly<Partial<Record<NotificationEvent, readonly NotificationChannel[]>>> = {
   document_expiring: ["email", "in_app"],
   ramadan_dates_moved: ["email", "in_app"],
+  /*
+     Board `11e` `B10`. The screen tells a seller joining a waiting list that
+     everybody on it is told the day the slot frees, and the first to answer
+     takes it. A seller who had switched something off and then lost the race
+     because of it would have been beaten by a preference they set about
+     newsletters — so the promise is on the floor with the other two.
+  */
+  placement_slot_freed: ["email", "in_app"],
 };
 
 /** The channels quiet hours actually silence. */

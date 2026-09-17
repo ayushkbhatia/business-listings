@@ -109,7 +109,21 @@ describe("the backfill migration mirrors the catalogue", () => {
      added after it needs a new migration, and this test is where that is
      noticed. It compares every field the SQL writes.
   */
-  const sql = readFileSync("prisma/migrations/20261027091000_notification_template_backfill/migration.sql", "utf8");
+  /*
+     Both files, because the backfill is frozen.
+
+     Prisma checksums an applied migration, so the 14 Sep backfill can never
+     gain a row — a template added after it needs a migration of its own or it
+     exists locally and nowhere a seller can receive it, which is the state that
+     backfill was written to end. Reading every migration that writes the table
+     keeps this test the place somebody notices.
+  */
+  const sql = [
+    "prisma/migrations/20261027091000_notification_template_backfill/migration.sql",
+    "prisma/migrations/20261105090000_placement_demand_bands_11e/migration.sql",
+  ]
+    .map((path) => readFileSync(path, "utf8"))
+    .join("\n");
   const quote = (value: string | undefined) => (value === undefined ? "NULL" : `'${value.replace(/'/g, "''")}'`);
 
   for (const template of TEMPLATES) {

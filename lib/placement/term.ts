@@ -5,6 +5,10 @@ import { daysRemaining, lineFils } from "@/lib/billing/proration";
 import { periodPriceAed } from "@/lib/billing/period";
 import type { BillingTerm } from "@/lib/db/generated/enums";
 import { issueInvoice } from "@/lib/billing/invoice";
+import type { Emirate } from "@/lib/db/generated/enums";
+import { formatCount } from "@/lib/format";
+import { onPlacementSlotFreed } from "@/lib/notify/events";
+import { priceScopes } from "./demand";
 import { t } from "@/lib/i18n";
 
 /**
@@ -81,6 +85,14 @@ export interface EndedPlacement {
   billedFrom: Date | null;
   /** Who is now first in the queue for this scope, or null where nobody is. */
   nextInQueue: string | null;
+  /**
+   * Everybody who was waiting and had not been told, so the caller can send to
+   * them once the transaction has committed.
+   *
+   * The whole list rather than the front of it: the release rule is that
+   * everybody is told and the first to answer takes it.
+   */
+  told: string[];
   /** Why it ended, carried so a caller can report it rather than infer it. */
   reason: PlacementEndReason;
 }
@@ -240,30 +252,31 @@ export async function endPlacementsFor(
     const unused = unusedPlacementFils(period, slot.endsOn, now);
 
     /*
-       The next in line, told the day it frees.
+       **Everybody waiting, told the day it frees** — board `11e` `B10`, and the
+       release rule ratified on 17 September 2026.
 
-       `notifiedAt` has been a column with no writer since the model was drawn.
-       Written here rather than left for a sweep, because the whole value of a
-       queue is that the person at the front hears about it before the slot is
-       stale — and there is no sweep to add it to now that the hourly one has
-       lost its only placement step.
+       It used to be the first in line alone. The rule the owner settled is that
+       the whole list is told and the first to answer takes the slot: a slot held
+       open for somebody who has lost interest is a slot nobody has and nobody is
+       paying for. The order the queue was joined in is still recorded and still
+       shown — it tells a seller how many people they are racing — but it no
+       longer decides anything on its own.
 
-       In-product rather than a message, deliberately. A new `NotificationEvent`
-       needs a live `NotificationTemplate` to render, and templates are database
-       rows that a commit cannot create in production — `ramadan_dates_moved`
-       fires nightly against no template and writes a silent skipped delivery
-       for exactly that reason. `/dashboard/promote` reads `notifiedAt` and says
-       so on the screen. The outbound message is owed once `12g` can author a
-       template without a seed run.
+       `notifiedAt` had no writer at all until D2 and no reader outside this
+       screen even then, which made a waiting list a mailing list nobody mailed.
+       `onPlacementSlotFreed` is the other half, and it is sent **after** the
+       transaction commits — see the caller. A message promising a slot that a
+       rolled-back transaction never actually freed is worse than a late one.
     */
-    const next = await tx.placementWaitlist.findFirst({
-      where: { categoryId: slot.categoryId, emirate: slot.emirate, notifiedAt: null },
+    const waiting = await tx.placementWaitlist.findMany({
+      where: { categoryId: slot.categoryId, emirate: slot.emirate },
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-      select: { id: true, businessId: true },
+      select: { id: true, businessId: true, notifiedAt: true },
     });
-    if (next) {
-      await tx.placementWaitlist.update({
-        where: { id: next.id },
+    const toTell = waiting.filter((row) => row.notifiedAt === null);
+    if (toTell.length > 0) {
+      await tx.placementWaitlist.updateMany({
+        where: { id: { in: toTell.map((row) => row.id) } },
         data: { notifiedAt: now },
       });
     }
@@ -276,7 +289,8 @@ export async function endPlacementsFor(
       unusedFils: unused.fils,
       monthlyPriceAed: Number(slot.monthlyPriceAed),
       billedFrom: subscription?.periodStartedAt ?? null,
-      nextInQueue: next?.businessId ?? null,
+      nextInQueue: waiting[0]?.businessId ?? null,
+      told: toTell.map((row) => row.businessId),
       reason,
     });
   }
@@ -362,4 +376,60 @@ export async function creditUnusedPlacement(
   }
 
   return { credited, fils };
+}
+
+/**
+ * Tell everybody who was waiting for a slot that has just freed.
+ *
+ * Board `11e` `B10`. Outside the ender's transaction and after it, for the same
+ * reason `creditUnusedPlacement` is: a message promising a slot that a
+ * rolled-back transaction never actually freed cannot be unsent, and a seller
+ * who drops what they are doing to take a slot that is still held is worse off
+ * than one told an hour late.
+ *
+ * One function and three call sites, like the credit beside it — a slot ends for
+ * three reasons and each ran in a different file, which is three chances for one
+ * of them to forget the queue.
+ *
+ * The price is **today's**, read fresh rather than carried off the slot that
+ * ended: what the last holder paid is not what the next one will, and quoting
+ * the old figure in the message that invites somebody to take it would be
+ * quoting a price nobody can have.
+ */
+export async function announceFreedPlacements(ended: readonly EndedPlacement[]): Promise<number> {
+  const withQueue = ended.filter((slot) => slot.told.length > 0);
+  if (withQueue.length === 0) return 0;
+
+  const [categories, prices] = await Promise.all([
+    prisma.category.findMany({
+      where: { id: { in: [...new Set(withQueue.map((slot) => slot.categoryId))] } },
+      select: { id: true, name: true },
+    }),
+    priceScopes(
+      withQueue.map((slot) => ({
+        categoryId: slot.categoryId,
+        emirate: slot.emirate as Emirate | null,
+      })),
+    ),
+  ]);
+
+  const nameOf = new Map(categories.map((category) => [category.id, category.name]));
+  const priceOf = new Map(
+    prices.map((price) => [`${price.categoryId}|${price.emirate ?? ""}`, price.monthlyPriceAed]),
+  );
+
+  let told = 0;
+  for (const slot of withQueue) {
+    const place = slot.emirate
+      ? t(`emirate.${slot.emirate}` as never)
+      : t("promote.place.national");
+    await onPlacementSlotFreed({
+      businessIds: slot.told,
+      scope: `${nameOf.get(slot.categoryId) ?? slot.categoryId} · ${place}`,
+      priceAed: formatCount(priceOf.get(`${slot.categoryId}|${slot.emirate ?? ""}`) ?? 0),
+    });
+    told += slot.told.length;
+  }
+
+  return told;
 }

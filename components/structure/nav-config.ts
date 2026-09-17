@@ -310,6 +310,12 @@ export const ADMIN_NAV: readonly NavGroup[] = [
       { key: "subscriptions", labelKey: "nav.subscriptions", href: "/admin/subscriptions", capability: "revenue.read" },
       { key: "revenue", labelKey: "nav.revenue", href: "/admin/revenue", capability: "revenue.read" },
       { key: "plans", labelKey: "nav.plans", href: "/admin/plans", capability: "plan.entitlements.write" },
+      {
+        key: "placement",
+        labelKey: "nav.placement",
+        href: "/admin/placement",
+        capability: "plan.entitlements.write",
+      },
       { key: "invoices", labelKey: "nav.invoices", href: "/admin/invoices", capability: "subscription.credit" },
       { key: "dunning", labelKey: "nav.dunning", href: "/admin/dunning", capability: "revenue.read" },
     ],

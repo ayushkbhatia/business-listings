@@ -42,6 +42,7 @@ import { measureResponseTimesIn } from "../lib/metrics/measure-response-times.js
 import { monthStart } from "../lib/enquiry/fanout.js";
 import { EXTRA_CATEGORIES } from "./seed-taxonomy.mjs";
 import { EXTRA_SUBCATEGORIES } from "./seed-taxonomy.mjs";
+import { seedPlacementDemand } from "./seed-placement-demand.mjs";
 import { DEEP_SUBCATEGORIES } from "./seed-taxonomy-depth.mjs";
 import { seedGuides } from "./seed-guides.mjs";
 import { seedSubcategories } from "./seed-subcategories.mjs";
@@ -1121,6 +1122,15 @@ async function main() {
   // the window is Dubai days from acceptance, and its stated day must not move.
   await seedReviewWrite(prisma, new Date());
   await seedContactLeads(prisma, new Date());
+  /*
+     Board `11e`. Seeds the traffic a sponsored slot is priced from and then
+     runs the real classifier over it, so a seeded database holds the bands the
+     first of the month would have written rather than a table somebody copied.
+
+     After the listings and their branches exist, because the scopes it writes
+     are a category and a place a published business actually trades in.
+  */
+  await seedPlacementDemand(prisma, NOW);
   // After the named fixtures, so an unverified channel written above is not
   // overwritten by the backfill's verified one.
   await backfillSeatChannels(prisma);

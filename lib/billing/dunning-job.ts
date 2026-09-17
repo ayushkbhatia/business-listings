@@ -1,5 +1,6 @@
 import "server-only";
 import {
+  announceFreedPlacements,
   creditUnusedPlacement,
   endPlacementsFor,
   type EndedPlacement,
@@ -254,6 +255,13 @@ export async function runDunning(now: Date = new Date()): Promise<DunningResult>
 
   for (const row of endedPlacements) {
     await creditUnusedPlacement(row.ended, row.businessId, now);
+    /*
+       And everybody who was waiting for the scope it freed — board `11e` `B10`.
+       Beside the credit and after the transaction, for the same reason: a
+       message about a slot a rolled-back transaction never freed cannot be
+       unsent.
+    */
+    await announceFreedPlacements(row.ended);
   }
 
   return { considered: overdue.length, retried, notified, dropped, placementsEnded, ranAt: now };

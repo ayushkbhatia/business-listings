@@ -224,6 +224,70 @@ export async function recordProductView(
 }
 
 /**
+ * Count a buyer picking something out of a results page. Board `11e`.
+ *
+ * The click half of the demand signal a sponsored slot is priced from, and the
+ * one stage of the search funnel nothing recorded: appearances were counted per
+ * listing on every results load, and a click was attributable to no page at
+ * all.
+ *
+ * ## No business id, deliberately
+ *
+ * This counts demand for a **scope** and never performance of a listing. Which
+ * listing a buyer clicked is the seller's own analytics, is counted against
+ * their own business elsewhere, and putting it here would make a table that
+ * prices a category readable as who is winning it.
+ *
+ * ## Both props are checked, because the endpoint is public
+ *
+ * The same rule `recordListingView` follows: a payload names a category and an
+ * emirate, and neither decides anything until the category is a real published
+ * row and the emirate is a real enum value. A count is cheap to forge and
+ * nothing ranks on it — but a forged count here would move a price, which is
+ * one step further than the other counters go, so the scope is validated rather
+ * than trusted.
+ */
+export async function recordScopeClick(
+  categoryId: string,
+  emirate: Emirate | null,
+  at: Date = new Date(),
+): Promise<void> {
+  try {
+    const category = await prisma.category.findUnique({
+      where: { id: categoryId },
+      select: { id: true },
+    });
+    if (!category) return;
+
+    const day = dubaiDayStart(at);
+
+    /*
+       Two `ON CONFLICT` arms, because the conflict target is a partial unique
+       index: `emirate` is nullable and Postgres treats two NULLs as distinct,
+       so the country-wide scope needs its own. The same pair
+       `recordCategoryPositions` writes through, twenty lines up.
+    */
+    if (emirate === null) {
+      await prisma.$executeRaw`
+        INSERT INTO "scope_click_day" ("id", "category_id", "emirate", "day", "clicks")
+        VALUES (gen_random_uuid()::text, ${category.id}, NULL, ${day}::date, 1)
+        ON CONFLICT ("category_id", "day") WHERE "emirate" IS NULL DO UPDATE
+          SET "clicks" = "scope_click_day"."clicks" + 1
+      `;
+    } else {
+      await prisma.$executeRaw`
+        INSERT INTO "scope_click_day" ("id", "category_id", "emirate", "day", "clicks")
+        VALUES (gen_random_uuid()::text, ${category.id}, ${emirate}::"emirate", ${day}::date, 1)
+        ON CONFLICT ("category_id", "day", "emirate") WHERE "emirate" IS NOT NULL DO UPDATE
+          SET "clicks" = "scope_click_day"."clicks" + 1
+      `;
+    }
+  } catch (cause) {
+    console.error("[analytics] could not count a result click", { categoryId, cause });
+  }
+}
+
+/**
  * Count what a storefront view happened on.
  *
  * Written beside `recordListingView` from the same beacon, so the split is over

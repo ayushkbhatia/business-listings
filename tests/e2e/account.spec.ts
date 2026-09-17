@@ -394,22 +394,65 @@ test.describe("board 11e — sponsored placement", () => {
     await page.goto("/dashboard/promote");
   });
 
-  test("states the three rules before anything can be bought", async ({ page }) => {
-    const rules = page.getByRole("region", { name: "What a sponsored slot does, and does not" });
-    await expect(rules).toContainText(/Always labelled/);
-    await expect(rules).toContainText(/Never above a verified supplier/);
-    await expect(rules).toContainText(/Nobody can buy the whole category/);
+  test("states the three rules, with the buyer's view of the label", async ({ page }) => {
+    const preview = page.getByRole("region", { name: "How a sponsored slot looks to a buyer" });
+    await expect(preview).toContainText(/Always labelled/);
+    await expect(preview).toContainText(/Never above a verified supplier/);
+    await expect(preview).toContainText(/Nobody can buy the whole category/);
   });
 
-  test("puts the free things first, above the buy control", async ({ page }) => {
+  test("puts the free things first, above anything that can be bought", async ({ page }) => {
     // An honest upsell that appears below the thing it warns about is
-    // decoration.
+    // decoration, and board 11e asks for this panel above the fold by name.
     const main = (await page.locator("main").textContent()) ?? "";
-    expect(main.indexOf("Fix the free things first")).toBeLessThan(main.indexOf("What a sponsored slot"));
+    expect(main.indexOf("Fix the free things first")).toBeLessThan(
+      main.indexOf("Where do you want to be first?"),
+    );
   });
 
   test("says it is not an auction", async ({ page }) => {
     await expect(page.getByText(/Not auctioned/)).toBeVisible();
+  });
+
+  test("marks every slot price ex-VAT (correction 1)", async ({ page }) => {
+    /*
+       `3m`/`11f` shipped this convention after being corrected for exactly this
+       ambiguity, and 11e was the third board in three exports to carry an
+       unlabelled price. Every figure on a row is the line, not a total.
+    */
+    const main = page.locator("main");
+    if ((await main.getByText(/a month, ex-VAT/).count()) === 0) test.skip();
+    await expect(main.getByText(/a month, ex-VAT/).first()).toBeVisible();
+  });
+
+  test("prices a selection as a line, a VAT row and one labelled total", async ({ page }) => {
+    const radios = page.getByRole("radio");
+    if ((await radios.count()) === 0) test.skip();
+    await radios.first().check();
+
+    const panel = page.getByRole("group", { name: "Your selection" });
+    await expect(panel).toContainText(/VAT 5%/);
+    await expect(panel).toContainText(/Added to your invoice, incl\. VAT/);
+    // Correction 2: the date is derived, never a fixed string in the past.
+    await expect(panel).toContainText(/reaches your invoice on \d/);
+  });
+
+  test("never states a demand figure or a rank it has not measured", async ({ page }) => {
+    /*
+       The cold-start rule. A scope nobody has visited reads "not measured" and
+       a scope the nightly rank run has never reached reads "not ranked here
+       yet" — neither prints a nought, which would read as a measurement of
+       nothing rather than an absence of one.
+    */
+    const main = (await page.locator("main").textContent()) ?? "";
+    expect(main).not.toMatch(/0 appearances and 0 clicks/);
+    expect(main).not.toMatch(/you rank #0/);
+  });
+
+  test("offers no budget cap, which belongs to a model this board rejects", async ({ page }) => {
+    // Open question 1, answered no. A flat-price single slot cannot overrun a
+    // cap, and the control was the residue of a per-click model.
+    await expect(page.getByText(/budget cap/i)).toHaveCount(0);
   });
 
   test("is axe clean", async ({ page }) => {
