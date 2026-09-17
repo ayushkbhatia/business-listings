@@ -138,6 +138,14 @@ export const DISALLOWED_PATHS = [
   "/dev",
   "/admin",
   "/staff",
+  /*
+     Board 4h. `/report/:slug` — one form per listing, roughly thirty thousand
+     of them, each with nothing on it to rank and each a function invocation if
+     a crawler walks the set. The storefront links to it twice, so the anchors
+     carry `nofollow` as well: this half stops the compliant before they spend a
+     request, and the attribute stops the rest from learning the URLs exist.
+  */
+  "/report",
 ] as const;
 
 /**

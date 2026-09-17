@@ -1,0 +1,22 @@
+-- Board `11e` `B10` — a notification event for a sponsored slot coming free.
+--
+-- On its own, and that is not tidiness. Postgres refuses to *use* an enum value
+-- in the transaction that added it, and `prisma migrate deploy` runs each file
+-- in one — so the `INSERT` that writes the two templates cannot sit beside the
+-- `ALTER TYPE` that makes the value it casts to. The templates are in
+-- `20261106091000_placement_slot_freed_templates_11e`, which applies after this.
+-- Board `4h` split its own pair the same way a day earlier.
+--
+-- The waiting list had the position and, since D2, a `notified_at` stamp the
+-- promote screen read — so a seller who did not open that screen learned
+-- nothing. The release rule ratified on 17 Sep is **everybody waiting is told
+-- and the first to answer takes it**, which only works if everybody is told.
+--
+-- ## Ordering
+--
+-- **Additive, and applies before the merge** (`docs/deployments.md` § Ordering).
+-- An enum value nothing yet writes. The deployed code neither reads nor sends it.
+--
+-- Idempotent: `IF NOT EXISTS`, so a second run is a no-op.
+
+ALTER TYPE "notification_event" ADD VALUE IF NOT EXISTS 'placement_slot_freed';

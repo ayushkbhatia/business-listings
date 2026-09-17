@@ -2,7 +2,13 @@ import Link from "next/link";
 import { Card } from "@/components/structure";
 import { ADMIN_NAV } from "@/components/structure/nav-config";
 import { requireStaff } from "@/lib/auth/staff";
-import { consoleOverview, SLA_DAYS, visibleTo, type ConsoleMetric } from "@/lib/console/overview";
+import {
+  consoleOverview,
+  FASTEST_REPORT_SLA_DAYS,
+  SLA_DAYS,
+  visibleTo,
+  type ConsoleMetric,
+} from "@/lib/console/overview";
 import { formatCount } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
@@ -164,6 +170,13 @@ export default async function AdminOverviewPage() {
           {t("admin.overview.sla", {
             moderation: String(SLA_DAYS.moderation),
             claim: String(SLA_DAYS.claim),
+            /*
+               A range, because board 4h's queue has a clock per type: one day
+               for off-platform payment, two for a review dispute, five for a
+               wrong telephone number. One figure here would have been true of
+               the slowest of them and wrong about the fastest.
+            */
+            reportFast: String(FASTEST_REPORT_SLA_DAYS),
             report: String(SLA_DAYS.report),
             dunning: String(SLA_DAYS.dunning),
           })}

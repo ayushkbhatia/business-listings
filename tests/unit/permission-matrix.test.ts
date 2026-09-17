@@ -93,6 +93,8 @@ const STAFF_TABLE: [Capability, Staff[]][] = [
   // Board 1m's reversible pause, one rung below the removal above it.
   ["review.hold", ["ops", "moderator"]],
   ["report.resolve", ["ops", "moderator"]],
+  // Board 4h's detection thresholds. Inferred; named in the inferred list below.
+  ["report.detectors", ["ops"]],
   ["business.suspend", ["ops"]],
   ["subscription.credit", ["finance"]],
   ["plan.entitlements.write", ["ops", "finance"]],
@@ -256,6 +258,12 @@ describe("every row cites the document", () => {
        `taxonomy.write`: a paired half is what every business of one kind reads,
        written without a deploy. Ops lead alone.
 
+       `report.detectors` joined on board 4h `B11`, for the thresholds its two
+       nightly sweeps file against. The same argument as `queue.rules` one row
+       up: deciding a report is working the queue, and moving the line that
+       decides what lands in it is answering for the queue. Ops lead alone. §07
+       has no row because the detectors did not exist.
+
        `contact_lead.read` and `contact_lead.platform.read` joined on the `1d`
        amendment, when the owner asked that a landline reveal register as a
        lead in the seller's panel and the site owner's. Neither panel existed
@@ -277,6 +285,7 @@ describe("every row cites the document", () => {
       "notification.template.write",
       "question.remove",
       "queue.rules",
+      "report.detectors",
       "review.dispute",
       "review.hold",
       "staff.manage",

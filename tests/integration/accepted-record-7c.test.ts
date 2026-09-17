@@ -396,7 +396,13 @@ describe("reportAcceptedQuote — B8", () => {
       outcome: "seller_corrected",
       reason: "Replacement delivered and confirmed by the buyer in the thread.",
     });
-    expect(resolved).toEqual({ ok: true });
+    /*
+       `alsoClosed` arrived with board 4h's collapse. Zero here, and it has to
+       be: a report filed from an accepted record points at one enquiry, and
+       `lib/reports/collapse.ts` refuses to group that shape — two buyers
+       reporting one supplier after two different quotes are two complaints.
+    */
+    expect(resolved).toEqual({ ok: true, alsoClosed: 0 });
     expect((await getAcceptedRecord(buyerId, e.id))!.report).toMatchObject({
       kind: "resolved",
       outcome: "seller_corrected",

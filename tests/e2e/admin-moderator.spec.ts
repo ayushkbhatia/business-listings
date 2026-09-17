@@ -31,7 +31,7 @@ test.describe("what a moderator is not offered", () => {
 
     // Held: approve and reject edits, resolve reports, view-as.
     await expect(sidebar.getByText("Approval queue")).toBeVisible();
-    await expect(sidebar.getByText("Supplier reports")).toBeVisible();
+    await expect(sidebar.getByText("Reports & flags")).toBeVisible();
 
     /*
      * Not held, and rendered locked rather than hidden — AppSidebar's rule

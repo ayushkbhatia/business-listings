@@ -315,12 +315,29 @@ export function VerificationPanel({
       {/* The sentence the board says not to soften. It is not softened. */}
       <p className="mt-3 text-caption text-body">{t("verify.not_self_declared")}</p>
 
-      <Link
-        href="/verification-policy"
-        className="mt-2 inline-block rounded-tag text-caption text-moss underline-offset-2 hover:underline focus-visible:outline-none focus-visible:shadow-focus"
-      >
-        {t("verify.report_issue")}
-      </Link>
+      {/*
+         Board 4h. This said *Report an issue* and opened the verification
+         policy — prose about how we check a licence, which is not what somebody
+         pressing it is trying to do. `/report/:slug` is the form, and the
+         report it files is the thing this panel's closing sentence is asking
+         for: we check the licence, and a buyer standing in front of the unit
+         knows things we do not.
+      */}
+      <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <Link
+          href={`/report/${business.slug}`}
+          rel="nofollow"
+          className="inline-block rounded-tag text-caption text-moss underline-offset-2 hover:underline focus-visible:outline-none focus-visible:shadow-focus"
+        >
+          {t("verify.report_issue")}
+        </Link>
+        <Link
+          href="/verification-policy"
+          className="inline-block rounded-tag text-caption text-muted underline-offset-2 hover:underline focus-visible:outline-none focus-visible:shadow-focus"
+        >
+          {t("verify.read_policy")}
+        </Link>
+      </div>
     </Card>
   );
 }
