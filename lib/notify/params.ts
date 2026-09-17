@@ -194,6 +194,17 @@ export const EVENT_PARAMS = {
      reads as a change to something happening now.
   */
   ramadan_dates_moved: ["year", "from", "to"],
+  /*
+     Board `11e` `B10`. The scope, and what it costs today.
+
+     `price` is not decoration. A slot's price follows measured demand and is
+     recut on the first of each month, so the figure somebody saw when they
+     joined a queue in July is not necessarily the figure they would be
+     committing to in November — the invoice history already carries a jump from
+     1,100 to 1,400 across one such gap. A message that said only "it is free"
+     would be inviting a seller to commit to a number they last saw months ago.
+  */
+  placement_slot_freed: ["scope", "price"],
   weekly_digest: [],
 } as const satisfies Record<NotificationEvent, readonly string[]>;
 
@@ -235,6 +246,8 @@ export const EVENT_SOURCES = {
   report_resolved: ["4h"],
   product_alert_matched: [],
   ramadan_dates_moved: ["3d"],
+  // `endPlacementsFor`, which is what ends a slot for all three of its reasons.
+  placement_slot_freed: ["11e"],
   weekly_digest: [],
 } as const satisfies Record<NotificationEvent, readonly string[]>;
 
@@ -264,6 +277,7 @@ export const EVENT_AUDIENCE = {
   report_resolved: "buyer",
   product_alert_matched: "buyer",
   ramadan_dates_moved: "seller",
+  placement_slot_freed: "seller",
   weekly_digest: "seller",
 } as const satisfies Record<NotificationEvent, "seller" | "buyer">;
 
@@ -360,6 +374,8 @@ export function sampleParams<E extends NotificationEvent>(
     year: "2027",
     from: "8 Feb 2027",
     to: "9 Mar 2027",
+    scope: "Valves & actuators · Dubai",
+    price: "439",
   } as const;
   const params: Record<string, string | number> = {};
   for (const name of EVENT_PARAMS[event]) params[name] = all[name as keyof typeof all];

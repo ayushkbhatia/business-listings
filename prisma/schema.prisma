@@ -627,6 +627,8 @@ model Category {
   importMappings    ImportMapping[]
   positionDays      CategoryPositionDay[]
   rankDays          CategoryRankDay[]
+  scopeClicks       ScopeClickDay[]
+  demandBands       ScopeDemandBand[]
   placementWaitlist PlacementWaitlist[]
   stagedListings    StagedListing[]
   activityMappings  LicenceActivityMapping[]
@@ -640,12 +642,12 @@ model Category {
   productAlerts     ProductAlert[]
   curatedLists      CuratedList[]
   sectorSuggestions SectorSuggestion[]
+  savedSearches     SavedSearch[]            @relation("SavedSearchCategory")
 
   @@index([parentId])
   /// Synonyms are matched exactly — an Arabic term either is or is not in the
   /// list — so a plain GIN over the array is the right shape.
   @@index([synonyms], type: Gin)
-  savedSearches SavedSearch[] @relation("SavedSearchCategory")
   @@map("category")
 }
 
@@ -2853,15 +2855,15 @@ model Document {
   /// The seller's folder. Null is `Unfiled`. See `Media.folderId`.
   folderId   String? @map("folder_id")
 
-  business         Business?                @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  enquiry          Enquiry?                 @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
-  folder           MediaFolder?             @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  business           Business?                @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  enquiry            Enquiry?                 @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
+  folder             MediaFolder?             @relation(fields: [folderId], references: [id], onDelete: SetNull)
   /// Every product citing this document. Many-to-many since board 3i.
-  products         ProductDocument[]
-  claims           ClaimSubmission[]
-  credentials      Credential[]
-  catalogueImports CatalogueImportRequest[]
-  quoteAttachments QuoteAttachment[]
+  products           ProductDocument[]
+  claims             ClaimSubmission[]
+  credentials        Credential[]
+  catalogueImports   CatalogueImportRequest[]
+  quoteAttachments   QuoteAttachment[]
   messageAttachments MessageAttachment[]
 
   @@index([businessId])
@@ -3111,7 +3113,7 @@ model Enquiry {
   /// close, it creates this one and points back. The match is run again rather
   /// than copied (Q4) — the sellers who let the first one lapse are not the
   /// default audience for the second.
-  resentFromId                String?   @map("resent_from_id")
+  resentFromId String? @map("resent_from_id")
 
   /// Criterion 9. Where this enquiry came from, if the buyer arrived through a
   /// campaign or a tagged link.
@@ -4746,10 +4748,10 @@ enum MessageAuthorSide {
 /// by its foreign key), and a row goes only when its enquiry, business or sender
 /// does.
 model Message {
-  id              String    @id @default(cuid())
-  enquiryId       String    @map("enquiry_id")
-  businessId      String    @map("business_id")
-  senderId        String    @map("sender_id") @db.Uuid
+  id              String            @id @default(cuid())
+  enquiryId       String            @map("enquiry_id")
+  businessId      String            @map("business_id")
+  senderId        String            @map("sender_id") @db.Uuid
   /// The side of the thread, stated at write — never derived from the sender.
   ///
   /// Board `10h` `B5`: the thread is between two organisations and the record
@@ -4770,23 +4772,23 @@ model Message {
   /// thread stamps the seller's messages, the seller opening it stamps the
   /// buyer's, and each side sees `Read` under its own words and nowhere else.
   /// Set once — the first opening, not the latest — like `Quote.readAt`.
-  readAt          DateTime? @map("read_at")
+  readAt          DateTime?         @map("read_at")
   body            String
   /// Written by the follow-up schedule rather than typed.
   ///
   /// It is still a seller message — it is what the buyer receives, and the
   /// thread is the record — but board 11b tags it `AUTOMATIC` on screen, because
   /// a buyer replying to a person deserves to know when they did not get one.
-  automatic       Boolean   @default(false)
+  automatic       Boolean           @default(false)
   /// A revised quote appears inline in the thread.
-  quoteRevisionId String?   @map("quote_revision_id")
-  flaggedAt       DateTime? @map("flagged_at")
-  createdAt       DateTime  @default(now()) @map("created_at")
+  quoteRevisionId String?           @map("quote_revision_id")
+  flaggedAt       DateTime?         @map("flagged_at")
+  createdAt       DateTime          @default(now()) @map("created_at")
 
-  enquiry       Enquiry  @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
-  business      Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  sender        User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
-  quoteRevision Quote?   @relation(fields: [quoteRevisionId], references: [id], onDelete: SetNull)
+  enquiry       Enquiry             @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
+  business      Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  sender        User                @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  quoteRevision Quote?              @relation(fields: [quoteRevisionId], references: [id], onDelete: SetNull)
   attachments   MessageAttachment[]
 
   @@index([enquiryId, businessId, createdAt])
@@ -4879,9 +4881,9 @@ model Review {
   removalReason      String?   @map("removal_reason")
   createdAt          DateTime  @default(now()) @map("created_at")
 
-  business Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  buyer    User             @relation(fields: [buyerId], references: [id], onDelete: Cascade)
-  enquiry  Enquiry          @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
+  business  Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  buyer     User             @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  enquiry   Enquiry          @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
   media     Media[]
   disputes  ReviewDispute[]
   reports   SupplierReport[]
@@ -4911,23 +4913,23 @@ model Review {
 /// supplier is the one the gate resolved when the draft was saved, and the gate
 /// is asked again on post. Deleted in the transaction that writes the review.
 model ReviewDraft {
-  id                 String   @id @default(cuid())
-  enquiryId          String   @unique @map("enquiry_id")
-  buyerId            String   @map("buyer_id") @db.Uuid
-  businessId         String   @map("business_id")
-  overall            Int?
-  quotedAccurate     Int?     @map("quoted_accurate")
-  onTime             Int?     @map("on_time")
-  asDescribed        Int?     @map("as_described")
-  responsiveness     Int?
-  body               String   @default("")
-  showCompanyName    Boolean  @default(true) @map("show_company_name")
+  id              String   @id @default(cuid())
+  enquiryId       String   @unique @map("enquiry_id")
+  buyerId         String   @map("buyer_id") @db.Uuid
+  businessId      String   @map("business_id")
+  overall         Int?
+  quotedAccurate  Int?     @map("quoted_accurate")
+  onTime          Int?     @map("on_time")
+  asDescribed     Int?     @map("as_described")
+  responsiveness  Int?
+  body            String   @default("")
+  showCompanyName Boolean  @default(true) @map("show_company_name")
   /// Uploaded, metadata-stripped photographs, in order:
   /// `[{ path, width, height, bytes }]`. They become `Media` rows on post; a
   /// draft file is not a `Media` row, so no gallery or count can see one.
-  photos             Json     @default("[]")
-  createdAt          DateTime @default(now()) @map("created_at")
-  updatedAt          DateTime @updatedAt @map("updated_at")
+  photos          Json     @default("[]")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
 
   enquiry  Enquiry  @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
   buyer    User     @relation(fields: [buyerId], references: [id], onDelete: Cascade)
@@ -6019,12 +6021,145 @@ model RankingPublish {
   @@map("ranking_publish")
 }
 
+/// What buyers actually did with one trade in one emirate, counted per day.
+///
+/// The click half of the demand signal board `11e` prices from. Appearances
+/// were already counted — `CategoryPositionDay` writes a row per listing shown
+/// every time a real buyer loads a results page — and a click was not
+/// attributable to a scope at all: `ListingViewDay` knows a storefront had
+/// forty views and not which page sent them.
+///
+/// A counter, like the two beside it, written from the browser through
+/// `/api/events` and never from a render. The same two reasons `ListingViewDay`
+/// gives: the framework may serve a page from a cache, so a render is not a
+/// visit, and a crawler that runs no JavaScript is not a buyer.
+///
+/// No `businessId`. This counts demand for a **scope**, not performance of a
+/// listing — which listing was clicked is the seller's own analytics and is
+/// counted elsewhere. Keeping it out means the table cannot be read as
+/// competitive intelligence about who is winning a category.
+model ScopeClickDay {
+  /// A surrogate key, and two partial unique indexes beside it.
+  ///
+  /// `emirate` is nullable — the country-wide listing is a real scope — and
+  /// Postgres treats two NULLs as distinct, so a plain unique over the three
+  /// columns would not constrain the country-wide row at all. `CategoryPositionDay`
+  /// has exactly this shape and solves it exactly this way: an id here, and
+  /// `scope_click_day_national_key` / `scope_click_day_emirate_key` in the
+  /// migration, which the counter's two `ON CONFLICT` arms name.
+  id         String   @id @default(cuid())
+  categoryId String   @map("category_id")
+  /// Null is the country-wide listing, which is a scope in its own right.
+  emirate    Emirate?
+  day        DateTime @map("day") @db.Date
+  clicks     Int      @default(0)
+
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@index([categoryId, emirate, day], map: "scope_click_day_scope_idx")
+  @@index([day], map: "scope_click_day_day_idx")
+  @@map("scope_click_day")
+}
+
+/// The demand band one trade in one emirate sits in, and what put it there.
+///
+/// Board `11e`'s pricing model, ratified 17 Sep 2026: **ten bands, priced from
+/// AED 300 with a 10% step, and a scope's band is classified from the site's
+/// own traffic rather than typed in by anybody.** The bands are positioning
+/// bands — any number of scopes may sit in one — and there are always ten of
+/// them however large the directory grows, because the cut is by decile over
+/// the scopes that have measured demand.
+///
+/// Recomputed on the first of each month, not nightly. A quoted price that
+/// moves between a seller reading the page and coming back to it reads as
+/// arbitrary, and the invoice history already implies a monthly cadence —
+/// placement moved 1,100 in July to 1,400 in August, not day by day.
+///
+/// `measuredTo` is the last day of the window the score was taken over, so the
+/// screen can name what the price is based on rather than asserting a figure
+/// with no vintage.
+model ScopeDemandBand {
+  id           String   @id @default(cuid())
+  categoryId   String   @map("category_id")
+  /// Null is the country-wide listing.
+  emirate      Emirate?
+  /// 1 (quietest) to 10 (busiest). Never anything else.
+  band         Int
+  /// The weighted score the band was cut from. Appearances plus clicks.
+  score        Int
+  appearances  Int
+  clicks       Int
+  /// The last day of the window scored, and the first day of the run.
+  measuredFrom DateTime @map("measured_from") @db.Date
+  measuredTo   DateTime @map("measured_to") @db.Date
+  computedAt   DateTime @default(now()) @map("computed_at")
+
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  /// Declared as an index, enforced as two partial uniques.
+  ///
+  /// `emirate` is nullable, and Postgres treats two NULLs as distinct — so a
+  /// plain `@@unique` over this pair would generate an index that does not
+  /// constrain the country-wide row at all, while reading in the schema as
+  /// though it did. `scope_demand_band_national_key` and
+  /// `scope_demand_band_emirate_key` in the migration are what actually hold
+  /// it, and the classifier writes through `ON CONFLICT` naming them.
+  @@index([categoryId, emirate], map: "scope_demand_band_scope_idx")
+  @@index([band], map: "scope_demand_band_band_idx")
+  @@map("scope_demand_band")
+}
+
+/// What a sponsored slot costs in each of the ten demand bands.
+///
+/// Rows rather than a constant, because the owner asked to move these as we
+/// learn what sells and at what price, without a deploy — the same argument
+/// board `12e` makes for plan prices. The defaults are the ratified curve:
+/// `300 × 1.1^(band − 1)`, rounded to the dirham.
+///
+/// `override` records that a person set this price by hand, so regenerating the
+/// curve from a new base or step leaves it alone. Without it, changing the base
+/// would silently undo every individual price somebody had tuned.
+model PlacementBand {
+  band            Int      @id
+  monthlyPriceAed Int      @map("monthly_price_aed")
+  override        Boolean  @default(false)
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("placement_band")
+}
+
+/// The base and the step the band prices are generated from. One row.
+///
+/// Kept beside the prices rather than inside them so "300, rising 10% a band"
+/// stays a statement somebody can read and change, rather than ten numbers that
+/// happen to be in a ratio.
+model PlacementPricing {
+  /// Always `current`. One row, like `RankingWeights`.
+  id           String   @id
+  basePriceAed Int      @map("base_price_aed")
+  /// Basis points. 1000 is the ratified 10% step.
+  stepBps      Int      @map("step_bps")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("placement_pricing")
+}
+
 model PlacementSlot {
   id              String    @id @default(cuid())
   businessId      String    @map("business_id")
   categoryId      String    @map("category_id")
   emirate         Emirate?
   monthlyPriceAed Int       @map("monthly_price_aed")
+  /// Which demand band this slot was **sold** in. Null on anything bought
+  /// before the rate card existed.
+  ///
+  /// Stored rather than recomputed, the rule board `3m` sets for every figure
+  /// that reaches an invoice. Bands move on the first of each month as the
+  /// site's traffic moves; a seller who bought a band-4 slot in August is on
+  /// band 4's price until they cancel, and an invoice line that recomputed
+  /// itself from today's band would restate a charge that has already been
+  /// sent.
+  band            Int?      @map("band")
   startsOn        DateTime  @map("starts_on")
   endsOn          DateTime? @map("ends_on")
   createdAt       DateTime  @default(now()) @map("created_at")
@@ -8461,6 +8596,21 @@ enum NotificationEvent {
   /// Board 11b's follow-up. A buyer who has gone quiet is by definition not
   /// looking at the thread, so a message to them needs a carrier.
   message_received
+  /// Board `11e` `B10`. A sponsored slot somebody was waiting for has come free.
+  ///
+  /// The waiting list is a queue with a position and, since 17 Sep, a release
+  /// rule: **everybody on it is told the day the slot frees, and the first to
+  /// answer takes it.** That rule only works if everybody is actually told, and
+  /// until this the telling was a `notified_at` stamp the promote screen read —
+  /// so a seller who did not happen to open that screen learned nothing, which
+  /// makes a waiting list a mailing list nobody mails.
+  ///
+  /// Carries the scope and the price. The price moves with demand between
+  /// somebody joining a queue and the slot freeing, and a message that said
+  /// only "it is free" would be inviting them to commit to a figure they last
+  /// saw months ago.
+  placement_slot_freed
+
   /// Board 3d: the Ramadan window we publish has moved.
   ///
   /// The dates are ours and the card promises "we shift them and email you when
@@ -8541,10 +8691,10 @@ model NotificationTemplate {
   actionPath  String? @map("action_path")
 
   /// WhatsApp only: the Meta-approved template name this maps to.
-  metaTemplateName String? @map("meta_template_name")
+  metaTemplateName String?   @map("meta_template_name")
   /// WhatsApp only: what Meta said when it refused the wording. Shown against
   /// the rejected version while the live one carries on.
-  metaNote         String? @map("meta_note")
+  metaNote         String?   @map("meta_note")
   /// WhatsApp only: when this version went to Meta, and when Meta's answer was
   /// recorded. The pair is how long a review took, measured rather than quoted.
   submittedAt      DateTime? @map("submitted_at")
@@ -8772,11 +8922,11 @@ model NotificationDelivery {
   /// this is what turns that into a measurement. A delivery about a services
   /// brief that went out through a `goods` template is a plumber told about
   /// "3 lines", and the count of those is the cost of the twin not existing.
-  tradeKind    TradeKind? @map("trade_kind")
+  tradeKind TradeKind? @map("trade_kind")
   /// Board 12g `B10`: `Send test to me`. A real send through the real carrier
   /// to the staff member who asked, and not reach — so every volume on the
   /// console leaves these out.
-  test         Boolean   @default(false)
+  test      Boolean    @default(false)
 
   template NotificationTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
 

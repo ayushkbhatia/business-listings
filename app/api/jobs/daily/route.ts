@@ -33,6 +33,8 @@ import { purgeRetainedDocuments } from "@/lib/closure/retention";
 import { revalidateClosure } from "@/lib/closure/revalidate";
 import { rebuildSectorIndex } from "@/lib/onboarding/sector-index";
 import { syncCrmTasks } from "@/lib/crm/sync";
+import { runDemandBands } from "@/lib/placement/demand";
+import { dubaiDayStart } from "@/lib/format";
 
 /**
  * The daily run — the jobs whose natural grain is a day.
@@ -437,6 +439,31 @@ export async function GET(request: NextRequest) {
        hourly sweep.
     */
     crmSignals: () => syncCrmTasks(),
+    /*
+       Board `11e` — the demand bands a sponsored slot is priced from, cut on
+       the first of the month.
+
+       In the daily route and gated to one day, rather than a cron of its own:
+       Vercel's cron allowance is small, and a job that runs twelve times a year
+       does not earn a schedule. The gate is the Dubai calendar, because that is
+       the day every other date in this product is reckoned on.
+
+       **After `positionSnapshots`**, which is the other half of what it reads —
+       though not load-bearing today, because the window is a trailing quarter
+       and one night at either end of it moves no band. Stated so that a future
+       shorter window is a decision somebody takes rather than an ordering that
+       silently stops holding.
+
+       Monthly rather than nightly, ratified 17 Sep: a quoted price that moves
+       between a seller reading the screen and coming back to it reads as
+       arbitrary. A slot's price is frozen at booking either way, so this only
+       ever moves a quote.
+    */
+    demandBands: async () => {
+      const today = dubaiDayStart(new Date());
+      if (today.getUTCDate() !== 1) return { skipped: "not the first of the month" };
+      return runDemandBands();
+    },
   });
 
   console.info("[jobs] daily", outcome.steps);

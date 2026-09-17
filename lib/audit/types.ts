@@ -82,6 +82,13 @@ export const AUDIT_ACTIONS = [
      inside a list of cap edits.
   */
   "plan_created",
+  /*
+     Board `11e`. The sponsored-placement rate card is not a plan entitlement:
+     it prices a slot on a search page, it moves on a different rhythm, and
+     filing it under `entitlements_changed` would hide a repricing of paid
+     visibility inside a list of plan cap edits.
+  */
+  "placement_priced",
   "ranking_changed",
   "cross_business_read",
   /*
@@ -315,7 +322,7 @@ export const PAIRED_ACTIONS = {
     "homepage_query_added",
     "homepage_query_removed",
   ],
-  "plan.entitlements.write": ["entitlements_changed", "plan_created"],
+  "plan.entitlements.write": ["entitlements_changed", "plan_created", "placement_priced"],
   "taxonomy.write": [
     "taxonomy_changed",
     "category_created",
@@ -349,6 +356,12 @@ export const BLAST_UNITS = [
   "pages",
   "subscriptions",
   "redirects",
+  /*
+     Board `11e`. A curve change on the placement rate card moves N of the ten
+     rungs — the ones nobody has tuned by hand — and "4" with no unit reads as
+     four sellers or four slots. It is neither.
+  */
+  "bands",
 ] as const;
 
 export type BlastUnit = (typeof BLAST_UNITS)[number];

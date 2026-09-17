@@ -237,6 +237,7 @@ export const en = {
   "nav.group.content": "Editorial",
   "nav.dedupe": "Dedupe & merge",
   "nav.users": "Users",
+  "nav.placement": "Placement pricing",
   "nav.plans": "Plans & entitlements",
   "nav.invoices": "Invoices & credits",
   "nav.notifications": "Notifications",
@@ -2278,6 +2279,7 @@ export const en = {
   "audit.action.claim_resolved": "resolved a claim conflict",
   "audit.action.entitlements_changed": "changed plan entitlements",
   "audit.action.plan_created": "added a plan",
+  "audit.action.placement_priced": "repriced sponsored placement",
   "audit.action.ranking_changed": "changed search ranking",
   "audit.action.cross_business_read": "read another business's enquiries",
   "audit.action.rule_proposed": "proposed a publish rule change",
@@ -2322,6 +2324,7 @@ export const en = {
   "audit.blast.records": { one: "covered {n} record", other: "covered {n} records" },
   "audit.blast.pages": { one: "affected {n} page", other: "affected {n} pages" },
   "audit.blast.subscriptions": { one: "affected {n} subscription", other: "affected {n} subscriptions" },
+  "audit.blast.bands": { one: "repriced {n} band", other: "repriced {n} bands" },
   "audit.blast.redirects": { one: "wrote {n} redirect", other: "wrote {n} redirects" },
   "admin.staff.title": "Staff & roles",
   "admin.staff.eyebrow": "Platform",
@@ -7847,7 +7850,6 @@ export const en = {
   "promote.title": "Sponsored placement",
   "promote.eyebrow": "Growth",
   "promote.intro": "One slot per subcategory and emirate. Not auctioned — if it is taken, you join a queue in the order people joined it.",
-  "promote.rules_heading": "What a sponsored slot does, and does not",
   "promote.rule.labelled": "Always labelled as sponsored, on every surface.",
   "promote.rule.never_outranks": "Never above a verified supplier on a filter the buyer set. A buyer who asked for tier 3 gets tier 3 first, whoever is paying.",
   "promote.rule.one_slot": "One slot per subcategory and emirate. Nobody can buy the whole category.",
@@ -7855,22 +7857,51 @@ export const en = {
   "promote.fix_first": "{count} of your products have no filterable specs. Buyers narrow by those fields, so those products are listed and not found — and a sponsored slot puts a product nobody can filter to at the top of a page.",
   "promote.fix_first_link": "Go to the catalogue",
   "promote.fix_first_clear": "Your catalogue has its filterable specs filled in. A sponsored slot will land on products buyers can actually narrow to.",
-  "promote.category": "Subcategory",
-  "promote.emirate": "Emirate",
-  "promote.emirate_all": "Every emirate",
-  "promote.available": "Available, AED {price} a month",
-  "promote.taken": "Taken until {when}",
-  "promote.join": "Join the queue",
-  "promote.joined": "You are in the queue. We will write when it comes free.",
-  "promote.leave": "Leave the queue",
-  "promote.buy": "Take this slot",
-  "promote.yours": "Yours until {when}",
-  "promote.queue_position": "{n} ahead of you",
-  // The queue's whole point, and until D2 nothing said it: `notifiedAt` was
-  // written by nothing and read by nothing, so a seller sat in a queue for a
-  // slot that had been free for a month.
-  "promote.freed": "The slot you queued for is free. It is first come, so it may not stay that way.",
-  "promote.freed_badge": "Free now",
+  "promote.billed_with": "Billed monthly with your subscription. Cancel any month, no minimum term.",
+  "promote.where_heading": "Where do you want to be first?",
+  "promote.place.national": "Every emirate",
+  "promote.per_month_ex_vat": "a month, ex-VAT",
+  "promote.state.available": "Available",
+  "promote.state.yours": "Yours",
+  "promote.state.taken": "Taken until {when}",
+  // Two measurements or two absences, never a nought standing in for either.
+  // A trade nobody has searched and a trade with no searches are different
+  // sentences, and the second one this directory cannot yet honestly say.
+  "promote.demand.measured": "{searches} appearances and {clicks} clicks, to {when}",
+  "promote.demand.unmeasured": "Demand not measured here yet",
+  "promote.position.ranked": "you rank #{rank} of {total} organically",
+  "promote.position.unranked": "not ranked here yet",
+  "promote.queue.join": "Join the waiting list",
+  "promote.queue.leave": "Leave the waiting list",
+  "promote.queue.position": "{count} ahead of you in the queue",
+  "promote.queue.freed": "This slot is free now. Everybody waiting was told, so it is first come.",
+  "promote.joined": "You are on the waiting list. Everybody on it is told the day the slot frees.",
+  "promote.taken": "The slot is yours. It goes live on search straight away.",
+  "promote.selection.title": "Your selection",
+  // `Corrected at export` §1. The slot price is ex-VAT wherever it appears, VAT
+  // is its own line, and the only figure called a total says `incl. VAT`.
+  "promote.selection.vat": "VAT {rate}",
+  "promote.selection.total": "Added to your invoice, incl. VAT",
+  "promote.selection.billed_on": "The slot starts now. It reaches your invoice on {when}.",
+  "promote.selection.start": "Start this slot",
+  "promote.selection.cancel_any": "Cancel any month. No minimum term, and an unused part comes back as a credit.",
+  "promote.selection.choose": "Choose a slot to see what it costs.",
+  "promote.selection.none_free": "Every slot in your trades is taken. Join a waiting list and you will be told the day one frees.",
+  "promote.empty.title": "No slots to sell you yet",
+  "promote.empty.body": "A slot is one trade in one emirate. Publish a branch and pick your trades, and the places you can be first in will appear here.",
+  "promote.impact.title": "Last time you ran this",
+  "promote.impact.none": "Nothing to report yet. A slot has to run a fortnight before the difference it made can be told from an ordinary week.",
+  "promote.impact.ran": "{scope}, {from} to {to}",
+  "promote.impact.extra": "Extra enquiries",
+  "promote.impact.cost_each": "Cost per enquiry",
+  "promote.impact.won": "Won from those",
+  "promote.impact.no_extra": "none to price",
+  // `B6`, and the sentence is the whole difference between a measurement and a
+  // sales figure. A placement product that counted every enquiry arriving while
+  // a slot ran would claim all of them.
+  "promote.impact.basis": "Measured against the same span without sponsorship, not against zero — you had {count} enquiries over the span before it.",
+  "promote.preview.title": "How a sponsored slot looks to a buyer",
+  "promote.preview.row": "Your trade, your area, your reply time — and the label.",
   // The line on the credit note a seller keeps when their slot ends before its
   // thirty days are up. Names the days rather than the reason: a credit note is
   // an accounting document and "cancelled" belongs in the account history, not
@@ -7881,6 +7912,8 @@ export const en = {
   "promote.refuse.already_yours": "You already hold that slot.",
   "promote.refuse.no_plan": "This business is not on a plan, so it cannot take a slot.",
   "promote.refuse.plan": "Sponsored placement is not included on {plan}. Change plan to take a slot.",
+  "promote.refuse.needs_emirate": "A slot is bought for one trade in one emirate. Choose the emirate.",
+  "promote.refuse.no_scope": "That trade is not one we sell a slot in.",
 
   // ── Analytics, board 3l ───────────────────────────────────────────────────
   // ── Board 3l · analytics ──────────────────────────────────────────────────
@@ -9714,6 +9747,34 @@ export const en = {
   "subscription.status.cancelled": "Cancelled",
   "subscription.status.expired": "Expired",
 
+  "admin.placement.title": "Placement pricing",
+  "admin.placement.eyebrow": "Billing operations",
+  "admin.placement.meta": "{count} scopes measured",
+  "admin.placement.meta_none": "No scope measured yet",
+  "admin.placement.intro": "A sponsored slot is one trade in one emirate. Every scope is put in one of ten demand bands from what buyers actually did there — appearances and clicks, over the last quarter, recut on the first of each month. This screen sets what each band costs. It does not set which band a trade is in: that is measured, which is what makes the price defensible to the seller paying it.",
+  "admin.placement.caption": "What a sponsored slot costs in each demand band, and how many scopes are in it",
+  "admin.placement.col.band": "Band",
+  "admin.placement.col.price": "A month, ex-VAT",
+  "admin.placement.col.scopes": "Scopes here",
+  "admin.placement.col.set": "Price",
+  "admin.placement.no_scopes": "none",
+  "admin.placement.by_hand": "Set by hand",
+  "admin.placement.set_price": "Set this band",
+  "admin.placement.price_for": "Price for band {band}",
+  "admin.placement.curve_title": "The floor and the step",
+  "admin.placement.curve_body": "Band 1 is the floor and each band above it costs this much more. Saving regenerates every band except the ones set by hand, which keep the price somebody chose for them.",
+  "admin.placement.base": "Band 1, a month, ex-VAT",
+  "admin.placement.base_hint": "The quietest page a slot can be bought on is still worth this.",
+  "admin.placement.step": "Step a band",
+  "admin.placement.step_hint": "Ten per cent means band 2 costs a tenth more than band 1, and so on up. Zero is a flat rate.",
+  "admin.placement.regenerate": "Save and regenerate the bands",
+  "admin.placement.reason_hint": "Goes on the audit row with the prices that moved.",
+  "admin.placement.curve_saved": "Saved. {count} bands regenerated; any set by hand were left alone.",
+  "admin.placement.band_saved": "Saved. That band keeps this price until somebody changes it again.",
+  "admin.placement.not_yours": "Placement pricing is an ops lead or finance decision.",
+  "admin.placement.note_measured": "A scope climbs the ladder by attracting buyers, never by being moved up. The bands are cut by decile over the scopes with measured traffic, so the ladder stays ten rungs however large the directory grows — what changes is what it takes to reach a rung.",
+  "admin.placement.note_frozen": "A price change never re-prices a slot somebody already holds. The band and the price are stamped on the booking, so a seller who bought in band 4 is on band 4's price until they cancel.",
+
   "admin.plans.title": "Plan config",
   "admin.plans.eyebrow": "Billing operations",
   "admin.plans.meta": "{count} plans",
@@ -10568,6 +10629,10 @@ export const en = {
   "notifications.opt_out.buyer_none": "no channel for this event",
   "notifications.floor_event.document_expiring": "licence expiry",
   "notifications.floor_event.ramadan_dates_moved": "Ramadan date changes",
+  // Board `11e` `B10`. A seller who switched something off and then lost the
+  // race for a slot because of it would have been beaten by a preference they
+  // set about newsletters.
+  "notifications.floor_event.placement_slot_freed": "a sponsored slot coming free",
   "notifications.floor_title.document_expiring": "Licence expiry",
   "notifications.floor_title.ramadan_dates_moved": "Ramadan date changes",
 

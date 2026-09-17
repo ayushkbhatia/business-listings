@@ -44,6 +44,7 @@ export const EVENT_NAMES = [
   "setup_done_exit",
   "setup_done_redirected",
   "listing_viewed",
+  "result_clicked",
   "product_viewed",
   "service_viewed",
   "inbox_viewed",
@@ -264,6 +265,34 @@ export const EVENT_SPECS = {
     emitter: "browser",
     session: "never",
     props: { productId: "string" },
+  },
+
+  /*
+     Board `11e` — a buyer picked something out of a results page.
+
+     The click half of the demand signal a sponsored slot is priced from.
+     Appearances were already counted, per listing, every time a real buyer
+     loaded a results page; a click was attributable to nothing at all —
+     `ListingViewDay` knows a storefront had forty views and not which page sent
+     them, so there was no way to tell a trade buyers open and act on from one
+     they open and abandon.
+
+     `session: "never"`: search is public and most of it happens signed out.
+
+     **No `businessId`, and that is the whole design.** This counts demand for a
+     *scope* — a trade in an emirate — and never performance of a listing, so
+     the row it writes cannot be read as who is winning a category. Which
+     listing was clicked is the seller's own analytics and is counted elsewhere,
+     against their own business.
+
+     Both props are checked server-side before anything is counted: the endpoint
+     is public, and a payload naming a category that does not exist, or an
+     emirate that is not one, is dropped rather than stored.
+  */
+  result_clicked: {
+    emitter: "browser",
+    session: "never",
+    props: { categoryId: "string", emirate: "string?" },
   },
 
   /*

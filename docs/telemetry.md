@@ -76,7 +76,7 @@ difference between a measurement and a claim.
 
 | Emitter | Events | Because |
 |---|---|---|
-| `browser` | `setup_hub_viewed`, `setup_task_started`, `setup_hub_abandoned`, `setup_done_viewed`, `setup_done_exit`, `listing_viewed` | Attention facts. A screen was looked at, a task was opened, a tab went away, one of two exits was taken. The server cannot know any of them. |
+| `browser` | `setup_hub_viewed`, `setup_task_started`, `setup_hub_abandoned`, `setup_done_viewed`, `setup_done_exit`, `listing_viewed`, `result_clicked` | Attention facts. A screen was looked at, a task was opened, a tab went away, one of two exits was taken. The server cannot know any of them. |
 | `server` | `setup_task_completed`, `setup_completed`, `setup_done_redirected`, `concierge_requested`, `setup_nudge_sent`, `setup_nudge_opened` | State facts. A task actually completed, every task completed, a route turned somebody away and knows why, a request row exists, a nudge went out, its link was followed. |
 
 `/api/events` drops anything marked `server`. A browser asserting a state fact
@@ -116,6 +116,28 @@ One view per listing per request, whatever the batch claims. That does not make
 the count unforgeable — nothing short of an audited pipeline would — which is
 why **nothing ranks on it, and it is not an input to billing.** It is a number a
 seller reads about their own listing.
+
+### `result_clicked`, and the one thing it does feed
+
+Board `11e` added the second public event: a buyer picking something out of a
+results page, carrying the trade and the emirate. Two things about it are
+deliberate and both are checks on the paragraph above.
+
+**It carries no business id.** It counts demand for a *scope* — a trade in a
+place — and never performance of a listing, so the table it writes cannot be
+read as who is winning a category. Which listing a buyer clicked is the seller's
+own analytics and is counted against their own business elsewhere. One click per
+scope per request, like the two counters beside it.
+
+**It is the one counter that reaches a price.** Sponsored slots are banded from
+appearances and clicks, so unlike a view count this is an input to what a seller
+is charged. That is why both props are checked server-side before anything is
+counted — the category has to be a real row and the emirate a real enum value —
+and why the figure is cut by **decile over every scope** rather than read as an
+absolute: inflating one scope's clicks moves it relative to the others and
+changes nothing about what a band costs. The bands are recut monthly, and the
+price is frozen onto a booking the moment it is made, so a forged click can
+never re-price a slot somebody already holds.
 
 ## 4. Anonymous views, and why there is no consent banner
 

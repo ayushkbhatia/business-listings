@@ -22,6 +22,7 @@ import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { JsonLd } from "@/app/(public)/_json-ld";
 import { Prose } from "./Blocks";
 import { AreaMapCard } from "./AreaMapCard";
+import { ResultClicks } from "@/app/(public)/_results/ResultClicks";
 import { LandingResults } from "./LandingResults";
 import { ClaimPrompt, ReadNext, RelatedSearches } from "./LandingRail";
 import { SiblingLinks } from "./SiblingLinks";
@@ -424,29 +425,36 @@ export async function LandingPage({ state, searchParams, pageCount }: LandingPag
       </section>
 
       {/* ── Results ────────────────────────────────────────────────────── */}
-      <LandingResults
-        heading={t("landing.results_heading", {
-          category: scope.category.name,
-          place: placeName,
-        })}
-        // The board's fifth correction: one weighted config shared with `1b`
-        // and `1c` and edited on `12c`, never "verification, then response
-        // time" — which describes a two-key sort we do not run.
-        caption={t("landing.ranking_caption")}
-        rows={results.rows}
-        total={results.total}
-        page={page}
-        pageCount={pageCount}
-        hrefFor={hrefFor}
-        rfqHref={`/rfq/new?category=${scope.category.slug}${
-          scope.area ? `&area=${scope.area.slug}` : `&emirate=${scope.emirate}`
-        }`}
-        rfqLabel={t("landing.rfq_action", {
-          place: placeName,
-          category: scope.category.name,
-        })}
-        sponsoredId={results.sponsoredId}
-      />
+      {/*
+         Board `11e`. The same delegated click counter `/search` carries, on the
+         other template that ranks a scope's suppliers — an area or emirate page
+         is a category and a place, which is exactly a sellable scope.
+      */}
+      <ResultClicks categoryId={scope.category.id} emirate={scope.emirate}>
+        <LandingResults
+          heading={t("landing.results_heading", {
+            category: scope.category.name,
+            place: placeName,
+          })}
+          // The board's fifth correction: one weighted config shared with `1b`
+          // and `1c` and edited on `12c`, never "verification, then response
+          // time" — which describes a two-key sort we do not run.
+          caption={t("landing.ranking_caption")}
+          rows={results.rows}
+          total={results.total}
+          page={page}
+          pageCount={pageCount}
+          hrefFor={hrefFor}
+          rfqHref={`/rfq/new?category=${scope.category.slug}${
+            scope.area ? `&area=${scope.area.slug}` : `&emirate=${scope.emirate}`
+          }`}
+          rfqLabel={t("landing.rfq_action", {
+            place: placeName,
+            category: scope.category.name,
+          })}
+          sponsoredId={results.sponsoredId}
+        />
+      </ResultClicks>
 
       {/* ── FAQ + rail ─────────────────────────────────────────────────── */}
       {(faq.length > 0 || state.relatedSearches.length > 0 || next.length > 0) && (

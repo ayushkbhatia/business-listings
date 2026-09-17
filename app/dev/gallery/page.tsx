@@ -3,6 +3,7 @@ import { Actions } from "./_sections/Actions";
 import { Choice } from "./_sections/Choice";
 import { Display } from "./_sections/Display";
 import { Billing } from "./_sections/Billing";
+import { PlacementGallery } from "./_sections/Placement";
 import { PlanConfigGallery } from "./_sections/PlanConfig";
 import { Domain } from "./_sections/Domain";
 import { Numeric } from "./_sections/Numeric";
@@ -348,6 +349,8 @@ export default function Gallery() {
       <ContactRevealGallery />
       {/* After contact reveal, for the same axe-grid reason: nothing new above Shells. */}
       <PlanConfigGallery />
+      {/* After plan config, for the same axe-grid reason: nothing new above Shells. */}
+      <PlacementGallery />
     </main>
   );
 }

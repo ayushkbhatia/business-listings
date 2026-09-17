@@ -5,7 +5,9 @@ import { checkRate, RATE_POLICIES, recordHit, requesterKey, type RateBucket } fr
 import { isBrowserEmitted, requiresSession, validateEvent } from "@/lib/telemetry/events";
 import { recordEvent, recordListingView } from "@/lib/telemetry/record";
 import { deviceFrom } from "@/lib/analytics/device";
-import { recordListingDevice, recordProductView } from "@/lib/analytics/record";
+import { isEmirate } from "@/lib/uae";
+import type { Emirate } from "@/lib/db/generated/enums";
+import { recordListingDevice, recordProductView, recordScopeClick } from "@/lib/analytics/record";
 import { isSessionId } from "@/lib/telemetry/session";
 
 /**
@@ -168,6 +170,30 @@ export async function POST(request: NextRequest) {
 
   for (const productId of productsViewed) {
     await recordProductView(productId);
+  }
+
+  /*
+     Board `11e` — clicks out of a results page, counted per scope.
+
+     One per scope per request, like the two counters above: a batch is a
+     transport detail and not evidence of ten clicks. The emirate arrives as a
+     string and is checked against the enum here rather than cast — a payload
+     is not allowed to name a value the column does not have, and an unparsed
+     one drops the event rather than the request.
+  */
+  const scopesClicked = new Set<string>();
+  for (const event of accepted) {
+    if (event.name !== "result_clicked") continue;
+    const categoryId = event.props["categoryId"];
+    if (typeof categoryId !== "string") continue;
+    const claimed = event.props["emirate"];
+    const emirate = typeof claimed === "string" && isEmirate(claimed) ? claimed : null;
+    scopesClicked.add(`${categoryId}|${emirate ?? ""}`);
+  }
+
+  for (const scope of scopesClicked) {
+    const [categoryId, emirate] = scope.split("|");
+    await recordScopeClick(categoryId!, emirate ? (emirate as Emirate) : null);
   }
 
   const owned = accepted.filter((event) => requiresSession(event.name));
