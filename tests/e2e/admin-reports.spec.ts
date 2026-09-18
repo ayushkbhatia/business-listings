@@ -38,9 +38,9 @@ test.describe("the queue", () => {
 
     const perType = await chips.getByRole("link").allInnerTexts();
     const counted = perType
-      // Drop "All" and the escalated chip: one is the total and the other is a
-      // state that cuts across every type.
-      .filter((text) => !/^All /.test(text) && !/^Escalated /.test(text))
+      // Drop "All", the escalated chip and board 13c's flagged chip: one is the
+      // total and the other two are states that cut across every type.
+      .filter((text) => !/^All /.test(text) && !/^Escalated /.test(text) && !/^Flagged /.test(text))
       .map((text) => Number(/(\d+)$/.exec(text)![1]))
       .reduce((sum, n) => sum + n, 0);
     expect(counted).toBe(open);

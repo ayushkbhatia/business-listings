@@ -184,21 +184,6 @@ export default async function StorefrontPage({ params, searchParams }: Params) {
   return (
     <>
       {/*
-         Board 13c — the report modal, mounted once above both compositions so
-         the unclaimed panel's link and the verification rail's link open the
-         same thing. In a `Suspense` because it reads the query string on the
-         client, and a component that does must not hold up the page around it.
-      */}
-      <Suspense fallback={null}>
-        <ReportDialog
-          slug={business.slug}
-          businessName={business.displayName}
-          initialData={reportData}
-          loadReportForm={loadReportForm}
-          fileReport={fileReport}
-        />
-      </Suspense>
-      {/*
          The view, counted from the browser and not from this render.
 
          Two reasons, and both are about what the word "view" is allowed to
@@ -225,6 +210,28 @@ export default async function StorefrontPage({ params, searchParams }: Params) {
       ) : (
         <ClaimedStorefront business={business} requestedService={requestedService} />
       )}
+      {/*
+         Board 13c — the report modal, mounted once beside both compositions so
+         the unclaimed panel's link and the verification rail's link open the
+         same thing. In a `Suspense` because it reads the query string on the
+         client, and a component that does must not hold up the page around it.
+
+         After the page, not before it. A closed `<dialog>` is still in the
+         document, and the `Modal` panel carries a `<header>`: mounted first,
+         that header was the page's first one, ahead of the site's banner —
+         which is what the viewport spec's `header.first()` found, and what a
+         landmark-reading tool would find too. `showModal()` puts it in the top
+         layer wherever it sits in the source.
+      */}
+      <Suspense fallback={null}>
+        <ReportDialog
+          slug={business.slug}
+          businessName={business.displayName}
+          initialData={reportData}
+          loadReportForm={loadReportForm}
+          fileReport={fileReport}
+        />
+      </Suspense>
     </>
   );
 }
