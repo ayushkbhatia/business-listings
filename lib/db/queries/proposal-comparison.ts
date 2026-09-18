@@ -74,6 +74,8 @@ export interface ProposalComparison {
   engagementType: string | null;
   cadence: string | null;
   acceptedBusinessId: string | null;
+  /** Board `7b`: the buying company whose rule governs acceptance, or null. */
+  buyerCompanyId: string | null;
   recipientCount: number;
   columns: ComparisonColumn[];
   /** Suppliers who declined the enquiry themselves. */
@@ -101,6 +103,7 @@ export async function getProposalComparison(
       emirate: true,
       area: { select: { name: true } },
       contactReleasedToBusinessId: true,
+      buyerCompanyId: true,
       serviceBrief: { select: { ...ENQUIRY_BRIEF_SELECT, categoryId: true } },
       lines: {
         where: { serviceId: { not: null } },
@@ -245,6 +248,7 @@ export async function getProposalComparison(
     engagementType: enquiry.serviceBrief?.engagementType ?? null,
     cadence: enquiry.serviceBrief?.cadence ?? null,
     acceptedBusinessId: enquiry.contactReleasedToBusinessId,
+    buyerCompanyId: enquiry.buyerCompanyId,
     recipientCount: enquiry.recipients.length,
     columns,
     declined,

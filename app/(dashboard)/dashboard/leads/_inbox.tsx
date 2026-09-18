@@ -19,6 +19,9 @@ import {
   isWithinRelativeWindow,
 } from "@/lib/format";
 import { t } from "@/lib/i18n";
+import { constraintPhrases } from "@/lib/buyer-company/words";
+import { formatTRN } from "@/lib/format/trn";
+import { formatPhone } from "@/lib/format/phone";
 import { getInbox, type LeadRailRow, type LeadScope, type LeadTab } from "@/lib/leads/inbox";
 import { assignableSeats } from "@/lib/leads/assign";
 import { findDraft } from "@/lib/quote/draft";
@@ -508,7 +511,15 @@ function RequestHeader({
           ? [{ key: "service", label: t("lead.service_asked"), value: askedService.name }]
           : []),
         ...(lead.scale ? [{ key: "scale", label: t("lead.scale"), value: lead.scale }] : []),
-        { key: "deliver", label: t("lead.deliver_to"), value: lead.deliverToArea ?? t("table.not_provided") },
+        {
+          key: "deliver",
+          label: t("lead.deliver_to"),
+          // Board `7b` `B6`: a saved address carries its access hours and load
+          // limit, which is what the vehicle is planned around.
+          value: lead.delivery
+            ? constraintPhrases(lead.delivery.constraints).join(" · ")
+            : (lead.deliverToArea ?? t("table.not_provided")),
+        },
         {
           key: "needed",
           label: t("lead.needed_by"),
@@ -732,6 +743,47 @@ function ContactBlock({ lead }: { lead: LeadDetail }) {
         {lead.buyer.phone ? <dd className="font-mono text-ink">{lead.buyer.phone}</dd> : null}
         {lead.buyer.email ? <dd className="text-ink">{lead.buyer.email}</dd> : null}
       </dl>
+      {/*
+         Board `7b`: what the supplier needs for the tax invoice they issue,
+         and where to deliver — released with the rest, and not before.
+      */}
+      {lead.buyer.companyTrn || lead.buyer.companyLicence || lead.buyer.companyAccountsEmail || lead.delivery?.address ? (
+        <dl className="mt-2 grid gap-x-4 gap-y-1 border-t border-ok-line pt-2 text-caption sm:grid-cols-2">
+          {lead.buyer.companyTrn ? (
+            <div>
+              <dt className="text-ok-ink">{t("contact.company.trn")}</dt>
+              <dd className="font-mono text-ink">{formatTRN(lead.buyer.companyTrn)}</dd>
+            </div>
+          ) : null}
+          {lead.buyer.companyLicence ? (
+            <div>
+              <dt className="text-ok-ink">{t("contact.company.licence")}</dt>
+              <dd className="font-mono text-ink">{lead.buyer.companyLicence}</dd>
+            </div>
+          ) : null}
+          {lead.buyer.companyAccountsEmail ? (
+            <div>
+              <dt className="text-ok-ink">{t("contact.company.accounts_email")}</dt>
+              <dd className="text-ink">{lead.buyer.companyAccountsEmail}</dd>
+            </div>
+          ) : null}
+          {lead.delivery?.address ? (
+            <div>
+              <dt className="text-ok-ink">{t("contact.company.delivery")}</dt>
+              <dd className="text-ink">
+                {[
+                  lead.delivery.address.label,
+                  lead.delivery.address.addressLine,
+                  lead.delivery.address.attnName ? t("company.address.attn", { name: lead.delivery.address.attnName }) : null,
+                  lead.delivery.address.attnPhone ? formatPhone(lead.delivery.address.attnPhone) : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </dd>
+            </div>
+          ) : null}
+        </dl>
+      ) : null}
     </div>
   );
 }

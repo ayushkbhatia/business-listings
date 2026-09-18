@@ -1,4 +1,5 @@
 import "server-only";
+import { onOffPlatformFlagged } from "@/lib/notify/events";
 import { prisma } from "@/lib/db/client";
 import { assertCan } from "@/lib/auth/can";
 import type { Actor } from "@/lib/auth/roles";
@@ -304,6 +305,15 @@ export async function postMessage(
   */
   if (input.sender === "buyer") {
     await cancelFollowUp(input.enquiryId, input.businessId, "buyer_replied");
+  }
+
+  /*
+     Board `7b` `B4`. The scanner filed a report against this supplier on a
+     company enquiry: the company's admins are told, if the company asked to
+     be. Nothing is blocked — nothing can be — and the message says so.
+  */
+  if (result.reportId && input.sender === "seller") {
+    await onOffPlatformFlagged({ enquiryId: input.enquiryId, businessId: input.businessId });
   }
 
   /*

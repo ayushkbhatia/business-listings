@@ -104,10 +104,11 @@ export async function seedReviewWrite(db: Db, now: Date) {
       roles: [],
       isProvisional: true,
       claimToken: REVIEW_WRITE_CLAIM_TOKEN,
-      buyerCompanyId: company.id,
     },
     select: { id: true },
   });
+  // Board 7b: the company through a membership; its trigger writes `buyer_company_id`.
+  await db.buyerCompanyMember.create({ data: { companyId: company.id, userId: buyer.id, role: "company_admin" } });
 
   /**
    * One accepted enquiry: quote first, then the release — the order acceptance

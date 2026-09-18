@@ -237,17 +237,18 @@ test("the account menu names the buyer and signs out", async ({ page }, info) =>
   await signIn(page, inbox.email, "/account/enquiries");
 
   const header = page.getByRole("banner");
-  await header.getByText("Mariam", { exact: true }).click();
+  // Board 7b: the header names the whole person, as `BLNav`'s signed-in block does.
+  await header.getByText("Mariam Haddad", { exact: true }).click();
   await expect(header.getByRole("link", { name: "Saved searches" })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(header.getByRole("link", { name: "Saved searches" })).toBeHidden();
 
-  await header.getByText("Mariam", { exact: true }).click();
+  await header.getByText("Mariam Haddad", { exact: true }).click();
   await header.getByRole("button", { name: "Sign out" }).click();
   await expect(page).toHaveURL(/\/$/);
 
   // The session is gone, not only the menu: the inbox asks for a sign-in again.
   await page.goto("/account/enquiries");
   await expect(page).toHaveURL(/\/signin\?next=%2Faccount%2Fenquiries$/);
-  await expect(page.getByRole("banner").getByText("Mariam", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("banner").getByText("Mariam Haddad", { exact: true })).toHaveCount(0);
 });

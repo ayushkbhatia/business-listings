@@ -161,6 +161,7 @@ export function boardNegotiation(): Negotiation {
       releasedTo: null,
       releasedAt: null,
       winnerName: null,
+      buyerCompanyId: null,
     },
     rail: RAIL,
     supplier: {
@@ -285,6 +286,7 @@ export function acceptedElsewhereNegotiation(): Negotiation {
       releasedTo: "gb-ng",
       releasedAt: at("2026-08-21T07:00:00.000Z"),
       winnerName: "Northern Gulf Trading",
+      buyerCompanyId: null,
       closesAt: at("2026-08-21T07:00:00.000Z"),
     },
     record: { ...board.record, quotes: [R1, { ...R2, status: "lost" }] },

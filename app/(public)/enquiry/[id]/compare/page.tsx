@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { after } from "next/server";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Button } from "@/components/primitives";
+import { Button, buttonClassName } from "@/components/primitives";
 import { Card, PublicShell } from "@/components/structure";
 import { StatusBadge } from "@/components/display/StatusBadge";
 import { VerificationBadge, tierSpec } from "@/components/domain";
@@ -18,6 +18,8 @@ import { acceptErrorMessage } from "../../_errors";
 import { getProposalComparison } from "@/lib/db/queries/proposal-comparison";
 import { AREA_MAX, VISITS_MAX, readFigure } from "@/lib/quote/proposal-footing";
 import { ProposalComparisonView } from "./_proposals";
+import { openRequestOn } from "@/lib/buyer-company/queue";
+import { ApprovalNotice } from "../../_approval-notice";
 
 /**
  * Board 1n — the quotes side by side.
@@ -98,6 +100,7 @@ export default async function ComparePage({
 
   const error = acceptErrorMessage(one("error"));
   const accepted = enquiry.contactReleasedToBusinessId;
+  const openRequest = accepted ? null : await openRequestOn(buyerId, enquiry);
   /*
      Board `10e` `B3` and `10h`'s states: closed with nothing accepted is
      terminal, and `acceptQuote` refuses it. The buttons were live on a closed
@@ -134,6 +137,8 @@ export default async function ComparePage({
           {t("compare.error_enquiry_closed")}
         </p>
       ) : null}
+
+      {openRequest ? <ApprovalNotice card={openRequest} /> : null}
 
       <div className="mt-6 overflow-x-auto rounded-card border border-line bg-card">
         <table className="w-full min-w-[48rem] border-collapse text-left">
@@ -268,6 +273,22 @@ export default async function ComparePage({
                         total: formatAED(quote.totalAed),
                       })}
                     </Button>
+                  ) : enquiry.buyerCompanyId ? (
+                    /*
+                       Board `7b`: a company enquiry is accepted under the
+                       company's rule, which the accept screen states before
+                       the click. Same words on the control; it opens that
+                       screen instead of posting.
+                    */
+                    <Link
+                      href={`/enquiry/${enquiry.id}/accept/${quote.id}`}
+                      className={buttonClassName({ size: "sm", block: true })}
+                    >
+                      {t("compare.accept", {
+                        ref: `r${quote.revision}`,
+                        total: formatAED(quote.totalAed),
+                      })}
+                    </Link>
                   ) : (
                     <form action={acceptQuoteAction}>
                       <input type="hidden" name="quoteId" value={quote.id} />

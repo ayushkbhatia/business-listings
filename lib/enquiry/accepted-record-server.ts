@@ -18,7 +18,8 @@ export { BUYER_REFERENCE_MAX, REPORT_DETAIL_MAX, REPORT_DETAIL_MIN };
 
 export type ReferenceResult =
   | { ok: true; buyerReference: string | null }
-  | { ok: false; error: "not_found" | "too_long" | "invalid" };
+  /** `required`: board `7b` — the company requires a PO number, so it cannot be cleared. */
+  | { ok: false; error: "not_found" | "too_long" | "invalid" | "required" };
 
 /**
  * Set, change or clear the buyer's reference.
@@ -40,6 +41,19 @@ export async function setBuyerReference(input: {
   const normalised = input.value.replace(/\s+/g, " ").trim();
   if (normalised.length > BUYER_REFERENCE_MAX) return { ok: false, error: "too_long" };
   const buyerReference = normalised === "" ? null : normalised;
+
+  /*
+     Board `7b`. Where the enquiry's company requires a PO number, the
+     reference is that PO number: it was asked for at acceptance and the
+     supplier has it on the record, so it can be corrected but not removed.
+  */
+  if (buyerReference === null) {
+    const owner = await prisma.enquiry.findFirst({
+      where: { OR: [{ ref: input.refOrId }, { id: input.refOrId }], buyerId: input.buyerId },
+      select: { buyerCompany: { select: { requirePoNumber: true } } },
+    });
+    if (owner?.buyerCompany?.requirePoNumber) return { ok: false, error: "required" };
+  }
 
   const updated = await prisma.enquiry.updateMany({
     where: {

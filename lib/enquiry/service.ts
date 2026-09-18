@@ -1,5 +1,5 @@
 import "server-only";
-import type { BriefStart, Emirate, EngagementType, ServiceCadence } from "@/lib/db/generated/client";
+import type { BriefStart, Emirate, EngagementType, Prisma, ServiceCadence } from "@/lib/db/generated/client";
 import { prisma } from "@/lib/db/client";
 import { tradeKindFor } from "@/lib/taxonomy/service";
 import { createProvisionalIdentity } from "@/lib/auth/flow";
@@ -9,6 +9,9 @@ import { sendAutoReplies } from "@/lib/messaging/auto-reply";
 import { onEnquiryDelivered, onQuoteAccepted } from "@/lib/notify/events";
 import { quoteTotalAed } from "@/lib/quote/money";
 import { resolveEnquiryArea } from "./area";
+import { gateCompanyAcceptance, GateRefused, readReference, type GateRefusal } from "@/lib/buyer-company/gate";
+import { activeMembership } from "@/lib/buyer-company/store";
+import { snapshotOf } from "@/lib/buyer-company/address";
 import { PLAN_CAPS_SELECT, effectiveCaps, toCaps } from "@/lib/plan/entitlements";
 import type { Attribution } from "@/lib/campaign/attribution";
 import {
@@ -376,7 +379,19 @@ export interface CreateEnquiryInput {
   /** Required when there is no buyerId: the lightweight identity is built on it. */
   phone?: string | null;
   fullName?: string | null;
+  /**
+   * The company this enquiry is raised for. Omitted, it is the buyer's own
+   * active company — board `7b`: an enquiry a member sends is the company's to
+   * approve. Passed explicitly only by fixtures.
+   */
   buyerCompanyId?: string | null;
+  /**
+   * Board `7b` `B6`: one of the company's saved delivery addresses. Its
+   * emirate and area route the fan-out, and a snapshot of it travels on the
+   * enquiry. Ignored when it is not an active address of the buyer's company —
+   * the emirate and area the form also posts still say where.
+   */
+  deliveryAddressId?: string | null;
 
   requirement: string;
   lines: EnquiryLineInput[];
@@ -517,9 +532,54 @@ export async function createEnquiry(
     claimToken = provisional?.isProvisional ? provisional.claimToken : null;
   }
 
-  const { recipients, skipped } = input.selection
-    ? { recipients: [...input.selection.recipients], skipped: input.selection.skipped }
-    : await matchGoods(input, now);
+  /*
+     Board `7b`. The company is the sender's, read from the membership record —
+     an enquiry a member sends is one their company's rule governs when a quote
+     comes back. A provisional buyer has no membership, so no company.
+  */
+  const buyerCompanyId =
+    input.buyerCompanyId !== undefined
+      ? input.buyerCompanyId
+      : input.buyerId
+        ? ((await activeMembership(prisma, buyerId))?.companyId ?? null)
+        : null;
+  const delivery =
+    buyerCompanyId && input.deliveryAddressId
+      ? await prisma.buyerDeliveryAddress.findFirst({
+          where: { id: input.deliveryAddressId, companyId: buyerCompanyId, archivedAt: null },
+          select: {
+            id: true,
+            label: true,
+            addressLine: true,
+            emirate: true,
+            areaId: true,
+            area: { select: { name: true } },
+            attnName: true,
+            attnPhone: true,
+            accessPoint: true,
+            accessFrom: true,
+            accessUntil: true,
+            loadLimit: true,
+          },
+        })
+      : null;
+  /*
+     A saved address decides where, for the matcher as much as for the record:
+     its emirate routes the fan-out and its area is a picked row, not typed text
+     for `resolveEnquiryArea` to guess at.
+  */
+  const located: CreateEnquiryInput = delivery
+    ? {
+        ...input,
+        emirate: delivery.emirate,
+        deliverToArea: input.deliverToArea?.trim() || delivery.area?.name || null,
+        areaId: delivery.areaId,
+      }
+    : input;
+
+  const { recipients, skipped } = located.selection
+    ? { recipients: [...located.selection.recipients], skipped: located.selection.skipped }
+    : await matchGoods(located, now);
   if (recipients.length === 0) return { ok: false, error: "no_recipients" };
 
   /*
@@ -577,12 +637,12 @@ export async function createEnquiry(
      lets a seller covering only Al Quoz be matched — a bad resolve sends the
      job to somebody who does not work there.
   */
-  const areaId = input.areaId !== undefined
-    ? input.areaId
-    : input.deliverToArea
+  const areaId = located.areaId !== undefined
+    ? located.areaId
+    : located.deliverToArea
     ? resolveEnquiryArea(
-        input.deliverToArea,
-        input.emirate ?? null,
+        located.deliverToArea,
+        located.emirate ?? null,
         await prisma.area.findMany({ select: { id: true, name: true, emirate: true } }),
       )
     : null;
@@ -597,7 +657,27 @@ export async function createEnquiry(
       data: {
         ref,
         buyerId,
-        buyerCompanyId: input.buyerCompanyId ?? null,
+        buyerCompanyId,
+        ...(delivery
+          ? {
+              deliveryAddressId: delivery.id,
+              deliverySnapshot: snapshotOf(
+                {
+                  label: delivery.label,
+                  addressLine: delivery.addressLine,
+                  emirate: delivery.emirate,
+                  areaId: delivery.areaId,
+                  attnName: delivery.attnName,
+                  attnPhone: delivery.attnPhone,
+                  accessPoint: delivery.accessPoint,
+                  accessFrom: delivery.accessFrom,
+                  accessUntil: delivery.accessUntil,
+                  loadLimit: delivery.loadLimit,
+                },
+                delivery.area?.name ?? null,
+              ) as unknown as Prisma.InputJsonValue,
+            }
+          : {}),
         /*
            A brief keeps the description byte for byte — `1h-s` B2, *suppliers
            see this exactly as you write it*. The goods composer's trim stays
@@ -606,7 +686,7 @@ export async function createEnquiry(
         requirement: input.serviceBrief ? input.requirement : input.requirement.trim(),
         // What the buyer wrote, kept as they wrote it — and beside it the row
         // it resolves to, which is a different claim and often null.
-        deliverToArea: input.deliverToArea ?? null,
+        deliverToArea: located.deliverToArea ?? null,
         areaId,
         /*
            The emirate the composer already asked for, finally stored.
@@ -621,7 +701,7 @@ export async function createEnquiry(
            A null is a real answer the panel renders as **Not stated**, not a
            gap to fill in with a guess.
         */
-        emirate: (input.emirate as Emirate | null | undefined) ?? null,
+        emirate: (located.emirate as Emirate | null | undefined) ?? null,
         neededBy: input.neededBy ?? null,
         termsWanted: (input.termsWanted as never) ?? null,
         scale: input.scale?.trim() ? input.scale.trim() : null,
@@ -833,8 +913,24 @@ export type AcceptQuoteResult =
          * the thread read-only at the same moment. Accepting past it would
          * release a buyer's contact on an enquiry every other screen calls dead.
          */
-        | "enquiry_closed";
+        | "enquiry_closed"
+        /**
+         * Board `7b`. The enquiry was raised for a buying company and its rule
+         * refused this acceptance — see `lib/buyer-company/gate.ts`.
+         */
+        | GateRefusal;
     };
+
+/**
+ * Board `7b`. What a company acceptance carries, and — from the approval
+ * queue — which request it is the approval of.
+ */
+export interface AcceptOptions {
+  /** Written to `Enquiry.buyerReference` with the acceptance. */
+  poNumber?: string | null;
+  costCode?: string | null;
+  approval?: { id: string; approverId: string } | null;
+}
 
 /**
  * Accepting a quote. The terminal state of the whole product.
@@ -852,7 +948,7 @@ export type AcceptQuoteResult =
  */
 /** A refusal found under the lock, thrown so the claim rolls back with it. */
 class AcceptRefused extends Error {
-  constructor(readonly code: "not_open" | "revised" | "enquiry_closed") {
+  constructor(readonly code: "not_open" | "revised" | "enquiry_closed" | GateRefusal) {
     super(code);
   }
 }
@@ -861,6 +957,7 @@ export async function acceptQuote(
   buyerId: string,
   quoteId: string,
   now: Date = new Date(),
+  options: AcceptOptions = {},
 ): Promise<AcceptQuoteResult> {
   const quote = await prisma.quote.findUnique({
     where: { id: quoteId },
@@ -872,7 +969,9 @@ export async function acceptQuote(
       status: true,
       expiresAt: true,
       business: { select: { closureRequestedAt: true } },
-      enquiry: { select: { id: true, buyerId: true, contactReleasedToBusinessId: true, closesAt: true } },
+      enquiry: {
+        select: { id: true, buyerId: true, buyerCompanyId: true, contactReleasedToBusinessId: true, closesAt: true },
+      },
     },
   });
   if (!quote) return { ok: false, error: "not_found" };
@@ -942,6 +1041,45 @@ export async function acceptQuote(
       },
     });
     if (later > 0) throw new AcceptRefused("revised");
+
+    /*
+       Board `7b`: an enquiry raised for a buying company passes its rule here,
+       under the claim — the threshold, the person's authority and the month's
+       spend are read under the company's lock, so the gate and the claim are
+       one decision. A refusal throws and the claim rolls back with it.
+
+       The company is the enquiry's, not the buyer's today: an enquiry raised
+       for Marina Facilities is Marina's to approve even if the person who sent
+       it has since moved on — and then nobody accepts it in Marina's name.
+    */
+    if (quote.enquiry.buyerCompanyId) {
+      const po = readReference(options.poNumber);
+      const cost = readReference(options.costCode);
+      if (po === "too_long" || po === "invalid" || cost === "too_long" || cost === "invalid") {
+        throw new AcceptRefused("reference_invalid");
+      }
+      const gated = await gateCompanyAcceptance(tx, {
+        companyId: quote.enquiry.buyerCompanyId,
+        enquiryId: quote.enquiry.id,
+        quoteId: quote.id,
+        quoteRef: quote.ref,
+        raiserId: buyerId,
+        now,
+        poNumber: po,
+        costCode: cost,
+        approval: options.approval ?? null,
+      }).catch((error: unknown) => {
+        if (error instanceof GateRefused) throw new AcceptRefused(error.code);
+        throw error;
+      });
+      await tx.enquiry.update({
+        where: { id: quote.enquiry.id },
+        data: {
+          ...(gated.poNumber ? { buyerReference: gated.poNumber } : {}),
+          ...(gated.costCode ? { costCode: gated.costCode } : {}),
+        },
+      });
+    }
 
     await tx.quote.update({
       where: { id: quote.id },

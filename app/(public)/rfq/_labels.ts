@@ -41,6 +41,9 @@ export function enquiryLabels(options: {
 
     area: t("rfq.area"),
     areaHint: t("rfq.area_hint"),
+    deliverTo: t("rfq.deliver_to"),
+    deliverToHint: t("rfq.deliver_to_hint"),
+    deliverToElsewhere: t("rfq.deliver_to_elsewhere"),
     emirate: t("rfq.emirate"),
     emirateOptions: options.emirates,
     neededBy: t("rfq.needed_by"),

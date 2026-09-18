@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { constraintsOf } from "@/lib/buyer-company/address";
+import { constraintPhrases } from "@/lib/buyer-company/words";
 import { buttonClassName } from "@/components/primitives";
 import { Card } from "@/components/structure";
 import { StatusBadge } from "@/components/display";
@@ -184,6 +186,44 @@ export function AcceptedRecordView({
               </div>
             </dl>
           </Card>
+
+          {/* ── For the buying company — board `7b` ─────────────────────────── */}
+          {record.delivery || record.costCode ? (
+            <Card padded>
+              <dl className="grid gap-5 @xl:grid-cols-2">
+                {record.delivery ? (
+                  <div>
+                    <dt className="font-mono text-eyebrow uppercase tracking-eyebrow text-faint">
+                      {t("company.record.delivery")}
+                    </dt>
+                    <dd className="mt-1.5 flex flex-col gap-0.5 text-body text-ink">
+                      <span>{record.delivery.label}</span>
+                      <span className="text-body-sm text-body">{record.delivery.addressLine}</span>
+                      <span className="text-body-sm text-body">{constraintPhrases(constraintsOf(record.delivery)).join(" · ")}</span>
+                      {record.delivery.attnName || record.delivery.attnPhone ? (
+                        <span className="text-body-sm text-body">
+                          {[
+                            record.delivery.attnName ? t("company.address.attn", { name: record.delivery.attnName }) : null,
+                            record.delivery.attnPhone ? formatPhone(record.delivery.attnPhone) : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </span>
+                      ) : null}
+                    </dd>
+                  </div>
+                ) : null}
+                {record.costCode ? (
+                  <div>
+                    <dt className="font-mono text-eyebrow uppercase tracking-eyebrow text-faint">
+                      {t("company.approval_page.cost_code")}
+                    </dt>
+                    <dd className="mt-1.5 font-mono text-body text-ink">{record.costCode}</dd>
+                  </div>
+                ) : null}
+              </dl>
+            </Card>
+          ) : null}
 
           {/* ── What was agreed — board `7c-s` ────────────────────────────────── */}
           {accepted ? (

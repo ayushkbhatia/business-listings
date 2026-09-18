@@ -260,6 +260,16 @@ export const BUYER_DEFAULT: RoutingPreference = {
        back to the site, and a reply they never see is the same as no reply.
     */
     report_resolved: ["email", "in_app"],
+    /*
+       Board `7b`. A colleague's request, its answer, and a supplier asking to
+       be paid off-platform: all three are about the buyer's own company and
+       all three are acted on at a desk, so email and in-app. Quiet hours hold
+       an evening request until seven — an approval is today's work, not
+       tonight's.
+    */
+    approval_requested: ["email", "in_app"],
+    approval_decided: ["email", "in_app"],
+    off_platform_flagged: ["email", "in_app"],
   },
   quiet: { enabled: true, fromHour: 21, toHour: 7, onSunday: true },
   highValueOverrideAed: null,

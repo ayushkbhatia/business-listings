@@ -5,7 +5,12 @@ import { t } from "@/lib/i18n";
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, useTransition } from "react";
 import { StepHeader } from "@/components/structure";
 import { Button, Checkbox, IconButton, Input } from "@/components/primitives";
-import { EnquiryComposer, type EnquiryComposerValue, type RecipientPreview } from "@/components/domain";
+import {
+  EnquiryComposer,
+  type DeliveryChoice,
+  type EnquiryComposerValue,
+  type RecipientPreview,
+} from "@/components/domain";
 import { cn } from "@/lib/cn";
 import { isVerified } from "@/lib/verification";
 import { enquiryLabels, rfqLabels } from "./_labels";
@@ -113,6 +118,7 @@ export function RfqComposer({
   askForContact,
   seeded = false,
   resentFrom = null,
+  deliveryChoices = [],
 }: {
   /**
    * Built here, not passed in.
@@ -137,6 +143,8 @@ export function RfqComposer({
   seeded?: boolean;
   /** Board 10e: the expired enquiry being re-sent, by reference. */
   resentFrom?: string | null;
+  /** Board `7b` `B6`: the buyer's company's saved delivery addresses, already worded. */
+  deliveryChoices?: readonly DeliveryChoice[];
 }) {
   const labels = useMemo(() => rfqLabels({ emirateName }), [emirateName]);
   /*
@@ -341,6 +349,7 @@ export function RfqComposer({
         categoryId,
         emirate: value.emirate,
         deliverToArea: value.deliverToArea,
+        deliveryAddressId: value.deliveryAddressId,
         neededBy: value.neededBy,
         termsWanted: value.termsWanted,
         closesInDays: value.closesInDays,
@@ -540,6 +549,7 @@ export function RfqComposer({
                 initialRequirement={initialRequirement}
                 initialEmirate={initialEmirate}
                 initialArea={initialArea}
+                deliveryChoices={deliveryChoices}
                 askForContact={askForContact}
                 disabled={!linesExist}
                 onChange={setValue}

@@ -31,6 +31,7 @@ import { ProposalComparisonGallery } from "./_sections/ProposalComparison";
 import { BuyerInboxGallery } from "./_sections/BuyerInbox";
 import { BlendedSearchGallery } from "./_sections/BlendedSearch";
 import { CompareGallery } from "./_sections/Compare";
+import { CompanyAccountGallery } from "./_sections/CompanyAccount";
 import { NotificationTemplatesGallery } from "./_sections/NotificationTemplates";
 import { MaintenanceGallery } from "./_sections/Maintenance";
 import { HomeCurationGallery } from "./_sections/HomeCuration";
@@ -226,6 +227,8 @@ const UNLISTED = [
   "paired-strings",
   // Board `10d`: the product comparison, the tick's four states and the tray's.
   "product-comparison",
+  // Board `7b`: the buying company — details, addresses, team, rule, a request in each state.
+  "company-account",
 ] as const;
 
 export default function Gallery() {
@@ -359,6 +362,8 @@ export default function Gallery() {
       <ReportListingGallery />
       {/* After report-a-listing, for the same axe-grid reason: nothing new above Shells. */}
       <CompareGallery />
+      {/* After compare, for the same axe-grid reason: nothing new above Shells. */}
+      <CompanyAccountGallery />
     </main>
   );
 }

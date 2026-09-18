@@ -30,6 +30,8 @@ const TYPICAL: AcceptedRecord = {
   enquiryId: "gallery-7cs",
   ref: "ENQ-40812",
   buyerReference: "DP-FM-2026-14",
+  costCode: null,
+  delivery: null,
   acceptedAt: ACCEPTED,
   isBrief: true,
   declinedCount: 3,

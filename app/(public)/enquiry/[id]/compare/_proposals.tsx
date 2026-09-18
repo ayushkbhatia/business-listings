@@ -498,6 +498,7 @@ function ComparisonTable({
                   now={now}
                   closesAt={comparison.closesAt}
                   acceptAction={acceptAction}
+                  viaAcceptPage={comparison.buyerCompanyId !== null}
                 />
               </td>
             ))}
@@ -636,6 +637,7 @@ function DecisionCell({
   now,
   closesAt,
   acceptAction,
+  viaAcceptPage = false,
 }: {
   column: ComparisonColumn;
   primary: boolean;
@@ -645,6 +647,8 @@ function DecisionCell({
   now: Date;
   closesAt: Date;
   acceptAction: ((formData: FormData) => Promise<void>) | undefined;
+  /** Board `7b`: a company enquiry is accepted on the accept screen, under the company's rule. */
+  viaAcceptPage?: boolean;
 }) {
   const ask = (
     // B10: a question opens the thread, and neither accepts nor declines.
@@ -699,6 +703,30 @@ function DecisionCell({
   }
 
   const Wrapper = acceptAction ? "form" : "div";
+  const label = primary ? t("compare_proposals.accept_primary") : t("compare_proposals.accept");
+  const named = t("compare_proposals.accept_named", {
+    supplier: column.displayName,
+    revision: column.quote.revision,
+  });
+  if (viaAcceptPage && acceptAction) {
+    return (
+      <div>
+        <Link
+          href={`/enquiry/${enquiryId}/accept/${column.quote.id}`}
+          aria-label={named}
+          className={buttonClassName({ variant: primary ? "primary" : "secondary", block: true })}
+        >
+          {label}
+        </Link>
+        {column.quote.expiresAt && column.quote.expiresAt.getTime() > now.getTime() ? (
+          <p className="mt-2 text-center text-caption text-muted">
+            {t("compare_proposals.valid_until", { when: formatDate(column.quote.expiresAt) })}
+          </p>
+        ) : null}
+        {ask}
+      </div>
+    );
+  }
   return (
     <div>
       <Wrapper {...(acceptAction ? { action: acceptAction } : {})}>

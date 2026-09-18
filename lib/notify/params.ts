@@ -213,6 +213,15 @@ export const EVENT_PARAMS = {
   */
   placement_slot_freed: ["scope", "price"],
   weekly_digest: [],
+  /*
+     Board `7b`. To colleagues, never to a supplier: `requester` and `approver`
+     are first names within one buying company, and nothing here reaches the
+     other side of an enquiry. `amount` is the value the request was raised at,
+     or the words for a quote with no single total.
+  */
+  approval_requested: ["ref", "quoteRef", "businessName", "amount", "requester", "approvalId"],
+  approval_decided: ["ref", "quoteRef", "businessName", "approver", "outcome", "nextStep", "approvalId"],
+  off_platform_flagged: ["ref", "businessName"],
 } as const satisfies Record<NotificationEvent, readonly string[]>;
 
 export type ParamsOf<E extends NotificationEvent> = (typeof EVENT_PARAMS)[E][number];
@@ -256,6 +265,11 @@ export const EVENT_SOURCES = {
   // `endPlacementsFor`, which is what ends a slot for all three of its reasons.
   placement_slot_freed: ["11e"],
   weekly_digest: [],
+  // `lib/buyer-company/approvals.ts`, from the accept screen and the approval page.
+  approval_requested: ["7b"],
+  approval_decided: ["7b"],
+  // `postMessage`, when the scanner files an off-platform report on a company enquiry.
+  off_platform_flagged: ["7b", "10h"],
 } as const satisfies Record<NotificationEvent, readonly string[]>;
 
 /**
@@ -286,6 +300,9 @@ export const EVENT_AUDIENCE = {
   ramadan_dates_moved: "seller",
   placement_slot_freed: "seller",
   weekly_digest: "seller",
+  approval_requested: "buyer",
+  approval_decided: "buyer",
+  off_platform_flagged: "buyer",
 } as const satisfies Record<NotificationEvent, "seller" | "buyer">;
 
 export type Audience = (typeof EVENT_AUDIENCE)[NotificationEvent];
@@ -384,6 +401,10 @@ export function sampleParams<E extends NotificationEvent>(
     to: "9 Mar 2027",
     scope: "Valves & actuators · Dubai",
     price: "439",
+    requester: "Priya",
+    approver: "Rami Haddad",
+    approvalId: "sample-approval",
+    nextStep: "The quote is accepted and the supplier has your contact details.",
   } as const;
   const params: Record<string, string | number> = {};
   for (const name of EVENT_PARAMS[event]) params[name] = all[name as keyof typeof all];

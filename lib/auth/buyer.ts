@@ -24,22 +24,21 @@ import type { Actor } from "@/lib/auth/roles";
  * the account holder on a new device. Sending them to a 404 would be a lie
  * about a page they own. So this redirects to sign-in and carries them back.
  *
- * ## No company scoping yet, on purpose
+ * ## The company is carried, and scoped where it binds
  *
- * `buyerCompanyId` rides along because `Actor` carries it and a seat that
- * dropped it would be a seat every future check has to work around. Nothing
- * reads it yet. The screen that writes it is board 7b, `/account/company`, and
- * when it lands the scoping goes here rather than into the pages — which is the
- * entire reason this file exists before that one does.
+ * `buyerCompanyId` rides along because `Actor` carries it. Since board 7b it is
+ * the mirror of the person's active `buyer_company_member` row, and the
+ * company's own rules are enforced in `lib/buyer-company/` — under the
+ * company's lock, from the membership record — rather than here, because a
+ * seat read at the top of a page is not the answer at the moment of a write.
  */
 export interface BuyerSeat {
   actor: Actor;
   /**
-   * The buyer company this person belongs to, when they belong to one.
+   * The buyer company this person sends enquiries for, when they have one.
    *
-   * Absent for everybody today: nothing writes `User.buyerCompanyId` until
-   * board 7b. Absent rather than null for the same reason as `Actor.branchId` —
-   * a scoping check reads the absence, and null is a different answer from
+   * Absent rather than null for the same reason as `Actor.branchId` — a
+   * scoping check reads the absence, and null is a different answer from
    * "unscoped".
    */
   buyerCompanyId?: string;

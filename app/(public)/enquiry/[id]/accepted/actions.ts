@@ -53,7 +53,9 @@ export async function saveReferenceAction(
           })
         : result.error === "invalid"
           ? t("accepted.reference.error.invalid")
-          : t("accepted.error.not_found");
+          : result.error === "required"
+            ? t("company.error.po_kept")
+            : t("accepted.error.not_found");
     return { status: "error", message };
   }
 

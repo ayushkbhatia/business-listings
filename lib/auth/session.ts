@@ -133,9 +133,10 @@ export async function getActor(): Promise<Actor | null> {
     // `withinScope` reads the absence that way, so it must stay absent rather
     // than becoming null.
     ...(profile?.branchId ? { branchId: profile.branchId } : {}),
-    // Absent for every buyer who has not been attached to a company, which is
-    // all of them until board 7b ships the screen that attaches them. Absent,
-    // not null, for the same reason as `branchId`: a check reads the absence.
+    // Absent for every buyer who does not send enquiries for a company. Since
+    // board 7b the column is the mirror of an active `buyer_company_member`
+    // row, written by that table's trigger. Absent, not null, for the same
+    // reason as `branchId`: a check reads the absence.
     ...(profile?.buyerCompanyId ? { buyerCompanyId: profile.buyerCompanyId } : {}),
   };
 }

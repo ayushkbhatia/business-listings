@@ -17,13 +17,48 @@ import { t } from "@/lib/i18n";
 const ITEM =
   "block rounded-ctl px-3 py-2 text-body-sm text-ink hover:bg-fill focus-visible:outline-none focus-visible:shadow-focus";
 
+/** `RH` — the board's avatar, from the name, never an image nobody uploaded. */
+function initialsOf(name: string | null): string {
+  if (!name) return "";
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word[0]!)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+}
+
+/*
+   Board 7b: the signed-in block names the person and the company they send
+   enquiries for — `BLNav`'s `user` and `org` — so a procurement admin on
+   their own company page is not offered *Sign in* by a header that does not
+   know who they are. The company line is absent for a buyer with none.
+*/
 export function AccountMenu({ viewer }: { viewer: Viewer }) {
+  const name = viewer.fullName ?? viewer.firstName;
+  const initials = initialsOf(name);
   return (
     <details className="group relative">
       <summary
-        className="flex min-h-11 cursor-pointer list-none items-center gap-1.5 rounded-ctl px-2 py-1.5 text-body-sm text-ink hover:bg-fill focus-visible:outline-none focus-visible:shadow-focus sm:min-h-0 [&::-webkit-details-marker]:hidden"
+        className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-ctl border border-line-strong bg-card py-1 pl-1 pr-2 text-body-sm text-ink hover:bg-fill focus-visible:outline-none focus-visible:shadow-focus sm:min-h-0 [&::-webkit-details-marker]:hidden"
       >
-        {viewer.firstName ? t("chrome.account_named", { name: viewer.firstName }) : t("chrome.account")}
+        {initials ? (
+          <span
+            aria-hidden="true"
+            className="flex size-7 shrink-0 items-center justify-center rounded-pill bg-moss-wash font-mono text-eyebrow text-moss-deep"
+          >
+            {initials}
+          </span>
+        ) : null}
+        <span className="flex min-w-0 flex-col text-left leading-tight">
+          <span className="max-w-[10rem] truncate font-medium">
+            {name ? t("chrome.account_named", { name }) : t("chrome.account")}
+          </span>
+          {viewer.company ? (
+            <span className="hidden max-w-[10rem] truncate text-eyebrow text-body sm:block">{viewer.company}</span>
+          ) : null}
+        </span>
         <span className="text-muted transition-transform duration-120 group-open:rotate-180">
           <ChevronDown size={14} />
         </span>
@@ -44,6 +79,11 @@ export function AccountMenu({ viewer }: { viewer: Viewer }) {
           <li>
             <Link href="/account/saved/shortlist" className={ITEM}>
               {t("account.tab.suppliers")}
+            </Link>
+          </li>
+          <li>
+            <Link href="/account/company" className={ITEM}>
+              {t("account.tab.company")}
             </Link>
           </li>
           {viewer.seller ? (

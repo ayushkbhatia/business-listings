@@ -144,6 +144,38 @@ If §07 gains a row for any of these, the row wins and the `source` becomes `sta
 
 ---
 
+## 4. Buyer company roles (board 7b) — three roles
+
+Buyer-side and separate from table 3 by construction (`B12`): a different Postgres type
+(`buyer_company_role`), read from `buyer_company_member` under the company's lock, never from an
+`Actor` role or a session claim. `lib/buyer-company/guard.ts` is the one way into a company write,
+and `lib/buyer-company/authority.ts` decides every approval question.
+
+| Capability | Admin | Procurement | Requester |
+|---|---|---|---|
+| Send an enquiry for the company | ✓ | ✓ | ✓ |
+| Accept a quote without approval | any value, within the rule | within what is left of their monthly limit, within the rule | — |
+| Approve a colleague's request | ✓ (named approver only above the threshold) | when their remaining month covers it | — |
+| Query a request | ✓ | when they may approve it | — |
+| Edit company details, addresses, team, rule | ✓ | — | — |
+| See the company page, the rule, the team, the spend | ✓ | ✓ | ✓ |
+| See a request's detail | ✓ | raiser, or may approve | raiser |
+
+**Nobody approves their own request.** Where the named approver raises one the rule holds,
+another admin approves; with no other admin, nobody can, and the rule card says so.
+
+**No finance role.** The board drew *Finance — approves invoices only*; there is no buyer-side
+invoice surface for it to approve on (Q2), so the role is not offered.
+
+**The last admin and the named approver cannot be demoted, deactivated or leave** — the first
+would leave a company nobody can administer, the second a rule naming somebody who cannot approve.
+
+None of these writes `AuditEvent` — that log is staff decisions. Each writes a
+`buyer_company_event` in the same transaction, read by the company on
+`/account/company/history` (`B8`).
+
+---
+
 ## Implementation notes
 
 One function per capability, named for the capability: `canSetVerificationTier(actor, business)`,

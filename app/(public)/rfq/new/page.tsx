@@ -10,6 +10,7 @@ import { ViewerNav } from "@/app/(public)/_account-menu";
 import { briefWanted, pinnedFirm } from "@/lib/enquiry/service-brief-server";
 import { previewRecipients } from "../actions";
 import { RfqComposer } from "../RfqComposer";
+import { deliveryChoicesFor } from "@/lib/buyer-company/queue";
 import type { RfqLine } from "../rfq-state";
 import { ServiceBriefPage } from "./_brief";
 import { RevisePage } from "./_revise";
@@ -298,13 +299,17 @@ export default async function RfqNewPage({
      behind "Add all" — the footer's "3 more match your spec" is a real count of
      sellers already fetched, not a promise about a query nobody ran.
   */
-  const recipients = await previewRecipients({
-    categoryId: category.id,
-    emirate: null,
-    lineCount: Math.max(1, initialLines.length),
-    fanoutTo: 8,
-    ...(pinned.length ? { pinnedBusinessIds: pinned } : {}),
-  });
+  const [recipients, deliveryChoices] = await Promise.all([
+    previewRecipients({
+      categoryId: category.id,
+      emirate: null,
+      lineCount: Math.max(1, initialLines.length),
+      fanoutTo: 8,
+      ...(pinned.length ? { pinnedBusinessIds: pinned } : {}),
+    }),
+    // Board `7b` `B6`: a company member picks a saved address rather than typing an area.
+    actor ? deliveryChoicesFor(actor.id) : Promise.resolve([]),
+  ]);
 
   return (
     <PublicShell nav={<ViewerNav />}>
@@ -325,6 +330,7 @@ export default async function RfqNewPage({
         askForContact={!actor}
         seeded={Boolean(seededQuery) || Boolean(resend?.ok)}
         resentFrom={resend?.ok ? resend.ref : null}
+        deliveryChoices={deliveryChoices}
       />
     </PublicShell>
   );

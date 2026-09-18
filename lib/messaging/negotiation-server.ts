@@ -150,6 +150,8 @@ export interface Negotiation {
     releasedAt: Date | null;
     /** Who was accepted, when it was somebody else. The name the buyer chose. */
     winnerName: string | null;
+    /** Board `7b`: the buying company whose rule governs acceptance, or null. */
+    buyerCompanyId: string | null;
   };
   rail: RailThread[];
   supplier: {
@@ -194,6 +196,7 @@ export async function loadNegotiation(
       requirement: true,
       closesAt: true,
       contactReleasedToBusinessId: true,
+      buyerCompanyId: true,
       contactReleasedAt: true,
       recipients: {
         orderBy: [{ createdAt: "asc" }, { businessId: "asc" }],
@@ -323,6 +326,7 @@ export async function loadNegotiation(
       requirement: enquiry.requirement,
       closesAt: enquiry.closesAt,
       releasedTo: enquiry.contactReleasedToBusinessId,
+      buyerCompanyId: enquiry.buyerCompanyId,
       releasedAt: enquiry.contactReleasedAt,
       winnerName: winner && winner.businessId !== current.businessId ? winner.business.displayName : null,
     },
