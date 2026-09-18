@@ -59,6 +59,8 @@ export interface StorefrontProduct {
   minOrderQty: number | null;
   sizeLabel: string | null;
   imageUrl: string | null;
+  /** The product's own category — the trade its compare tick is in (`10d`). */
+  categoryId: string;
 }
 
 export interface StorefrontReview {

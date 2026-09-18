@@ -224,6 +224,8 @@ export interface CatalogueProduct {
   leadTimeDays: number | null;
   minOrderQty: number | null;
   specValues: Record<string, unknown>;
+  /** The product's own category — the trade its compare tick is in (`10d`). */
+  categoryId: string;
   categoryName: string;
   imagePath: string | null;
   /** Open restock watches, for the seller's own screens. Never shown publicly. */
@@ -489,7 +491,7 @@ async function getPage(
     leadTimeDays: true,
     minOrderQty: true,
     specValues: true,
-    category: { select: { name: true } },
+    category: { select: { id: true, name: true } },
     media: {
       // `mediaId` last: `sortOrder` is `@default(0)` and ties until a seller
       // reorders, which most never do.
@@ -575,7 +577,7 @@ function toCatalogueProduct(
     leadTimeDays: number | null;
     minOrderQty: number | null;
     specValues: unknown;
-    category: { name: string };
+    category: { id: string; name: string };
     media: { media: { storagePath: string } }[];
     _count?: { watches: number };
   },
@@ -591,6 +593,7 @@ function toCatalogueProduct(
     leadTimeDays: row.leadTimeDays,
     minOrderQty: row.minOrderQty,
     specValues: (row.specValues ?? {}) as Record<string, unknown>,
+    categoryId: row.category.id,
     categoryName: row.category.name,
     imagePath: row.media[0]?.media.storagePath ?? null,
     ...(row._count ? { watchers: row._count.watches } : {}),

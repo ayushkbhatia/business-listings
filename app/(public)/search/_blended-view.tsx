@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { FilterChip } from "@/components/display";
-import { BlendedResultList, compareKey, type CompareTicks } from "@/components/domain/BlendedResultRows";
+import { BlendedResultList } from "@/components/domain/BlendedResultRows";
 import { buttonClassName } from "@/components/primitives";
 import { FilterRail, Tabs, type FilterSection } from "@/components/structure";
 import { cn } from "@/lib/cn";
@@ -19,11 +19,9 @@ import {
   sortInScope,
   toggleFacet,
   toSearchParams,
-  trayParams,
   withoutFacet,
   type BlendedTab,
   type SearchQuery,
-  type SearchSort,
 } from "@/lib/search/query";
 import { crawlRel } from "@/lib/seo/crawl-policy";
 import { FacetOptionLink } from "@/app/(public)/_results/FacetLinks";
@@ -32,6 +30,7 @@ import { SaveSearch } from "@/app/(public)/_results/SaveSearch";
 import { ZeroInKind, ZeroNothing } from "@/app/(public)/_results/BlendedZero";
 import { AlertForm } from "@/app/(public)/_results/AlertForm";
 import { setAlert } from "@/app/(public)/_results/alert-actions";
+import { CompareTick } from "@/app/(public)/_compare/CompareTick";
 
 /**
  * Boards `10c` + `10c-s` — the one search results screen, from a query and a
@@ -53,14 +52,9 @@ export interface BlendedBodyProps {
   query: SearchQuery;
   result: BlendedSearchResult;
   copy: PairedCopies;
-  /** `B8` — supplier slugs in the comparison tray, carried in `?compare=`. */
-  tray?: readonly string[];
 }
 
-/** How many suppliers `/compare` will set side by side. */
-const COMPARE_MAX = 4;
-
-export function BlendedBody({ query, result, copy, tray = [] }: BlendedBodyProps) {
+export function BlendedBody({ query, result, copy }: BlendedBodyProps) {
   const active = result.active;
   const tabs = visibleTabs(result.counts, active);
   const applied = appliedFilters(query, result);
@@ -92,27 +86,16 @@ export function BlendedBody({ query, result, copy, tray = [] }: BlendedBodyProps
   }
 
   /*
-     `B8`/`Q1` — compare accepts a supplier, and a service row renders no tick.
-     `/compare` sets ten fixed business attributes side by side (D3); a service
-     has no comparable sheet, and what a buyer compares for a service is the
-     proposals that come back on `1n-s`. So the tray is absent entirely while
-     Services is the active scope, rather than present and inert.
+     Board `10d` `B8` — compare is products-only. A product row gets a tick and
+     nothing else does: not a service, which has no spec template, and not a
+     supplier, because `/compare` sets one trade's fields side by side and a
+     firm is not a row of them. The tray itself is the site-wide bar at the
+     foot of every public page, so this page draws no tray of its own.
   */
-  const comparable = active !== "services";
-  const ticks: CompareTicks = {};
-  if (comparable) {
-    for (const row of result.rows) {
-      if (row.kind === "service") continue;
-      const selected = tray.includes(row.businessSlug);
-      if (!selected && tray.length >= COMPARE_MAX) continue;
-      const next = selected
-        ? tray.filter((slug) => slug !== row.businessSlug)
-        : [...tray, row.businessSlug];
-      ticks[compareKey(row)] = {
-        href: `${BASE}?${trayParams(query, next)}`,
-        selected,
-      };
-    }
+  const compare: Record<string, React.ReactNode> = {};
+  for (const row of result.rows) {
+    if (row.kind !== "product") continue;
+    compare[row.id] = <CompareTick productId={row.id} productName={row.name} tradeId={row.categoryId} />;
   }
 
   return (
@@ -227,7 +210,6 @@ export function BlendedBody({ query, result, copy, tray = [] }: BlendedBodyProps
           )}
 
           <div className="mt-3 flex flex-wrap items-center justify-end gap-3">
-            {comparable && tray.length > 0 && <CompareTray query={query} tray={tray} />}
             <SaveSearch
               search={toSearchParams(query, { kind: active, page: 1 })}
               heading={[query.q.trim(), ...applied.map((filter) => filter.value)].filter(Boolean).join(" · ")}
@@ -281,7 +263,7 @@ export function BlendedBody({ query, result, copy, tray = [] }: BlendedBodyProps
               <h2 id="blended-results" className="sr-only">
                 {t("search_blended.list_label")}
               </h2>
-              <BlendedResultList rows={result.rows} copy={copy} compare={comparable ? ticks : undefined} />
+              <BlendedResultList rows={result.rows} copy={copy} compare={compare} />
 
               {/*
                  `1c-s` B4 — a product result stays in the blend, and says so.
@@ -431,41 +413,6 @@ export function SortControl({ query, active }: { query: SearchQuery; active: Ble
         <span className="sr-only">{t("search_blended.sort_scope_note")}</span>
       )}
     </nav>
-  );
-}
-
-/* ── Compare ─────────────────────────────────────────────────────────────── */
-
-export function CompareTray({ query, tray }: { query: SearchQuery; tray: readonly string[] }) {
-  const cleared = `${BASE}?${trayParams(query, [])}`;
-  return (
-    <div
-      aria-live="polite"
-      className="flex flex-wrap items-center gap-3 rounded-card border-[1.5px] border-moss bg-moss-wash px-3 py-2"
-    >
-      <span className="font-mono text-caption tabular-nums text-moss-deep">
-        {t("compare.tray", { count: tray.length })}
-      </span>
-      <a
-        href={`/compare?p=${tray.join(",")}`}
-        /*
-           `/compare` is disallowed in robots.txt and noindex besides — a tray of
-           whichever suppliers one buyer happened to pick means nothing to anyone
-           else. This is the anchor that told a crawler it existed.
-        */
-        rel="nofollow"
-        className="rounded-ctl border border-moss bg-moss px-3 py-1 text-caption font-medium text-on-ink transition-colors duration-120 ease-out hover:bg-moss-hover focus-visible:outline-none focus-visible:shadow-focus"
-      >
-        {t("compare.open")}
-      </a>
-      <a
-        href={cleared}
-        rel={crawlRel(cleared)}
-        className="rounded-tag text-caption text-moss-deep underline-offset-2 hover:underline focus-visible:outline-none focus-visible:shadow-focus"
-      >
-        {t("compare.clear")}
-      </a>
-    </div>
   );
 }
 

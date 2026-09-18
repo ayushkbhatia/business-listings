@@ -11,8 +11,16 @@ test("no two landmarks share a role and a name", async ({ page }) => {
   const duplicates = await page.evaluate(() => {
     // A <header> or <footer> is only a landmark when it is not nested inside
     // article, aside, main, nav or section. Nested ones are just headers.
+    //
+    // Likewise a <form> is a landmark only when it has an accessible name
+    // (HTML-AAM maps an unnamed one to no role, and axe agrees). Board `10d`
+    // put a one-button form on every product card — the tick posts to
+    // `/api/compare` so it works without JavaScript — and a results page is
+    // twenty of them. Counting those would demand twenty named "form"
+    // landmarks, which floods the list this test exists to keep readable.
     const selector = [
-      "main", "nav", "aside", "form",
+      "main", "nav", "aside",
+      "form[aria-label]", "form[aria-labelledby]", "[role=form]",
       "section[aria-label]", "section[aria-labelledby]",
       "[role=navigation]", "[role=banner]", "[role=main]",
       "[role=contentinfo]", "[role=complementary]", "[role=region]",

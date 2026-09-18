@@ -483,27 +483,6 @@ export function toSearchParams(query: SearchQuery, overrides: Partial<SearchQuer
 }
 
 /**
- * The query string that tray links carry, rebuilt from the parsed query.
- *
- * The three results routes each used to build this by re-serialising the raw
- * `searchParams` they were handed, which put the reflector back on the page one
- * layer below `parseSearchQuery`: a junk key survived into every "add to
- * comparison" href even after the facet bucket had learned to drop it. Rebuild
- * from the parsed query instead, and a parameter nobody defined has nowhere
- * left to hide.
- *
- * `compare` is carried through explicitly because it is the one reserved key
- * that is not part of `SearchQuery` — it is tray state, not a filter, and
- * `toSearchParams` has no business knowing about it.
- */
-export function trayParams(query: SearchQuery, tray: readonly string[]): string {
-  const params = toSearchParams(query);
-  if (tray.length === 0) return params;
-  const compare = `compare=${encodeURIComponent(tray.join(","))}`;
-  return params ? `${params}&${compare}` : compare;
-}
-
-/**
  * `basePath` with `query` on it, and no bare `?` when there is nothing to put
  * there.
  *

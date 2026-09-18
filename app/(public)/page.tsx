@@ -22,6 +22,7 @@ import { MEDIA_BUCKET, publicUrl } from "@/lib/storage";
 import { t } from "@/lib/i18n";
 import { DirectoryFooter, DirectoryNav } from "./_chrome";
 import { JsonLd } from "./_json-ld";
+import { CompareTick } from "./_compare/CompareTick";
 
 /**
  * Board 1a — the directory home.
@@ -372,7 +373,10 @@ export default async function HomePage() {
                        site passes this. Leaving it off here would have put five
                        dead buttons on the home page.
                     */
-                    enquireHref={`/rfq/new?to=${product.business.slug}`}
+                    enquireHref={`/rfq/new?to=${product.business.slug}&products=${product.id}`}
+                    compareAction={
+                      <CompareTick productId={product.id} productName={product.name} tradeId={product.categoryId} />
+                    }
                     product={{
                       slug: product.slug,
                       businessSlug: product.business.slug,

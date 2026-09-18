@@ -60,6 +60,16 @@ export interface ProductCardProps {
   notifyAction?: React.ReactNode;
   /** An inline spec table, expanded in place rather than navigating away. */
   specs?: React.ReactNode;
+  /**
+   * Board `10d` — the comparison tick, rendered by the caller.
+   *
+   * A slot rather than a prop the card acts on, for the reason `notifyAction`
+   * is one: the tick posts to an app route and reads the buyer's tray, and this
+   * card is a presentational component on four surfaces. Every public surface
+   * that draws a product card passes one, so the card reads the same on a
+   * category shelf, a catalogue and the home page.
+   */
+  compareAction?: React.ReactNode;
 }
 
 const AVAILABILITY_TONE: Record<Availability, StatusTone> = {
@@ -83,6 +93,7 @@ export function ProductCard({
   enquireHref,
   notifyAction,
   specs,
+  compareAction,
 }: ProductCardProps) {
   const link = href ?? `/b/${product.businessSlug}/p/${product.slug}`;
   const outOfStock = product.availability === "out_of_stock";
@@ -200,11 +211,11 @@ export function ProductCard({
             rel={crawlRel(enquireHref)}
             className={buttonClassName({ size: "sm", variant: "primary" })}
           >
-            {t("product.enquire")}
+            {t("listing.enquire")}
           </a>
         ) : (
           <Button size="sm" variant="primary" disabled title={t("enquiry.disabled")}>
-            {t("product.enquire")}
+            {t("listing.enquire")}
           </Button>
         )}
 
@@ -221,6 +232,7 @@ export function ProductCard({
           </details>
         )}
       </div>
+      {compareAction && <div className="mt-1.5">{compareAction}</div>}
     </div>
   );
 

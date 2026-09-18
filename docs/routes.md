@@ -19,7 +19,8 @@ and it is the one that argues back.
 /search?q&emirate&kind&…                One blended set, four filtering tabs [1c-s, 10c, 10c-s] built h10c
 /search (no words, or ?bounds=)         The directory on a map                [1c]
 /search?tab=products                    Legacy — resolves to ?kind=products  [10c]
-/compare?p=…                            Comparison tray                      [10d]
+/compare?p=…                            Products side by side — one trade, ≤4 [10d] built 10d
+                                        — no ?p=: the bl_cmp tray; ?diff=1 hides matching rows
 /b/:slug                                Storefront overview                   [1d]
 /b/:slug (sells work)                   Storefront, catalogue taken out     [1d-s] built h1ds
 /b/:slug (contact revealed)             The landline asked for, in place     [1d-v] built 15 Sep — was 13a, never routed
@@ -315,6 +316,30 @@ route. Four things are recorded above and here:
   second one on the plan screen over a different set of businesses; that panel is
   a count and a link. There are still no controls on it: `12i` audits the notices
   and `12j` sanctions a send, and neither is exported.
+
+### Board `10d` note — the comparison compares products, and the tray is a cookie
+
+`/compare` compared suppliers — ten fixed business attributes, slugs in `?p=`,
+the tray carried in every results URL as `?compare=`. Board `10d` (18 Sep) makes
+it the screen `10c`'s *matched on spec fields* promises: up to four **products**,
+one trade, one spec template. Four route-level consequences:
+
+- **`?p=` carries product ids now**, not seller slugs. A link from before the
+  change names no product and lands on the empty state, which says what the
+  page compares and where to start. Ids that are not ids are never looked up.
+- **`?compare=` is gone from every results URL.** The tray is the `bl_cmp`
+  cookie (`docs/telemetry.md` §4b), so it follows a buyer from a search to a
+  product page to a seller's catalogue instead of dying on the first link that
+  did not copy it. `compare` stays in the search query's reserved keys so an old
+  link cannot turn it into a spec facet.
+- **`POST /api/compare` is the tray's one writer** — a route handler, not a
+  Server Action, because an action that sets a cookie re-renders the page it
+  was called from, and on `/search` that is the whole loader for a tick. With
+  JavaScript it answers JSON; without, it 303s back to the page it came from.
+  Same-origin only, bodies over 2 KB refused, never cached.
+- **On a seller's subdomain** every path is the storefront's (`proxy.ts`), so
+  the tray links to the directory's `/compare` absolutely, with the set in `?p=`.
+  `/api/*` is exempt from the rewrite, so the tick works there unchanged.
 
 ### Wave 4 note — the `11f` split
 

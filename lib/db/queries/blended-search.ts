@@ -25,7 +25,6 @@ import {
   splitSectors,
   tabCounts,
   tabsWithResults,
-  type BlendedFilters,
   type FacetScope,
   type FacetVocabulary,
   type PlaceValues,
@@ -56,7 +55,6 @@ import {
   sortInScope,
   type SearchQuery,
   type SearchSort,
-  type ServiceFacetKey,
 } from "@/lib/search/query";
 import { rankResultSet, type RankSignals, type RankingKind, type VectorSet } from "@/lib/search/ranking";
 import { coverageMatch, scopeCompleteness, type CoverageTarget } from "@/lib/search/service-signals";
@@ -1320,6 +1318,7 @@ function productView(
     place: placeLabel(row.business.locations),
     chips,
     replyMs: row.business.responseTimeMedianMs,
+    categoryId: row.categoryId,
   };
 }
 

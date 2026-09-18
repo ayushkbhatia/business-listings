@@ -309,7 +309,7 @@ export default async function ReviewsPage({ params, searchParams }: Params) {
            does.
         */}
         {writeReviewHref && (
-          <div className="sticky bottom-0 z-10 border-t border-line bg-card/95 p-3 backdrop-blur-sm md:hidden">
+          <div className="sticky bottom-[var(--compare-tray-h,0px)] z-10 border-t border-line bg-card/95 p-3 backdrop-blur-sm md:hidden">
             <Link
               href={writeReviewHref}
               className={buttonClassName({ block: true })}

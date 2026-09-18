@@ -24,6 +24,7 @@ import { getActor } from "@/lib/auth/session";
 import { EnquiryCard, SpecRequestButton } from "./_enquiry-card";
 import { ProductEnquiryProvider } from "./_enquiry-context";
 import { redirectIfClosed } from "@/lib/listing/redirect";
+import { CompareTick } from "@/app/(public)/_compare/CompareTick";
 
 /**
  * Board 1g — product detail & spec table.
@@ -611,6 +612,15 @@ export default async function ProductPage({ params }: Params) {
                 </dl>
               }
             />
+            {/*
+               Board `10d`. The page a buyer is most likely to add the fourth
+               product from — the first three were ticked on a results page, and
+               this is where they landed to check one more. The tray follows
+               them here because it lives in a cookie, not in the results URL.
+            */}
+            <div className="mt-2 flex justify-end">
+              <CompareTick productId={product.id} productName={product.name} tradeId={product.categoryId} />
+            </div>
           </div>
 
           {/* ── Side cards ─────────────────────────────────────────────── */}

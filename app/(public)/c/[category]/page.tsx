@@ -12,7 +12,7 @@ import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { prisma } from "@/lib/db/client";
 import { canonicalFor, robotsForFilteredView } from "@/lib/seo/canonical";
-import { parseSearchQuery, trayParams } from "@/lib/search/query";
+import { parseSearchQuery, toSearchParams } from "@/lib/search/query";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { JsonLd } from "@/app/(public)/_json-ld";
 import { redirectIfMoved } from "@/lib/listing/redirect";
@@ -84,17 +84,18 @@ export default async function CategoryPage({ params, searchParams }: Props) {
 
   const sp = await searchParams;
   const query = parseSearchQuery(sp);
-  // The comparison tray rides in the URL so adding a supplier is a navigation
-  // and keeps every other facet intact — no client state, works without JS.
-  const trayRaw = Array.isArray(sp.compare) ? (sp.compare[0] ?? "") : (sp.compare ?? "");
-  const tray = trayRaw
-    .split(",")
-    .filter(Boolean)
-    .slice(0, 4);
-  // Rebuilt from the parsed query rather than from the raw search params. The
-  // raw form carried anything a caller invented straight back into every tray
-  // link — see `trayParams`.
-  const search = trayParams(query, tray);
+  /*
+     The saved search reproduces this exact view. Rebuilt from the parsed query
+     rather than the raw search params, which carried anything a caller invented
+     straight back into the saved row.
+
+     The comparison tray used to ride here too, as `?compare=` of supplier slugs.
+     Board `10d` made compare a product comparison and moved the tray to a
+     cookie that follows the buyer off this page, so an old `?compare=` link is
+     read by nothing — `compare` stays reserved in `lib/search/query.ts` so it
+     can never become a spec facet either.
+  */
+  const search = toSearchParams(query);
   const ids = categoryIdsFor(category);
 
   const [stats, chips, area] = await Promise.all([
@@ -191,8 +192,6 @@ export default async function CategoryPage({ params, searchParams }: Props) {
         <Results
           query={query}
           basePath={`/c/${category.slug}`}
-          tray={tray}
-          search={search}
           category={{ id: category.id, slug: category.slug, name: category.name, ids }}
         />
       </div>

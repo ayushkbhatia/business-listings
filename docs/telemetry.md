@@ -225,6 +225,51 @@ the form, before the tap that sends them, that the supplier receives them. That
 is a disclosure, not a consent basis or a retention window; both are the
 owner's open question (`Q5`) and `contact_lead` has no retention sweep yet.
 
+## 4b. The comparison tray's cookie (board `10d`, 18 Sep 2026)
+
+Section 4's revisit, a second time. Board `10d` keeps the products a buyer ticks
+for comparison in one first-party cookie, because the tray has to follow them
+from a search to a product page to a seller's catalogue, and a URL that carried
+it (the retired supplier tray did) broke on every link that did not copy it.
+
+| Cookie | Set when | Lifetime | What it is for |
+|---|---|---|---|
+| `bl_cmp` | the buyer ticks *Compare* on a product, and on each change after | browser session, no `Max-Age` | the up-to-four products held for comparison, their trade, and the names the tray draws |
+
+It is the basket case — a buyer's own selection, kept because they made it —
+which is the strictly-necessary case rather than tracking. What keeps it there,
+and must stay true; `lib/compare/service.ts` `trayCookie` is where each is set:
+
+1. **Nothing is set for a visitor who does not tick.** No page sets it on a
+   view. `/api/compare` writes it only when the tray actually changed —
+   `added`, `replaced`, `removed`, `cleared` — and deletes it when the last
+   product leaves. A refused fifth, an idempotent re-add and a delisted product
+   write nothing.
+2. **It holds what the buyer chose and nothing about them.** Product ids, the
+   product and seller names the tray labels, and the trade. No visitor id, no
+   timestamp, no count of anything. Two buyers who tick the same two products
+   hold byte-identical cookies.
+3. **It is read for nothing else.** No analytics event, no `product_event` row,
+   no ranking and no personalisation reads it. `/compare` reads its ids and then
+   reads every column from the database (`loadComparison`); the names in the
+   cookie are a label, never a record.
+4. **It is readable by script, on purpose.** The tick and the tray are drawn on
+   statically rendered pages — search, category shelves, catalogues, product
+   pages — which cannot read a request cookie on the server without becoming
+   per-request renders for everybody. The client reads it after hydration
+   (`app/(public)/_compare/store.ts`). It grants nothing, so there is nothing
+   for a script to steal.
+5. **Session, `SameSite=Lax`, path `/`, host-only.** It ends with the browser;
+   the durable form of a comparison is its URL (`/compare?p=…`, `B10`), which a
+   buyer can keep or send. On a seller's subdomain the cookie is not visible,
+   and the tray's link to the comparison carries the set in `?p=` instead.
+
+**Owed, not done here:** the cookie policy's register (`lib/legal/cookie-register.ts`,
+rendered at `/cookies`) calls itself the whole list and does not name `bl_cmp` —
+nor `bl_rsid` and `bl_vid` from §4a. Amending a dated legal document is the
+owner's call; the gap is pinned in `lib/legal/cookie-register.test.ts` beside
+`bl_attr`'s.
+
 ## 5. Retention
 
 **`product_event`: 180 days**, deleted by `prunedProductEvents` in

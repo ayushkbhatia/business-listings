@@ -5,7 +5,7 @@ import { countResults, getCategoryBySlug, getSpecFacets } from "@/lib/db/queries
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { canonicalFor, isFiltered } from "@/lib/seo/canonical";
-import { parseSearchQuery, trayParams } from "@/lib/search/query";
+import { parseSearchQuery } from "@/lib/search/query";
 import { landingFacts } from "@/lib/seo/facts";
 import { faqJsonLd, landingFaq } from "@/lib/seo/faq";
 import { isCategoryPublishable } from "@/lib/seo/taxonomy";
@@ -100,17 +100,13 @@ export default async function SubcategoryPage({ params, searchParams }: Props) {
 
   const sp = await searchParams;
   const query = parseSearchQuery(sp);
-  // The comparison tray rides in the URL so adding a supplier is a navigation
-  // and keeps every other facet intact — no client state, works without JS.
-  const trayRaw = Array.isArray(sp.compare) ? (sp.compare[0] ?? "") : (sp.compare ?? "");
-  const tray = trayRaw
-    .split(",")
-    .filter(Boolean)
-    .slice(0, 4);
-  // Rebuilt from the parsed query rather than from the raw search params. The
-  // raw form carried anything a caller invented straight back into every tray
-  // link — see `trayParams`.
-  const search = trayParams(query, tray);
+  /*
+     The comparison tray used to ride here as `?compare=` of supplier slugs.
+     Board `10d` made compare a product comparison and moved the tray to a
+     cookie that follows the buyer off this page, so an old `?compare=` link is
+     read by nothing — `compare` stays reserved in `lib/search/query.ts` so it
+     can never become a spec facet either.
+  */
 
   const basePath = `/c/${parent.slug}/${category.slug}`;
 
@@ -191,8 +187,6 @@ export default async function SubcategoryPage({ params, searchParams }: Props) {
         <Results
           query={query}
           basePath={basePath}
-          tray={tray}
-          search={search}
           category={{
             id: category.id,
             slug: category.slug,

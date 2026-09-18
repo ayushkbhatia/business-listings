@@ -30,14 +30,7 @@ import { BlendedBody } from "./_blended-view";
 
 const BASE = "/search";
 
-export async function BlendedSearchPage({
-  query,
-  tray = [],
-}: {
-  query: SearchQuery;
-  /** `B8` — supplier slugs in the comparison tray, straight off `?compare=`. */
-  tray?: readonly string[];
-}) {
+export async function BlendedSearchPage({ query }: { query: SearchQuery }) {
   const [result, copy] = await Promise.all([blendedSearch(query), pairedCopies()]);
 
   /*
@@ -66,7 +59,7 @@ export async function BlendedSearchPage({
       }
       footer={<DirectoryFooter />}
     >
-      <BlendedBody query={query} result={result} copy={copy} tray={tray} />
+      <BlendedBody query={query} result={result} copy={copy} />
     </PublicShell>
   );
 }

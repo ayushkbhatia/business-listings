@@ -48,26 +48,14 @@ import { tierSpec } from "./verification";
  */
 
 /**
- * `B8`/`Q1` — a row's comparison tick, where the row has one.
+ * Board `10d` `B8` — a product row's comparison tick, rendered by the page.
  *
- * A value rather than a callback, because these cross into a client island and
- * a function does not: the page knows the tray, the row knows nothing about it.
- * **A service row is never handed one.** `/compare` sets a supplier's ten fixed
- * attributes side by side (decision D3), a service has no comparable sheet, and
- * what a buyer compares for a service is the proposals that come back on
- * `1n-s` — so the tick belongs to the two shapes whose subject is a supplier.
+ * An element rather than anything this file builds: the tick posts to an app
+ * route and reads the buyer's tray, neither of which a presentational row
+ * should know about. Keyed by product id. Only product rows are handed one — a
+ * service has no spec template and a supplier is not a row of fields.
  */
-export interface CompareTick {
-  href: string;
-  selected: boolean;
-}
-
-/** The ticks a list is drawn with, keyed `kind:id`. */
-export type CompareTicks = Record<string, CompareTick>;
-
-export function compareKey(row: BlendedResultView): string {
-  return `${row.kind}:${row.id}`;
-}
+export type CompareActions = Readonly<Record<string, React.ReactNode>>;
 
 /** The kind label a row leads with — `SERVICE`, `SUPPLIER`, `PRODUCT`. */
 export function ResultKindBadge({ kind }: { kind: BlendedResultView["kind"] }) {
@@ -96,48 +84,6 @@ export function CheckedCredentialBadge({ kind }: { kind: string }) {
       <span className="sr-only">{t("search_blended.credential_checked", { credential: name })}</span>
       <span aria-hidden>{name}</span>
     </span>
-  );
-}
-
-/**
- * The comparison tick, as a link.
- *
- * A link because the tray lives in the query string — the same reason every
- * facet is one. It carries its own state in the accessible name rather than in
- * `aria-pressed`, which belongs to a button: adding a supplier to the tray is a
- * navigation.
- */
-function CompareLink({ tick, name }: { tick: CompareTick; name: string }) {
-  return (
-    <a
-      href={tick.href}
-      rel="nofollow"
-      aria-current={tick.selected ? "true" : undefined}
-      className={cn(
-        "inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-tag py-0.5 text-caption",
-        "transition-colors duration-120 ease-out focus-visible:outline-none focus-visible:shadow-focus",
-        tick.selected ? "text-ink" : "text-muted hover:text-ink",
-      )}
-    >
-      <span
-        aria-hidden="true"
-        className={cn(
-          "flex size-4 items-center justify-center rounded-tag border",
-          tick.selected ? "border-moss bg-moss text-on-ink" : "border-line-strong bg-card",
-        )}
-      >
-        {tick.selected && <Check size={11} />}
-      </span>
-      {/*
-         The name is in the accessible name and not in the visible one. Four
-         *Compare* links down a column are unambiguous to read and hopeless to
-         hear, and the row is 13rem wide — the firm's name wraps to three lines
-         where it is drawn. Same trade `FacetOptionLink` makes with its state
-         word.
-      */}
-      {tick.selected ? t("compare.in_tray") : t("action.compare")}
-      <span className="sr-only"> {name}</span>
-    </a>
   );
 }
 
@@ -308,15 +254,7 @@ function sentence(text: string): string {
  * own name and nothing it lists did, the line says so instead, which is also
  * the reason that firm has a row in Everything at all.
  */
-export function SupplierResultRow({
-  row,
-  copy,
-  compare,
-}: {
-  row: SupplierResultView;
-  copy: PairedCopies;
-  compare?: CompareTick | undefined;
-}) {
+export function SupplierResultRow({ row, copy }: { row: SupplierResultView; copy: PairedCopies }) {
   const headingId = `result-supplier-${row.id}`;
   const href = `/b/${row.businessSlug}`;
   const chips = row.services
@@ -374,7 +312,6 @@ export function SupplierResultRow({
             {copy[row.sellsWork ? "services" : "goods"]["search_blended.view_storefront"]}
           </Link>
           <Reply ms={row.replyMs} />
-          {compare && <CompareLink tick={compare} name={row.businessName} />}
         </>
       }
     >
@@ -412,13 +349,7 @@ export function SupplierResultRow({
 
 /* ── Product ─────────────────────────────────────────────────────────────── */
 
-export function ProductResultRow({
-  row,
-  compare,
-}: {
-  row: ProductResultView;
-  compare?: CompareTick | undefined;
-}) {
+export function ProductResultRow({ row, compare }: { row: ProductResultView; compare?: React.ReactNode }) {
   const headingId = `result-product-${row.id}`;
   const href = `/b/${row.businessSlug}/p/${row.slug}`;
   const chips = [...row.chips, ...(row.inStock ? [] : [row.availability]), ...(row.place ? [row.place] : [])];
@@ -438,7 +369,7 @@ export function ProductResultRow({
           </Link>
           {/* B5 — reply time is on every row of both kinds, measured. */}
           <Reply ms={row.replyMs} />
-          {compare && <CompareLink tick={compare} name={row.businessName} />}
+          {compare}
         </>
       }
     >
@@ -468,10 +399,10 @@ export function BlendedResultRow({
 }: {
   row: BlendedResultView;
   copy: PairedCopies;
-  compare?: CompareTick | undefined;
+  compare?: React.ReactNode;
 }) {
   if (row.kind === "service") return <ServiceResultRow row={row} />;
-  if (row.kind === "supplier") return <SupplierResultRow row={row} copy={copy} compare={compare} />;
+  if (row.kind === "supplier") return <SupplierResultRow row={row} copy={copy} />;
   return <ProductResultRow row={row} compare={compare} />;
 }
 
@@ -485,15 +416,15 @@ export function BlendedResultList({
   rows: readonly BlendedResultView[];
   /** Both halves of the paired strings, from `pairedCopies()` — a row reads the one its firm's kind picks. */
   copy: PairedCopies;
-  /** `B8` — the tray's ticks, keyed `kind:id`. Absent while the Services tab is active. */
-  compare?: CompareTicks | undefined;
+  /** Board `10d` — each product row's tick, keyed by product id. */
+  compare?: CompareActions | undefined;
   className?: string;
 }) {
   return (
     <ol className={cn("flex list-none flex-col gap-3 p-0", className)}>
       {rows.map((row) => (
-        <li key={compareKey(row)} data-result-kind={row.kind}>
-          <BlendedResultRow row={row} copy={copy} compare={compare?.[compareKey(row)]} />
+        <li key={`${row.kind}:${row.id}`} data-result-kind={row.kind}>
+          <BlendedResultRow row={row} copy={copy} compare={row.kind === "product" ? compare?.[row.id] : undefined} />
         </li>
       ))}
     </ol>

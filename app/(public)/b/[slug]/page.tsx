@@ -19,6 +19,7 @@ import { StorefrontHeader, storefrontCrumbs } from "./_storefront";
 import { ClosedStorefront } from "./_closed";
 import { closedListing } from "@/lib/closure/public";
 import { Branches, CatalogueGrid, Hero, Reviews, TrustStrip } from "@/components/storefront";
+import { CompareTick } from "@/app/(public)/_compare/CompareTick";
 import { storefrontData } from "@/lib/storefront/loader";
 import { openingHoursSchema } from "@/lib/trade/open-now";
 import { ContactActions, ContactReveal, RevealNote } from "./ContactReveal";
@@ -690,7 +691,21 @@ async function ClaimedStorefront({
               <TrustStrip data={data} enquireHref={sectionEnquireHref} />
             </div>
             <div>
-              <CatalogueGrid data={data} enquireHref={sectionEnquireHref} />
+              <CatalogueGrid
+                data={data}
+                enquireHref={sectionEnquireHref}
+                compare={Object.fromEntries(
+                  data.products.map((product) => [
+                    product.id,
+                    <CompareTick
+                      key={product.id}
+                      productId={product.id}
+                      productName={product.name}
+                      tradeId={product.categoryId}
+                    />,
+                  ]),
+                )}
+              />
             </div>
             <div>
               <Reviews data={data} enquireHref={sectionEnquireHref} />

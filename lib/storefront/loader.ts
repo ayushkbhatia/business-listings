@@ -54,7 +54,7 @@ export async function storefrontData(business: {
       take: 12,
       select: {
         id: true, slug: true, name: true, sku: true, availability: true,
-        stockQty: true, leadTimeDays: true, minOrderQty: true,
+        stockQty: true, leadTimeDays: true, minOrderQty: true, categoryId: true,
       },
     }),
     prisma.product.count({ where: { businessId, status: { not: "draft" } } }),
@@ -119,6 +119,7 @@ export async function storefrontData(business: {
       // does not load one per product just to label a card.
       sizeLabel: null,
       imageUrl: null,
+      categoryId: product.categoryId,
     })),
     productCount,
     reviews: reviews.map((review) => ({
