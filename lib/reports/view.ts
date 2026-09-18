@@ -47,6 +47,18 @@ export interface ReportEntry {
    * corrected twice and reported a third time is the case this is for.
    */
   priorsOnField: number;
+  /**
+   * Board 13c `B2` — how many distinct sources have said this, and on how many
+   * listings, counted over the **value** group where the field carries a value
+   * and over this work item where it does not.
+   *
+   * Distinct sources rather than rows: one person reporting one number on four
+   * listings is one voice about four pages. Live, not stored — a report
+   * decided this morning takes its corroboration with it.
+   */
+  corroboration: { sources: number; listings: number };
+  /** Three sources or more. The threshold the report modal's footer promises. */
+  flagged: boolean;
   filedAt: Date;
   waitingMs: number;
   slaMs: number;
@@ -71,6 +83,8 @@ export interface ReportQueueView {
   autoDetected: number;
   /** Underlying records, which is larger than `total` wherever a group collapsed. */
   records: number;
+  /** Work items at the three-source threshold, counted off `all`. */
+  flagged: number;
 }
 
 export interface ReportQueueFilter {
@@ -78,6 +92,8 @@ export interface ReportQueueFilter {
   assigneeId?: string | null;
   /** Escalated and still open. The ops lead's own list. */
   escalated?: boolean;
+  /** Board 13c — at the three-source threshold. */
+  flagged?: boolean;
 }
 
 /**
@@ -90,6 +106,14 @@ export interface ReportQueueFilter {
 function queueOrder(a: ReportEntry, b: ReportEntry): number {
   const lateness = Number(b.sla === "late") - Number(a.sla === "late");
   if (lateness !== 0) return lateness;
+  /*
+     Board 13c. *Three reports flag the listing for review* has to mean the
+     listing moves, or the flag is a word in a footer. Below the late rows,
+     because a missed service level is a promise already broken and a flag is
+     one about to be; above everything else.
+  */
+  const flag = Number(b.flagged) - Number(a.flagged);
+  if (flag !== 0) return flag;
   const age = a.filedAt.getTime() - b.filedAt.getTime();
   if (age !== 0) return age;
   return a.ref.localeCompare(b.ref);
@@ -103,6 +127,7 @@ export function viewOf(all: ReportEntry[], filter: ReportQueueFilter): ReportQue
     .filter((entry) => (filter.type ? entry.type === filter.type : true))
     .filter((entry) => (filter.assigneeId ? entry.assignee?.id === filter.assigneeId : true))
     .filter((entry) => (filter.escalated ? entry.escalatedAt !== null : true))
+    .filter((entry) => (filter.flagged ? entry.flagged : true))
     .sort(queueOrder);
 
   return {
@@ -113,6 +138,7 @@ export function viewOf(all: ReportEntry[], filter: ReportQueueFilter): ReportQue
     overSla: all.filter((entry) => entry.sla === "late").length,
     autoDetected: all.filter((entry) => entry.detector !== null).length,
     records: all.reduce((sum, entry) => sum + entry.reports, 0),
+    flagged: all.filter((entry) => entry.flagged).length,
   };
 }
 

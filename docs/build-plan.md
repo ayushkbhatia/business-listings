@@ -641,7 +641,14 @@ the only large piece and the only one selling something it does not deliver.
 
 ### Phase 9 · The four that do not exist, and the standing lane — 3 boards + hygiene
 
-- [ ] **9.1 `13c`** — report a listing, from the buyer's side.
+- [x] **9.1 `13c`** — report a listing, from the buyer's side. *Done 18 Sep 2026:* a modal over the
+  storefront at `/b/:slug?report=1` (a URL, `noindex`, 404 on a dead slug), degrading to
+  `/report/:slug` — one form component, one action, one writer. It captures the field, the value
+  read from the listing and the reporter's correction (`B1`, `B2`), the suggested trade (`B9`), an
+  optional email used once and a reference (`B4`), and writes the licence record's answer into
+  every evidence line (`B3`). Three distinct sources about one value flag the listing on `4h`. The
+  ownership reason routes to the claim flow (`B10`). `/report` is the footer's hub and reads a
+  reference.
 - [x] **9.2 `13e`** — maintenance, and the 500 that has no board either. No `error.tsx` exists
   anywhere; draw both in one board. A 503 needs `Retry-After` or a crawler deindexes 2,000 landing
   pages. *Done 14 Sep 2026:* `proxy.ts` answers a recorded window with a whole document, 503 and
@@ -686,7 +693,7 @@ the only large piece and the only one selling something it does not deliver.
 | `4f` | Businesses & health | built | small | Health derived from measured reply rate, search, filters, segments, export, detail route. The suspension appeal path is not built. | 4.5 |
 | `10g` | Unclaimed listing | partial | small | Both calls to action render `disabled`; the claim destination exists and only the href is absent. | 1.1 / 4.6 |
 | `10a` | Subcategory page | partial ↓ | export only | Two definitions of "suppliers in this trade" render on one page. | 5.2 |
-| `13c` | Report a listing | not started | medium | The admin queue is built; both live entry points go to the verification policy. | 9.1 |
+| `13c` | Report a listing | built | — | Modal over the storefront and the page it degrades to; value capture, reference, one-shot email, three-source flag, claim door. | 9.1 |
 | `4h` | Reports, flags & disputes | built | — | One queue, one taxonomy, a service level per type, and two detectors filling it. | 6.4 |
 | `4g` | Subscriptions & revenue | built | small | One Dubai month from the ledger; every ratio prints its formula, NRR excludes new business, placement stays out of MRR. | 6.2 |
 | `11e` | Sponsored placement | built | large | One trade in one emirate, priced from measured demand in ten bands, frozen at booking, with an editable rate card. | 6.3 |

@@ -1,6 +1,8 @@
 import type { PrismaClient } from "../lib/db/generated/client.js";
 import { DEFAULT_DETECTOR_RULES } from "../lib/reports/detector-rules.js";
 import { runReportDetectorsIn } from "../lib/reports/detectors.js";
+import { evidenceLine } from "../lib/reports/evidence.js";
+import { subjectValueKey } from "../lib/reports/value-key.js";
 
 /**
  * Board 4h — the queue as a working morning leaves it, and ninety days of
@@ -35,6 +37,14 @@ type Db = PrismaClient;
 
 const DAY = 86_400_000;
 const HOUR = 3_600_000;
+
+/**
+ * The landline three listings share, below. Named once so the three buyers'
+ * reports carry the value key the detector will group on — board 13c `B2` — and
+ * the detector's finding and theirs land in one value group, as a real report
+ * filed through the form would.
+ */
+const SHARED_NUMBER = "+97143472290";
 
 export async function seedReports(db: Db, now: Date): Promise<void> {
   console.log("→ reports, flags and disputes, for board 4h");
@@ -97,6 +107,8 @@ export async function seedReports(db: Db, now: Date): Promise<void> {
           reporterId: buyers[index % buyers.length]!.id,
           kind: "wrong_details",
           subjectField: "phone",
+          subjectValueKey: subjectValueKey("phone", SHARED_NUMBER),
+          subjectValue: SHARED_NUMBER,
           detail,
           createdAt: new Date(now.getTime() - (3 * DAY - index * 6 * HOUR)),
         },
@@ -223,7 +235,7 @@ export async function seedReports(db: Db, now: Date): Promise<void> {
       orderBy: { slug: "asc" },
       select: { id: true, locations: { orderBy: { id: "asc" }, take: 1, select: { id: true } } },
     });
-    const number = "+97143472290";
+    const number = SHARED_NUMBER;
     for (const business of [...sharing, shared]) {
       const location =
         "locations" in business
@@ -241,8 +253,112 @@ export async function seedReports(db: Db, now: Date): Promise<void> {
     }
   }
 
+  await seedReportCapture(db, now, shared ?? null);
+
   const open = await db.supplierReport.count({ where: { outcome: null } });
   console.log(`   ${open} open reports, and ninety days of decisions behind the rail`);
+}
+
+/**
+ * Board 13c — what the report modal captures, in the shapes the writer leaves.
+ *
+ * Three rows no earlier fixture produces, each filed the way
+ * `fileListingReport` files a signed-out report — a `reporterKey` digest in
+ * place of an account, the value read from the listing, the licence clause in
+ * the evidence line:
+ *
+ *   1. **A fourth source on the shared number**, anonymous, with the
+ *      correction a reporter offers (`B1`). With the three buyers and the
+ *      detector's findings it makes the value group the queue flags.
+ *   2. **A closure report with an address to write back to** (`B4`), on an
+ *      unclaimed listing — the modal's drawn case — so the detail screen shows
+ *      *An email they left, used once*.
+ *   3. **Not this trade, with the trade it should be** (`B9`).
+ *
+ * Every row a new fixture. The keys are fixed strings rather than digests of
+ * anything, because nothing reads them back except the dedupe, and a seed that
+ * hashed a made-up address would be pretending to know one.
+ */
+async function seedReportCapture(
+  db: Db,
+  now: Date,
+  shared: { id: string } | null,
+): Promise<void> {
+  const unclaimed = await db.business.findMany({
+    where: {
+      claimStatus: "unclaimed",
+      publishedAt: { not: null },
+      suspendedAt: null,
+      closedAt: null,
+      reports: { none: {} },
+    },
+    orderBy: [{ slug: "desc" }, { id: "asc" }],
+    take: 2,
+    select: { id: true, licenceNumber: true, licenceExpiry: true, primaryCategoryId: true },
+  });
+
+  if (shared) {
+    await db.supplierReport.create({
+      data: {
+        subjectBusinessId: shared.id,
+        reporterId: null,
+        reporterKey: "seed-13c-shared-number",
+        kind: "wrong_details",
+        subjectField: "phone",
+        subjectValueKey: subjectValueKey("phone", SHARED_NUMBER),
+        subjectValue: SHARED_NUMBER,
+        suggestedValue: "+971 6 554 1180",
+        detail: "The number on their delivery van is different. That one answered as the fabricators.",
+        evidence: evidenceLine({ field: "phone", listings: 3, licenceExpiry: null, now }),
+        createdAt: new Date(now.getTime() - 5 * HOUR),
+      },
+    });
+  }
+
+  const [closed, miscategorised] = unclaimed;
+  if (closed) {
+    await db.supplierReport.create({
+      data: {
+        subjectBusinessId: closed.id,
+        reporterId: null,
+        reporterKey: "seed-13c-closed",
+        reporterEmail: "reporter@example.ae",
+        kind: "closed",
+        subjectField: "licence",
+        subjectValueKey: subjectValueKey("licence", closed.licenceNumber),
+        subjectValue: closed.licenceNumber,
+        detail: "Shutters down and a to-let sign on the unit. The neighbours say they left in the spring.",
+        evidence: evidenceLine({ field: "licence", listings: 1, licenceExpiry: closed.licenceExpiry, now }),
+        createdAt: new Date(now.getTime() - 26 * HOUR),
+      },
+    });
+  }
+
+  if (miscategorised) {
+    const other = await db.category.findFirst({
+      where: { showInIndex: true, parentId: { not: null }, id: { not: miscategorised.primaryCategoryId } },
+      orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
+      select: { id: true },
+    });
+    await db.supplierReport.create({
+      data: {
+        subjectBusinessId: miscategorised.id,
+        reporterId: null,
+        reporterKey: "seed-13c-trade",
+        kind: "wrong_trade",
+        subjectField: "category",
+        suggestedCategoryId: other?.id ?? null,
+        detail: null,
+        evidence: evidenceLine({
+          field: "category",
+          listings: 1,
+          licenceExpiry: miscategorised.licenceExpiry,
+          now,
+        }),
+        createdAt: new Date(now.getTime() - 9 * HOUR),
+      },
+    });
+  }
 }
 
 /**

@@ -58,7 +58,7 @@ export const dynamic = "force-dynamic";
 export default async function ReportsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ type?: string; mine?: string; escalated?: string }>;
+  searchParams: Promise<{ type?: string; mine?: string; escalated?: string; flagged?: string }>;
 }) {
   const seat = await requireStaff();
   if (!can(seat.actor, "report.resolve")) notFound();
@@ -67,11 +67,13 @@ export default async function ReportsPage({
   const type = query.type && isReportType(query.type) ? query.type : null;
   const mine = query.mine === "1";
   const escalated = query.escalated === "1";
+  /* Board 13c — the three-source flag the report modal's footer promises. */
+  const flagged = query.flagged === "1";
   const now = new Date();
 
   const [view, outcomes, staff, log, badges] = await Promise.all([
     loadReportQueue(
-      { type, assigneeId: mine ? seat.actor.id : null, escalated },
+      { type, assigneeId: mine ? seat.actor.id : null, escalated, flagged },
       now,
     ),
     reportOutcomes(now),
@@ -80,14 +82,21 @@ export default async function ReportsPage({
     getAdminNavBadges(seat),
   ]);
 
-  const search = (next: { type?: string | null; mine?: boolean; escalated?: boolean }) => {
+  const search = (next: {
+    type?: string | null;
+    mine?: boolean;
+    escalated?: boolean;
+    flagged?: boolean;
+  }) => {
     const params = new URLSearchParams();
     const wantType = next.type === undefined ? type : next.type;
     const wantMine = next.mine === undefined ? mine : next.mine;
     const wantEscalated = next.escalated === undefined ? escalated : next.escalated;
+    const wantFlagged = next.flagged === undefined ? flagged : next.flagged;
     if (wantType) params.set("type", wantType);
     if (wantMine) params.set("mine", "1");
     if (wantEscalated) params.set("escalated", "1");
+    if (wantFlagged) params.set("flagged", "1");
     const text = params.toString();
     return text ? `/admin/reports?${text}` : "/admin/reports";
   };
@@ -219,6 +228,9 @@ export default async function ReportsPage({
                 {t("admin.reports.chip.escalated", {
                   n: formatCount(view.all.filter((entry) => entry.escalatedAt !== null).length),
                 })}
+              </ChipLink>
+              <ChipLink href={search({ flagged: !flagged })} selected={flagged}>
+                {t("admin.reports.chip.flagged", { n: formatCount(view.flagged) })}
               </ChipLink>
             </nav>
             <span className="text-body-sm text-muted">{t("admin.reports.sort")}</span>

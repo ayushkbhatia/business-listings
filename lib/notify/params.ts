@@ -168,7 +168,14 @@ export const EVENT_PARAMS = {
      saying *"the address field held a residential flat number"* would throw in
      a path where nobody is watching rather than send.
   */
-  report_resolved: ["businessName", "businessSlug", "outcome"],
+  /*
+     Board 13c `B4`: `reference` joins them — the `RP-` number the reporter was
+     shown on the confirmation, so an email arriving two days later can be
+     matched to the report it answers. It is a placeholder the template may use
+     rather than one it must: the wording lives in the template editor on `12g`,
+     and a new placeholder is a thing staff add there without a deploy.
+  */
+  report_resolved: ["businessName", "businessSlug", "outcome", "reference"],
   /*
      Declared, and deliberately empty — so `isEmitted` reports false and the
      notifications screen shows it as "nothing sends this yet", which is the
@@ -243,7 +250,7 @@ export const EVENT_SOURCES = {
   review_requested: ["11c"],
   review_dispute_decided: ["11c"],
   document_expiring: ["3e"],
-  report_resolved: ["4h"],
+  report_resolved: ["4h", "13c"],
   product_alert_matched: [],
   ramadan_dates_moved: ["3d"],
   // `endPlacementsFor`, which is what ends a slot for all three of its reasons.
@@ -368,6 +375,7 @@ export function sampleParams<E extends NotificationEvent>(
     preview: "We can deliver the pumps from stock in Jebel Ali next week if that suits.",
     rating: 4,
     outcome: "Upheld",
+    reference: "RP-4K2M9XQT",
     ground: "Not a real transaction",
     expiresAt: "28 Oct 2026",
     days: 14,

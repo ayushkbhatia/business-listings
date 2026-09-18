@@ -32,6 +32,7 @@ and it is the one that argues back.
 /b/:slug/services                       Services list — rows, not a grid    [1e-s] built h1es
 /b/:slug/s/:service                     Service detail — the scope table    [1g-s] built h3gs
 /b/:slug (unclaimed variant)            Unclaimed listing                    [10g]
+/b/:slug?report=1                       Report a listing — modal over the storefront [13c] built 13c · noindex
 /rfq/new                                RFQ fan-out                           [1h]  built h2s3
 /rfq/new (trade sold by the job)        Brief — five questions, no quantity [1h-s] built h1hs
 /rfq/new?revise=:ref                    Add detail to a sent enquiry          [1i]  built h1hs
@@ -52,7 +53,8 @@ and it is the one that argues back.
 /:emirate/:category                     Trade across one emirate — 84 of them [6a]  built h5s2
 /:emirate/:area/:category               Area landing page                     [6a]  built h5s3
 /lp/:campaign                           Campaign landing                     [10i]  built h5s5
-/report/:slug                           Report a listing — the four public kinds [4h] built 4h
+/report                                 Report hub — find the listing; ?ref= looks up a report [13c] built 13c · noindex
+/report/:slug                           Report a listing — the page the modal degrades to [4h · 13c] built 4h, 13c
 /terms                                  Terms of use, 16 clauses             [13f]  built h7s1
 /privacy                                Privacy policy, 12 sections          [13g]  built h7s1
 /cookies                                Cookie policy + 9-cookie register    [13h]  built h7s1

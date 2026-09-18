@@ -98,6 +98,30 @@ export const RATE_POLICIES = {
      not one reporter.
   */
   listing_report: { limit: 6, windowMs: 60 * MINUTE, cooldownMs: 20_000 },
+  /*
+     Board 13c `B8` — *rate-limit by IP and by listing.* The bucket above is the
+     IP half; this is the listing half, keyed on the business rather than on
+     whoever is asking.
+
+     It is what stands between the three-report flag and a botnet. Six an hour
+     from one address stops one person; it does not stop forty addresses each
+     filing once, and forty reports on a competitor's listing in an hour is
+     exactly the attack the flag invites. Twelve an hour is far more than any
+     genuinely broken listing collects — three is enough to flag it, and the
+     rest are corroboration a moderator does not need — and a listing at the
+     ceiling is one whose reports are already in front of somebody.
+
+     No cooldown. Two strangers reporting one listing a second apart are two
+     people, and refusing the second would be refusing a witness.
+  */
+  listing_report_subject: { limit: 12, windowMs: 60 * MINUTE, cooldownMs: 0 },
+  /*
+     Board 13c. `/report?ref=` reads one report by its forty-bit reference, with
+     no session. Guessing one is hopeless at any rate; the limit is what keeps a
+     script trying from costing nothing. Thirty a minute is far more than a
+     person re-checking their own.
+  */
+  report_status: { limit: 30, windowMs: MINUTE, cooldownMs: 0 },
 } as const satisfies Record<string, RatePolicy>;
 
 export type RateBucket = keyof typeof RATE_POLICIES;

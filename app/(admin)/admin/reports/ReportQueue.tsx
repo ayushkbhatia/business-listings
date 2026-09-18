@@ -122,6 +122,11 @@ export function ReportQueue({
               {t("admin.reports.escalated")}
             </StatusBadge>
           )}
+          {row.flagged && (
+            <StatusBadge tone="warn" size="sm">
+              {row.flagged}
+            </StatusBadge>
+          )}
           {row.suspended && (
             <StatusBadge tone="bad" size="sm">
               {t("admin.reports.suspended")}

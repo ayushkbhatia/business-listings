@@ -77,10 +77,14 @@ export function isReportKind(value: ReportType): value is ReportKind {
  * no producer at all: the storefront's two *Report this listing* links have
  * pointed at `/verification-policy` — a page of prose — since the storefront
  * shipped.
+ *
+ * The order is board 13c's, which puts *Permanently closed* first. That is the
+ * claim a person makes about an unclaimed listing they have just driven to, and
+ * an unclaimed listing is where the modal is drawn.
  */
 export const PUBLIC_REPORT_KINDS = [
-  "wrong_details",
   "closed",
+  "wrong_details",
   "wrong_trade",
   "content",
 ] as const satisfies readonly ReportKind[];
@@ -109,6 +113,26 @@ export const REPORT_SUBJECT_FIELDS = [
   "photo",
   "description",
   "hours",
+  /**
+   * The trade licence record itself. Board 13c.
+   *
+   * Two things arrive here and they are the same work item. `sweepLongExpiredLicences`
+   * has written `subjectField: "licence"` since board 4h — on a value this list
+   * did not contain, which made it a group the taxonomy could not name — and
+   * *Permanently closed* on the public form is a person standing outside the
+   * unit telling us the thing that sweep is looking for.
+   *
+   * The export's correction table reads *"Permanently closed — names no field;
+   * it is a claim about the business."* True of the shop front, and the reason
+   * it lands here anyway is `B3`: the promise on the modal is that **we check
+   * every report against the licence record**, so the licence record is exactly
+   * what a closure report is about. Filing it against the licence is what makes
+   * the buyer's report and the expiry sweep's finding collapse into one row
+   * instead of sitting in two — which is the defect `4h`'s own flag 4 records,
+   * a business whose licence expired fourteen months ago found by two buyers
+   * rather than by the pass.
+   */
+  "licence",
 ] as const;
 
 export type ReportSubjectField = (typeof REPORT_SUBJECT_FIELDS)[number];
@@ -120,7 +144,61 @@ export function isReportSubjectField(value: string): value is ReportSubjectField
 /** The fields each public kind may name. A closed unit is not about a photo. */
 export const FIELDS_FOR_KIND: Record<PublicReportKind, readonly ReportSubjectField[]> = {
   wrong_details: ["phone", "address", "website", "name", "hours"],
-  closed: ["address"],
+  closed: ["licence"],
   wrong_trade: ["category", "description"],
   content: ["photo", "description"],
 };
+
+/**
+ * Board 13c `B1` — the fields that take a correction as well as a complaint.
+ *
+ * *"`Wrong phone or address` opens a sub-choice — which one — and an optional
+ * what should it say."* The correction is the difference between a moderator
+ * reading *the number is wrong* and knowing what to check the register for, and
+ * it is what makes `58% seller corrected the listing` a number the platform can
+ * help along rather than one it only counts.
+ *
+ * Only where a correction is a short piece of text somebody can be expected to
+ * know. A photograph is not, a description is an essay, the category has its
+ * own control (`suggestedCategoryId`, `B9`), and a licence number is not
+ * something a passer-by has.
+ */
+export const FIELDS_TAKING_CORRECTION = ["phone", "address", "name", "website", "hours"] as const;
+
+export type CorrectableField = (typeof FIELDS_TAKING_CORRECTION)[number];
+
+export function takesCorrection(field: ReportSubjectField): field is CorrectableField {
+  return (FIELDS_TAKING_CORRECTION as readonly string[]).includes(field);
+}
+
+/** How long a suggested correction may be. A replacement value, not an essay. */
+export const MAX_CORRECTION = 160;
+
+/**
+ * Board 13c `B10` — the reason on the modal that is not a report.
+ *
+ * *"`Someone else claimed my business` is an ownership dispute raised by the
+ * rightful owner — the counter-case to `2a`'s free claim. It needs licence
+ * evidence and a named claimant, not an anonymous radio button."*
+ *
+ * It stays on the modal, because the modal is where somebody who has just found
+ * their own company under somebody else's account is standing, and taking the
+ * row away would leave them with nothing. What it does is leave: it routes to
+ * `/onboarding/claim`, which takes a trade licence, attaches a named claimant,
+ * and — when the listing is already claimed — opens the conflict board `4b`
+ * decides with `claim.resolve` behind it. `claim_conflict` stays *counted and
+ * never produced* in this file for exactly that reason.
+ *
+ * Not a `ReportKind`. It is a value the form carries so the client knows which
+ * row is a door rather than a radio, and the server never sees it: choosing it
+ * navigates.
+ */
+export const CLAIM_DISPUTE_REASON = "claim_dispute";
+
+/** Every row the public report form offers, in the order it offers them. */
+export const PUBLIC_REPORT_REASONS = [
+  ...PUBLIC_REPORT_KINDS,
+  CLAIM_DISPUTE_REASON,
+] as const;
+
+export type PublicReportReason = (typeof PUBLIC_REPORT_REASONS)[number];

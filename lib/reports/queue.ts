@@ -2,7 +2,8 @@ import "server-only";
 import { prisma } from "@/lib/db/client";
 import type { Prisma, PrismaClient } from "@/lib/db/generated/client";
 import type { $Enums } from "@/lib/db/generated/client";
-import { collapseKey } from "./collapse";
+import { collapseKey, reportSource, valueGroupKey } from "./collapse";
+import { isFlagged } from "./evidence";
 import { slaMsFor, slaStateOf } from "./sla";
 import { REVIEW_DISPUTE } from "./taxonomy";
 import {
@@ -73,6 +74,9 @@ const REPORT_SELECT = {
   enquiryId: true,
   escalatedAt: true,
   createdAt: true,
+  reporterId: true,
+  reporterKey: true,
+  subjectValueKey: true,
   reporter: { select: { id: true, fullName: true } },
   assignee: { select: { id: true, fullName: true } },
   subjectBusiness: {
@@ -130,6 +134,22 @@ async function openReportEntries(now: Date, db: Db): Promise<ReportEntry[]> {
     priorRows.map((row) => [`${row.subjectBusinessId}|${row.subjectField}`, row._count._all]),
   );
 
+  /*
+     Board 13c `B2` — the value groups, across listings. Built off the same open
+     rows the queue already read, so the flag costs no query: one telephone
+     number reported on four listings is one group here and four work items
+     below, each carrying the group's count.
+  */
+  const byValue = new Map<string, { sources: Set<string>; listings: Set<string> }>();
+  for (const row of rows) {
+    const key = valueGroupKey(row);
+    if (!key) continue;
+    const entry = byValue.get(key) ?? { sources: new Set<string>(), listings: new Set<string>() };
+    entry.sources.add(reportSource(row));
+    entry.listings.add(row.subjectBusiness.id);
+    byValue.set(key, entry);
+  }
+
   const groups = new Map<string, typeof rows>();
   for (const row of rows) {
     /*
@@ -145,6 +165,11 @@ async function openReportEntries(now: Date, db: Db): Promise<ReportEntry[]> {
     const head = group[0]!;
     const waitingMs = Math.max(0, now.getTime() - head.createdAt.getTime());
     const slaMs = slaMsFor(head.kind);
+    const valueKey = group.map(valueGroupKey).find((key) => key !== null) ?? null;
+    const valueGroup = valueKey ? byValue.get(valueKey) : undefined;
+    const corroboration = valueGroup
+      ? { sources: valueGroup.sources.size, listings: valueGroup.listings.size }
+      : { sources: new Set(group.map(reportSource)).size, listings: 1 };
     return {
       ref: `report:${head.id}`,
       id: head.id,
@@ -163,8 +188,12 @@ async function openReportEntries(now: Date, db: Db): Promise<ReportEntry[]> {
          record — a person's — carries no measurement. Reading the head's
          evidence alone would hide `Same number on 3 listings` behind the
          complaint that prompted it.
+
+         The newest measurement rather than the first, since board 13c: every
+         public report now writes one, and the third report's *3 separate
+         reports* is truer than the first report's licence clause.
       */
-      evidence: group.find((row) => row.evidence)?.evidence ?? null,
+      evidence: group.findLast((row) => row.evidence)?.evidence ?? null,
       /*
          The detector is the head's, and deliberately not the group's. A report
          a person filed first is one a person found, whatever the platform
@@ -178,6 +207,8 @@ async function openReportEntries(now: Date, db: Db): Promise<ReportEntry[]> {
       priorsOnField: head.subjectField
         ? (priors.get(`${head.subjectBusiness.id}|${head.subjectField}`) ?? group.length)
         : 0,
+      corroboration,
+      flagged: isFlagged(corroboration.sources),
       filedAt: head.createdAt,
       waitingMs,
       slaMs,
@@ -230,6 +261,8 @@ async function openDisputeEntries(now: Date, db: Db): Promise<ReportEntry[]> {
       reports: 1,
       duplicateIds: [],
       priorsOnField: 0,
+      corroboration: { sources: 1, listings: 1 },
+      flagged: false,
       filedAt: row.createdAt,
       waitingMs,
       slaMs,

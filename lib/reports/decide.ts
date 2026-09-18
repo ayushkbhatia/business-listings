@@ -286,6 +286,8 @@ export async function markDuplicate(
             outcomeReason: input.reason,
             resolvedAt: now,
             resolvedById: input.actor.id,
+            // Board 13c `B8`: the digest counts an open report and nothing else.
+            reporterKey: null,
           },
           select: { outcome: true, duplicateOfId: true, resolvedAt: true },
         });
