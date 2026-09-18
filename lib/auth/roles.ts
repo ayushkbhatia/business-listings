@@ -113,7 +113,9 @@ export interface Actor {
    * threshold a procurement team sets for itself, and none of those can be
    * enforced by a check that cannot see which company is asking.
    *
-   * Declared ahead of the screen that fills it — board 7b, `/account/company`.
+   * Declared ahead of the screen that fills it — board 7b, `/account/company`,
+   * which since shipped: the column is now the mirror of an active
+   * `buyer_company_member` row.
    * That is the opposite order from `branchId`, which was read by
    * `withinScope()` for four handoffs while nothing populated it, so every
    * branch-scoped check quietly returned true. Here the badge and its writer

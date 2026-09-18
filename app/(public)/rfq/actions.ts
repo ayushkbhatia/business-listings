@@ -25,6 +25,8 @@ export interface SendEnquiryInput {
   categoryId: string;
   emirate: string | null;
   deliverToArea: string | null;
+  /** Board `7b`: a saved company address. Re-checked against the sender's company in the service. */
+  deliveryAddressId?: string | null;
   neededBy: string | null;
   termsWanted: string | null;
   closesInDays: number;
@@ -55,6 +57,7 @@ export async function sendEnquiry(input: SendEnquiryInput): Promise<SendEnquiryR
     categoryId: input.categoryId,
     emirate: input.emirate,
     deliverToArea: input.deliverToArea,
+    deliveryAddressId: input.deliveryAddressId ?? null,
     neededBy: input.neededBy ? new Date(input.neededBy) : null,
     termsWanted: input.termsWanted,
     closesInDays: input.closesInDays,

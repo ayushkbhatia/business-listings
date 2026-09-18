@@ -143,7 +143,19 @@ export function buildNegotiationView(
   let accept: AcceptControl = { kind: "none" };
   const leadingChips: ThreadChip[] = [];
 
-  if (offer.kind === "offer") {
+  if (offer.kind === "offer" && enquiry.buyerCompanyId) {
+    /*
+       Board `7b`: the company's rule is read before the click, on the accept
+       screen, which says whether this is within the person's authority or goes
+       to a colleague for approval. The button keeps its words.
+    */
+    accept = {
+      kind: "company",
+      href: `${base}/accept/${offer.quote.id}`,
+      buttonLabel: t("negotiation.accept.button", { revision: offer.quote.revision, figure: figure(offer.quote) }),
+      footnote: t("company.notice.thread_footnote"),
+    };
+  } else if (offer.kind === "offer") {
     const quote = offer.quote;
     const compared = quote.proposal ? null : compareRevision(quote, previous, record.requirement);
     accept = {

@@ -72,10 +72,12 @@ beforeAll(async () => {
   const company = await prisma.buyerCompany.create({ data: { name: "Marina Facilities LLC (10f test)" } });
   companyId = company.id;
   const buyer = await prisma.user.create({
-    data: { id: randomUUID(), fullName: "Priya Menon (10f test)", roles: [], buyerCompanyId: companyId },
+    data: { id: randomUUID(), fullName: "Priya Menon (10f test)", roles: [] },
     select: { id: true },
   });
   buyerId = buyer.id;
+  // Board 7b: membership is the record; its trigger writes `user.buyer_company_id`.
+  await prisma.buyerCompanyMember.create({ data: { companyId, userId: buyerId, role: "company_admin" } });
 });
 
 afterAll(async () => {

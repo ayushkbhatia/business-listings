@@ -26,6 +26,7 @@ export {
   type EnquiryComposerLabels,
   type EnquiryComposerProps,
   type EnquiryComposerValue,
+  type DeliveryChoice,
   type EnquiryLineDraft,
   type RecipientPreview,
 } from "./EnquiryComposer";

@@ -344,6 +344,26 @@ if grep -qE '^[[:space:]]*model[[:space:]]+ReviewRevision[[:space:]]*\{' <<<"$CO
   fi
 fi
 
+# Board 7b. The buying company: membership is the record and
+# user.buyer_company_id its mirror, written by trigger and refused otherwise; a
+# request for approval is fixed once asked and stays decided; one open request
+# per enquiry; one active company per person; the company's history is
+# append-only. Each of these is what makes the approval gate a control rather
+# than a convention.
+if grep -qE '^[[:space:]]*model[[:space:]]+BuyerCompanyMember[[:space:]]*\{' <<<"$CODE"; then
+  if grep -rqE 'CREATE TRIGGER "buyer_company_member_mirror"' prisma/migrations \
+     && grep -rqE 'CREATE TRIGGER "user_buyer_company_follows_membership"' prisma/migrations \
+     && grep -rqE 'CREATE TRIGGER "quote_approval_is_the_request"' prisma/migrations \
+     && grep -rqE 'CREATE TRIGGER "buyer_company_event_is_the_record"' prisma/migrations \
+     && grep -rqE 'CREATE UNIQUE INDEX IF NOT EXISTS "buyer_company_member_one_active"' prisma/migrations \
+     && grep -rqE 'CREATE UNIQUE INDEX IF NOT EXISTS "quote_approval_one_open"' prisma/migrations; then
+    echo "   pass — a buyer's company is its membership, a request is what was asked, the history is append-only"
+  else
+    echo "   FAIL — a board 7b trigger or partial unique index is missing (membership mirror, approval request, company history)."
+    fail=1
+  fi
+fi
+
 ROLE_ENUM=$(awk '/^enum Role \{/,/^\}/' <<<"$CODE")
 if grep -qE '\bstaff_field\b' <<<"$ROLE_ENUM"; then
   echo "   FAIL — staff_field is back in the Role enum. It was retired and removed (board 4i B1)."

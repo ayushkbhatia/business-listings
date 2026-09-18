@@ -19,6 +19,13 @@ import { getActor } from "./session";
 export interface Viewer {
   /** The first name, or null when the account has none. */
   firstName: string | null;
+  /**
+   * The whole name, as the header prints it — board 7b's `BLNav` mount,
+   * `auth="buyer" user="Rami Haddad" org="Marina Facilities LLC"`.
+   */
+  fullName: string | null;
+  /** The buying company's registered name, when they send enquiries for one. */
+  company: string | null;
   /** Holds a seller seat, so the menu offers the dashboard. */
   seller: boolean;
   /** Holds a staff role, so the menu offers the console. */
@@ -28,9 +35,15 @@ export interface Viewer {
 export const getViewer = cache(async function getViewer(): Promise<Viewer | null> {
   const actor = await getActor();
   if (!actor) return null;
-  const profile = await prisma.user.findUnique({ where: { id: actor.id }, select: { fullName: true } });
+  const profile = await prisma.user.findUnique({
+    where: { id: actor.id },
+    select: { fullName: true, buyerCompany: { select: { name: true } } },
+  });
+  const fullName = profile?.fullName?.trim() || null;
   return {
-    firstName: profile?.fullName?.trim().split(/\s+/)[0] ?? null,
+    firstName: fullName?.split(/\s+/)[0] ?? null,
+    fullName,
+    company: profile?.buyerCompany?.name ?? null,
     seller: actor.roles.some((role) => role.startsWith("seller_")) && Boolean(actor.businessId),
     staff: actor.roles.some((role) => role.startsWith("staff_")),
   };

@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
-import { onSellerMessage } from "@/lib/notify/events";
+import { onSellerMessage, onOffPlatformFlagged } from "@/lib/notify/events";
 import { recordEvent } from "@/lib/telemetry/record";
 import { detectOffPlatform, describeVerdict } from "./off-platform";
 
@@ -228,6 +228,9 @@ export async function sendFollowUp(input: {
   });
 
   if (sent === null) return { ok: false, error: "already_nudged" };
+
+  // Board `7b` `B4`: the same notice a typed message raises, for the same finding.
+  if (verdict.report) await onOffPlatformFlagged({ enquiryId: input.enquiryId, businessId: input.businessId });
 
   // Outside the transaction: a carrier being slow must not hold one open.
   await onSellerMessage({

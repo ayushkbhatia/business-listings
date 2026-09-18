@@ -1,15 +1,16 @@
 import { Tabs } from "@/components/structure";
 import { t } from "@/lib/i18n";
 
-export type AccountTab = "enquiries" | "saved" | "suppliers";
+export type AccountTab = "enquiries" | "saved" | "suppliers" | "company";
 
 /**
- * The buyer account's tab row — board 10e.
+ * The buyer account's tab row — boards 10e and 7b.
  *
- * Three tabs, not the four the board draws. *Company & team* is board 7b, which
- * is not built, and Q3 is right that half a tab row is a worse promise than a
- * shorter one: a tab that opens nothing tells a buyer the product is unfinished
- * in the one place they came to get work done. It is added with 7b.
+ * Four tabs, not the five the boards draw. *Company & team* arrived with board
+ * 7b and counts the requests waiting on this person's approval — the one thing
+ * on that tab somebody is waiting for. *Saved requirements* opens
+ * `/account/requirements`, which `routes.md` still marks *later*, and Q3 is
+ * right that a tab opening nothing is a worse promise than a shorter row.
  *
  * *Saved suppliers* is here because it exists — `/account/saved/shortlist`,
  * built with board 8's shortlist, is the page `routes.md` calls
@@ -20,7 +21,7 @@ export function AccountTabs({
   counts,
 }: {
   active: AccountTab;
-  counts: { enquiries: number; saved: number; suppliers: number };
+  counts: { enquiries: number; saved: number; suppliers: number; company: number };
 }) {
   return (
     <div className="border-b border-line bg-card">
@@ -33,6 +34,7 @@ export function AccountTabs({
             { key: "enquiries", label: t("account.tab.enquiries"), href: "/account/enquiries", badge: counts.enquiries },
             { key: "saved", label: t("account.tab.saved"), href: "/account/saved", badge: counts.saved },
             { key: "suppliers", label: t("account.tab.suppliers"), href: "/account/saved/shortlist", badge: counts.suppliers },
+            { key: "company", label: t("account.tab.company"), href: "/account/company", badge: counts.company },
           ]}
         />
       </div>

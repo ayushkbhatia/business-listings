@@ -1,4 +1,5 @@
 import type { EnquiryBrief } from "@/lib/db/queries/enquiry-brief";
+import type { DeliverySnapshot } from "@/lib/buyer-company/address";
 import type { Commitment } from "@/lib/quote/commitments";
 import type { ProposalRecord } from "@/lib/quote/proposal";
 import { filsToAed, lineTotalFils, quoteTotalFils } from "@/lib/quote/money";
@@ -104,6 +105,14 @@ export interface AcceptedRecord {
   ref: string;
   /** The buyer's PO or job code. Null until they add one. */
   buyerReference: string | null;
+  /** Board `7b`: the cost code written with the acceptance, when the company asked for one. */
+  costCode: string | null;
+  /**
+   * Board `7b` `B6`: the saved address the enquiry was sent for delivery to,
+   * as it was sent. In full here — the line and the attn. contact were held
+   * back from every supplier until this acceptance released them.
+   */
+  delivery: DeliverySnapshot | null;
   /** Null only on rows written before either stamp existed; the page then omits the date. */
   acceptedAt: Date | null;
   /**

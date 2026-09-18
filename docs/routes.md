@@ -75,7 +75,13 @@ and it is the one that argues back.
 /account/saved                          Saved searches & alerts              [10e]  built 10e
 /account/suppliers                      Saved suppliers                       later
 /account/requirements                   Saved requirements                    later
-/account/company                        Company, TRN, team, approvals         [7b]
+/account/company                        Company, TRN, team, approvals         [7b]  built 7b
+/account/company/approvals              Approvals and the month's spend        [7b]  built 7b
+/account/company/approvals/:id          One request — approve, query, answer  [7b]  built 7b
+/account/company/history                The company's own history (B8)        [7b]  built 7b
+/account/company/join/:token            Accept a seat on a buying company     [7b]  built 7b
+/enquiry/:id/accept/:quote              Accept under the company's rule        [7b]  built 7b
+                                        — every accept control on a company enquiry leads here
 /review/new?enq=&about=&edit=          Write a review · your review         [10f]  built h2s6, 10f
 /account/reopen/:token                  Reverse a closure from the email      [11i]  built h3 wave 4
 /account/closed                         Closure confirmed — session-free      [11i]  built h3 wave 4

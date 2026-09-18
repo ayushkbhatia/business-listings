@@ -40,8 +40,7 @@ import {
  * **The buyer's own numbers stay the buyer's** (`B9`, `B10`). Nothing on this
  * page is read by a seller surface.
  *
- * Not drawn, and why: *Company & team* is board 7b, unbuilt (see `_tabs.tsx`);
- * *Saved requirements* opens `/account/requirements`, which `routes.md` marks
+ * Not drawn, and why: *Saved requirements* opens `/account/requirements`, which `routes.md` marks
  * *later* — a card whose button opens nothing is the defect this board's own
  * handoff flags. Re-send is the working half of that promise: an expired
  * requirement goes out again in two clicks.

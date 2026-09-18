@@ -1,4 +1,5 @@
 import "server-only";
+import { parseSnapshot } from "@/lib/buyer-company/address";
 import { prisma } from "@/lib/db/client";
 import {
   chooseContactLocation,
@@ -41,6 +42,8 @@ export async function getAcceptedRecord(
       id: true,
       ref: true,
       buyerReference: true,
+      costCode: true,
+      deliverySnapshot: true,
       contactReleasedAt: true,
       contactReleasedToBusinessId: true,
       emirate: true,
@@ -192,6 +195,8 @@ export async function getAcceptedRecord(
     enquiryId: enquiry.id,
     ref: enquiry.ref,
     buyerReference: enquiry.buyerReference,
+    costCode: enquiry.costCode,
+    delivery: parseSnapshot(enquiry.deliverySnapshot),
     // The quote's own stamp first, then the release — the pair the tracking page reads.
     acceptedAt: quote.acceptedAt ?? enquiry.contactReleasedAt,
     isBrief: enquiry.serviceBrief !== null,

@@ -57,6 +57,7 @@ import { seedBlendedSearch } from "./seed-blended-search.mjs";
 import { seedStaffRoster } from "./seed-staff-roster.mjs";
 import { seedNegotiationThreads } from "./seed-negotiation.mjs";
 import { seedReviewWrite } from "./seed-review-write.mjs";
+import { seedBuyerCompany } from "./seed-buyer-company.mjs";
 import { seedContactLeads } from "./seed-contact-leads.mjs";
 import { seedAccountHealth } from "./seed-account-health.mjs";
 import { seedRevenue } from "./seed-revenue.mjs";
@@ -714,9 +715,18 @@ async function main() {
       // else until acceptance, so the first name has to read like one.
       fullName: "Rashid Al Hameli",
       roles: ["buyer"],
-      buyerCompanyId: buyerCompany.id,
     },
   });
+  /*
+     Board 7b: membership is the record, and `user.buyer_company_id` its
+     mirror, written by the membership's trigger — a direct write is refused.
+     Rashid is the company's only admin and the approver its threshold names,
+     which is what production's backfill made of the same row.
+  */
+  await prisma.buyerCompanyMember.create({
+    data: { companyId: buyerCompany.id, userId: buyer.id, role: "company_admin" },
+  });
+  await prisma.buyerCompany.update({ where: { id: buyerCompany.id }, data: { approverId: buyer.id } });
   const buyerTwo = await prisma.user.create({
     data: { id: uuid(11), phone: "+971552048817", fullName: "Fatima Al Zaabi", roles: ["buyer"] },
   });
@@ -1122,6 +1132,10 @@ async function main() {
   // Board 10f: a review in draft and one per state beside it. The wall clock —
   // the window is Dubai days from acceptance, and its stated day must not move.
   await seedReviewWrite(prisma, new Date());
+  // Board 7b: Marina Facilities as drawn — a team, a rule, and the AED 15,624
+  // request its counter explains. The wall clock: "accepted two hours ago"
+  // has to fall in the month the page reads.
+  await seedBuyerCompany(prisma, new Date());
   await seedContactLeads(prisma, new Date());
   /*
      Board 4h: a collapsed group, an escalated row, a row with an owner, and
@@ -5758,9 +5772,10 @@ async function seedReviewDepth(db: Db) {
         phone: `+9715${index}${(4110022 + index * 137).toString().padStart(7, "0")}`,
         fullName: buyer.person,
         roles: ["buyer"],
-        ...(companyId ? { buyerCompanyId: companyId } : {}),
       },
     });
+    // Board 7b: through the membership, whose trigger writes the mirror.
+    if (companyId) await db.buyerCompanyMember.create({ data: { companyId, userId: id, role: "company_admin" } });
     buyerIds.push(id);
   }
 
@@ -5953,9 +5968,12 @@ async function seedReviewDepth(db: Db) {
         roles: ["buyer"],
         ...(buyer.phone ? { phone: buyer.phone } : {}),
         ...(buyer.email ? { email: buyer.email } : {}),
-        ...(companyId ? { buyerCompanyId: companyId } : {}),
       },
     });
+    // Board 7b: through the membership, whose trigger writes the mirror.
+    if (companyId) {
+      await db.buyerCompanyMember.create({ data: { companyId, userId: buyerId, role: "company_admin" } });
+    }
 
     // Inside the ninety-day window, and comfortably so: a fixture that sits on
     // the boundary is a fixture that falls out of the window while nobody is

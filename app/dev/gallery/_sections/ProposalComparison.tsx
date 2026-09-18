@@ -143,6 +143,7 @@ const TYPICAL: ProposalComparison = {
   engagementType: "ongoing_contract",
   cadence: "quarterly",
   acceptedBusinessId: null,
+  buyerCompanyId: null,
   recipientCount: 6,
   columns: [EFG, SHIRAWI, KHANSAHEB, GULF_TOWERS],
   declined: [],

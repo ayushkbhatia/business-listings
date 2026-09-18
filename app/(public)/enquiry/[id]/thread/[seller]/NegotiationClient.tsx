@@ -41,6 +41,8 @@ export type AcceptControl =
         confirm: string;
       };
     }
+  /** Board `7b`: a company enquiry is accepted on the accept screen, under the company's rule. */
+  | { kind: "company"; href: string; buttonLabel: string; footnote: string }
   | { kind: "expired"; buttonLabel: string; footnote: string }
   | { kind: "record"; href: string; label: string }
   | { kind: "none" };
@@ -195,6 +197,10 @@ export function BuyerNegotiation({
             <Button size="lg" disabled aria-describedby="accept-expired">
               {accept.buttonLabel}
             </Button>
+          ) : accept.kind === "company" ? (
+            <a href={accept.href} className={buttonClassName({ size: "lg" })}>
+              {accept.buttonLabel}
+            </a>
           ) : accept.kind === "record" ? (
             <a href={accept.href} className={buttonClassName({ size: "lg" })}>
               {accept.label}
@@ -202,7 +208,7 @@ export function BuyerNegotiation({
           ) : null
         }
         footnote={
-          accept.kind === "offer" ? (
+          accept.kind === "offer" || accept.kind === "company" ? (
             <p>{accept.footnote}</p>
           ) : accept.kind === "expired" ? (
             <p id="accept-expired" className="text-bad-ink">

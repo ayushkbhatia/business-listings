@@ -97,8 +97,21 @@ model User {
 
   business                 Business?                @relation("BusinessTeam", fields: [businessId], references: [id], onDelete: SetNull)
   branch                   Location?                @relation("SeatBranch", fields: [branchId], references: [id], onDelete: SetNull)
+  /// The company this person buys for — a mirror of their active
+  /// `BuyerCompanyMember` row, written by that table's trigger. A direct write
+  /// that disagrees with the membership is refused (board `7b`).
   buyerCompanyId           String?                  @map("buyer_company_id")
   buyerCompany             BuyerCompany?            @relation(fields: [buyerCompanyId], references: [id], onDelete: SetNull)
+  buyerMemberships         BuyerCompanyMember[]     @relation("BuyerMembership")
+  buyerMembersInvited      BuyerCompanyMember[]     @relation("BuyerMemberInviter")
+  buyerMembersDeactivated  BuyerCompanyMember[]     @relation("BuyerMemberDeactivator")
+  buyerInvitesSent         BuyerCompanyInvite[]     @relation("BuyerInviteSender")
+  buyerInvitesAccepted     BuyerCompanyInvite[]     @relation("BuyerInviteAcceptor")
+  buyerCompaniesApproving  BuyerCompany[]           @relation("BuyerCompanyApprover")
+  approvalsRaised          QuoteApproval[]          @relation("ApprovalRaiser")
+  approvalsNamed           QuoteApproval[]          @relation("ApprovalNamedApprover")
+  approvalsDecided         QuoteApproval[]          @relation("ApprovalDecider")
+  buyerCompanyEvents       BuyerCompanyEvent[]      @relation("BuyerCompanyEventActor")
   enquiries                Enquiry[]
   reviews                  Review[]
   reviewDrafts             ReviewDraft[]
@@ -336,21 +349,338 @@ enum Role {
   @@map("role")
 }
 
-/// A buyer's employer. Carries the TRN and the approval threshold a procurement
-/// team sets for itself — "orders over AED 25,000 need approval" is the buyer's
-/// own process, not a platform order entity.
+/// A buyer's employer — board `7b`, `/account/company`.
+///
+/// The buying company, not the buyer: a registered name, a TRN, a trade licence
+/// number and an accounts inbox that the supplier a quote is accepted from
+/// receives with the buyer's contact, delivery addresses with their access
+/// constraints, a team with spend authority, and one approval rule.
+///
+/// **The rule gates accepting a quote** (`B1`). Nothing on this platform places
+/// an order: the buyer's own "orders over AED 25,000 need approval" is enforced
+/// at the last platform-side act before money is committed, which is the only
+/// event with a value attached.
+///
+/// Every change here writes a `BuyerCompanyEvent` (`B8`), in the same
+/// transaction, because the supplier sees these details on acceptance and puts
+/// them on the tax invoice they issue.
 model BuyerCompany {
-  id                   String   @id @default(cuid())
-  name                 String
-  trn                  String?
-  emirate              Emirate?
-  approvalThresholdAed Int?     @map("approval_threshold_aed")
-  createdAt            DateTime @default(now()) @map("created_at")
+  id                      String   @id @default(cuid())
+  /// The registered company name, as on the trade licence.
+  name                    String
+  /// Fifteen digits, stored without spaces. The buyer's own number, shown to
+  /// them in full (`7b` flag 8) and never checked against the FTA register —
+  /// nothing performs that check, so nothing says `Matched` (`B7`).
+  trn                     String?
+  emirate                 Emirate?
+  /// `DED-772104`. Free text: thirty-odd licensing authorities, one field.
+  licenceNumber           String?  @map("licence_number")
+  /// Where the accepted supplier sends the tax invoice. Lower-cased.
+  accountsEmail           String?  @map("accounts_email")
+  /// Quotes above this, in whole dirhams, need approval. Null is no threshold,
+  /// which is a real answer: each person's own limit still applies.
+  approvalThresholdAed    Int?     @map("approval_threshold_aed")
+  /// Who approves above the threshold, and quotes from unverified suppliers.
+  ///
+  /// Nullable on purpose, with no CHECK tying it to the threshold: `SET NULL`
+  /// on the person's deletion must not collide with a constraint that requires
+  /// it (board 4h's trap). Null reads *an admin approves*, and the rule card
+  /// says so in those words.
+  approverId              String?  @map("approver_id") @db.Uuid
+  /// `B2` flags. Each renders a sentence on the rule card and nothing else.
+  requirePoNumber         Boolean  @default(false) @map("require_po_number")
+  requireCostCode         Boolean  @default(false) @map("require_cost_code")
+  /// `Only verified sellers`, with its reach named (`B9`): the approval gate.
+  /// Search and RFQ matching are unchanged by it.
+  unverifiedNeedsApproval Boolean  @default(false) @map("unverified_needs_approval")
+  /// `B4`. Not *block payment outside the platform*, which nothing can do: the
+  /// message scanner already flags those asks, and this tells the admins.
+  tellAdminsOffPlatform   Boolean  @default(true) @map("tell_admins_off_platform")
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @default(now()) @updatedAt @map("updated_at")
 
-  members   User[]
+  approver    User?                  @relation("BuyerCompanyApprover", fields: [approverId], references: [id], onDelete: SetNull)
+  /// The mirror `User.buyerCompanyId` points here. Written by a trigger on
+  /// `buyer_company_member` and nothing else.
+  members     User[]
+  memberships BuyerCompanyMember[]
+  invites     BuyerCompanyInvite[]
+  addresses   BuyerDeliveryAddress[]
+  approvals   QuoteApproval[]
+  events      BuyerCompanyEvent[]
+  enquiries   Enquiry[]
+
+  @@index([approverId])
+  @@map("buyer_company")
+}
+
+/// What a person may do for their buying company. Board `7b`, and separate
+/// from board 4i's staff roles by construction (`B12`): a different type, and
+/// no staff capability reads it.
+///
+/// There is no `finance` role. The board drew one that *approves invoices
+/// only*, and there is no buyer-side invoice surface for it to approve on
+/// (`7b` Q2) — a role whose function the product does not have is a promise.
+enum BuyerCompanyRole {
+  /// Edits the company, its addresses, team and rule. Unlimited authority.
+  company_admin
+  /// Accepts quotes up to a monthly limit, and approves others' within it.
+  procurement
+  /// Sends enquiries. Every quote they want accepted goes for approval.
+  requester
+
+  @@map("buyer_company_role")
+}
+
+/// A person's seat on a buying company.
+///
+/// The record of membership. `User.buyerCompanyId` is its mirror — kept for
+/// the readers that already join through it and for `getActor`'s one-row read
+/// — and a trigger keeps the two equal: this table writes the mirror, and a
+/// direct write to the mirror that disagrees is refused. Two places that can
+/// each say which company somebody buys for, maintained separately, is the
+/// defect `Business.planId` and `Subscription.planId` already demonstrated.
+///
+/// Deactivated rather than deleted (`7b` flag 7): the approvals a person
+/// raised and decided stay under their name.
+model BuyerCompanyMember {
+  id              String           @id @default(cuid())
+  companyId       String           @map("company_id")
+  userId          String           @map("user_id") @db.Uuid
+  role            BuyerCompanyRole
+  /// Procurement only, and required there: `AED 25,000` a calendar month in
+  /// Dubai (`B5`). What is used is derived from accepted quotes, never stored.
+  monthlyLimitAed Int?             @map("monthly_limit_aed")
+  joinedAt        DateTime         @default(now()) @map("joined_at")
+  invitedById     String?          @map("invited_by_id") @db.Uuid
+  deactivatedAt   DateTime?        @map("deactivated_at")
+  deactivatedById String?          @map("deactivated_by_id") @db.Uuid
+
+  company       BuyerCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user          User         @relation("BuyerMembership", fields: [userId], references: [id], onDelete: Cascade)
+  invitedBy     User?        @relation("BuyerMemberInviter", fields: [invitedById], references: [id], onDelete: SetNull)
+  deactivatedBy User?        @relation("BuyerMemberDeactivator", fields: [deactivatedById], references: [id], onDelete: SetNull)
+
+  @@index([companyId])
+  @@index([userId])
+  @@map("buyer_company_member")
+}
+
+/// An invitation to a buying company. `B11`: *Invited* is a state of its own,
+/// and it expires.
+///
+/// The token is hashed, as board 4i's staff invitation is: the link carries it
+/// and the row cannot reproduce it.
+model BuyerCompanyInvite {
+  id              String           @id @default(cuid())
+  companyId       String           @map("company_id")
+  /// Lower-cased and trimmed, by CHECK.
+  email           String
+  /// A person's name. A seat is one person (`7b` flag 3): the table records who
+  /// committed money, and a function like *Site foreman — JLT* cannot.
+  fullName        String           @map("full_name")
+  role            BuyerCompanyRole
+  monthlyLimitAed Int?             @map("monthly_limit_aed")
+  tokenHash       String           @unique @map("token_hash")
+  invitedById     String?          @map("invited_by_id") @db.Uuid
+  expiresAt       DateTime         @map("expires_at")
+  lastSentAt      DateTime         @default(now()) @map("last_sent_at")
+  sendCount       Int              @default(1) @map("send_count")
+  acceptedAt      DateTime?        @map("accepted_at")
+  acceptedById    String?          @map("accepted_by_id") @db.Uuid
+  revokedAt       DateTime?        @map("revoked_at")
+  createdAt       DateTime         @default(now()) @map("created_at")
+
+  company    BuyerCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invitedBy  User?        @relation("BuyerInviteSender", fields: [invitedById], references: [id], onDelete: SetNull)
+  acceptedBy User?        @relation("BuyerInviteAcceptor", fields: [acceptedById], references: [id], onDelete: SetNull)
+
+  @@index([companyId])
+  @@map("buyer_company_invite")
+}
+
+/// What a delivery address will take. `B6`: *small parcels only* is a
+/// constraint a supplier plans a vehicle around, so it is a value, not prose.
+enum DeliveryLoadLimit {
+  small_parcels
+  pallets
+  full_loads
+
+  @@map("delivery_load_limit")
+}
+
+/// A place the company takes deliveries. `B6`: structured, because the
+/// constraints travel onto the enquiry and from there to the supplier.
+///
+/// Archived rather than deleted: an enquiry that went to this address keeps a
+/// snapshot of it, and the row stays for the history to name.
+model BuyerDeliveryAddress {
+  id          String             @id @default(cuid())
+  companyId   String             @map("company_id")
+  /// `Marina Plaza, Tower 2, Level 14`.
+  label       String
+  /// The street-level line under it. Released to the accepted supplier only.
+  addressLine String             @map("address_line")
+  emirate     Emirate
+  areaId      String?            @map("area_id")
+  /// Who receives it. Released with the address, never before acceptance.
+  attnName    String?            @map("attn_name")
+  /// E.164.
+  attnPhone   String?            @map("attn_phone")
+  /// `Loading bay`, `Reception`. Where the access hours apply.
+  accessPoint String?            @map("access_point")
+  /// Minutes from midnight, Dubai. Either may be null: *before 11:00* is an
+  /// until with no from.
+  accessFrom  Int?               @map("access_from")
+  accessUntil Int?               @map("access_until")
+  loadLimit   DeliveryLoadLimit? @map("load_limit")
+  isDefault   Boolean            @default(false) @map("is_default")
+  archivedAt  DateTime?          @map("archived_at")
+  createdAt   DateTime           @default(now()) @map("created_at")
+  updatedAt   DateTime           @default(now()) @updatedAt @map("updated_at")
+
+  company   BuyerCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  area      Area?        @relation(fields: [areaId], references: [id], onDelete: SetNull)
   enquiries Enquiry[]
 
-  @@map("buyer_company")
+  @@index([companyId])
+  @@index([areaId])
+  @@map("buyer_delivery_address")
+}
+
+/// Why a quote went for approval. Every reason that can hold one is here, and
+/// every one renders a sentence on the rule card (`B3`).
+enum ApprovalReason {
+  /// Above the company threshold.
+  over_threshold
+  /// Beyond what is left of the person's monthly limit.
+  over_limit
+  /// A requester: no authority to commit money at any value.
+  no_authority
+  /// The supplier's trade licence is not verified, and the company asks.
+  unverified_supplier
+  /// A proposal priced per visit, per month, per hour: no single total to hold
+  /// against a limit, so it counts as over every one.
+  no_total
+
+  @@map("approval_reason")
+}
+
+enum QuoteApprovalStatus {
+  pending
+  /// Approved, and the quote was accepted in the same transaction.
+  approved
+  /// The approver asked a question. The raiser answers, and it is pending again.
+  queried
+  withdrawn
+  /// Replaced by a later request on the same enquiry, or by an acceptance.
+  superseded
+
+  @@map("quote_approval_status")
+}
+
+/// A quote someone wants accepted, held for a colleague's approval.
+///
+/// Created **instead of** an acceptance, never alongside one: when it is
+/// approved, `acceptQuote` runs under the same lock and the row records who
+/// approved. The acceptance itself still creates no row of its own.
+///
+/// The value and revision are what was asked for. An approval of revision 2 at
+/// AED 15,624 is not an approval of revision 3 at 18,000, and approving refuses
+/// if the quote moved underneath it.
+model QuoteApproval {
+  id            String              @id @default(cuid())
+  companyId     String              @map("company_id")
+  enquiryId     String              @map("enquiry_id")
+  quoteId       String              @map("quote_id")
+  quoteRevision Int                 @map("quote_revision")
+  /// Integer fils. Null for a quote with no single total (`no_total`).
+  valueFils     BigInt?             @map("value_fils")
+  raisedById    String              @map("raised_by_id") @db.Uuid
+  reasons       ApprovalReason[]
+  /// The one person who may approve, where a reason names one — the company's
+  /// approver at the time. Null: anybody the reasons allow.
+  approverId    String?             @map("approver_id") @db.Uuid
+  poNumber      String?             @map("po_number")
+  costCode      String?             @map("cost_code")
+  /// The raiser's note to the approver.
+  note          String?
+  status        QuoteApprovalStatus @default(pending)
+  decidedById   String?             @map("decided_by_id") @db.Uuid
+  decidedAt     DateTime?           @map("decided_at")
+  /// Required on a query, by CHECK.
+  decisionNote  String?             @map("decision_note")
+  /// The raiser's answer to the last query.
+  answer        String?
+  answeredAt    DateTime?           @map("answered_at")
+  createdAt     DateTime            @default(now()) @map("created_at")
+  updatedAt     DateTime            @default(now()) @updatedAt @map("updated_at")
+
+  company   BuyerCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  enquiry   Enquiry      @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
+  quote     Quote        @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  raisedBy  User         @relation("ApprovalRaiser", fields: [raisedById], references: [id], onDelete: Cascade)
+  approver  User?        @relation("ApprovalNamedApprover", fields: [approverId], references: [id], onDelete: SetNull)
+  decidedBy User?        @relation("ApprovalDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+
+  @@index([companyId, status])
+  @@index([enquiryId])
+  @@index([quoteId])
+  @@index([raisedById])
+  @@index([decidedById, decidedAt])
+  @@map("quote_approval")
+}
+
+enum BuyerCompanyEventKind {
+  company_created
+  details_changed
+  address_added
+  address_changed
+  address_archived
+  default_address_changed
+  member_invited
+  invite_resent
+  invite_revoked
+  member_joined
+  member_changed
+  member_deactivated
+  rule_changed
+  approval_requested
+  approval_approved
+  approval_queried
+  approval_answered
+  approval_withdrawn
+  /// Accepted inside the person's own authority, with no approval needed.
+  quote_accepted
+
+  @@map("buyer_company_event_kind")
+}
+
+/// The company's own history — `B8`.
+///
+/// Not `AuditEvent`: that log records staff decisions and is read in the
+/// console; this one is the buying company's, read by its members on
+/// `/account/company/history`. Append-only by trigger, like the audit log and
+/// the message thread. `actorName` is a snapshot, so a row still says who after
+/// the person's account is gone.
+model BuyerCompanyEvent {
+  id        String                @id @default(cuid())
+  companyId String                @map("company_id")
+  actorId   String?               @map("actor_id") @db.Uuid
+  actorName String                @map("actor_name")
+  kind      BuyerCompanyEventKind
+  /// `address:<id>`, `member:<id>`, `approval:<id>`, `enquiry:<id>`.
+  subject   String?
+  before    Json?
+  after     Json?
+  note      String?
+  createdAt DateTime              @default(now()) @map("created_at")
+
+  company BuyerCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  actor   User?        @relation("BuyerCompanyEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, createdAt])
+  @@map("buyer_company_event")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -488,6 +818,8 @@ model Area {
   lists                 CuratedList[]
   demand                ScopeDemand[]
   enquiries             Enquiry[]
+  /// Board `7b`: a buying company's delivery addresses in this area.
+  buyerAddresses        BuyerDeliveryAddress[]
 
   @@index([emirate])
   @@map("area")
@@ -3107,6 +3439,19 @@ model Enquiry {
   /// the buyer attaches, not a term of the agreement: the supplier never edits
   /// it, and changing it moves nothing either party agreed.
   buyerReference              String?   @map("buyer_reference")
+  /// The buyer's cost code for the accepted quote — board `7b`, written with
+  /// the acceptance when the company requires one. 40 characters, by CHECK.
+  costCode                    String?   @map("cost_code")
+  /// The saved address this enquiry was sent for delivery to — board `7b` `B6`.
+  ///
+  /// `SET NULL` because the snapshot beside it is the record: an address
+  /// edited or archived later does not rewrite where an enquiry said to go.
+  deliveryAddressId           String?   @map("delivery_address_id")
+  /// The address as it was when the enquiry was sent, in the shape
+  /// `lib/buyer-company/address.ts` reads. The area and access constraints are
+  /// shown to every recipient; the line and the attn. contact only to the
+  /// supplier whose quote is accepted.
+  deliverySnapshot            Json?     @map("delivery_snapshot")
   createdAt                   DateTime  @default(now()) @map("created_at")
 
   /// Board 10e `B3`. The expired enquiry this one re-sends.
@@ -3130,28 +3475,32 @@ model Enquiry {
   /// The campaign landing page they arrived on, where it was one of ours.
   campaignId  String? @map("campaign_id")
 
-  buyer          User               @relation(fields: [buyerId], references: [id], onDelete: Cascade)
-  buyerCompany   BuyerCompany?      @relation(fields: [buyerCompanyId], references: [id], onDelete: SetNull)
-  lines          EnquiryLine[]
+  buyer           User                  @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  buyerCompany    BuyerCompany?         @relation(fields: [buyerCompanyId], references: [id], onDelete: SetNull)
+  deliveryAddress BuyerDeliveryAddress? @relation(fields: [deliveryAddressId], references: [id], onDelete: SetNull)
+  /// Board `7b`. Every request to accept one of this enquiry's quotes that went
+  /// to a colleague for approval.
+  approvals       QuoteApproval[]
+  lines           EnquiryLine[]
   /// 1..8 businesses.
-  recipients     EnquiryRecipient[]
-  missedBy       MissedEnquiry[]
-  attachments    Document[]
-  quotes         Quote[]
-  messages       Message[]
-  review         Review?
-  reviewDraft    ReviewDraft?
-  reviewRequests ReviewRequest[]
+  recipients      EnquiryRecipient[]
+  missedBy        MissedEnquiry[]
+  attachments     Document[]
+  quotes          Quote[]
+  messages        Message[]
+  review          Review?
+  reviewDraft     ReviewDraft?
+  reviewRequests  ReviewRequest[]
   /// Board `7c` `B8`: the one supplier report a buyer may file from the
   /// accepted record, with this enquiry's thread as its evidence.
-  supplierReport SupplierReport?
-  campaign       Campaign?          @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  supplierReport  SupplierReport?
+  campaign        Campaign?             @relation(fields: [campaignId], references: [id], onDelete: SetNull)
   /// Board `1h-s`. Present on an enquiry for work, absent on one for things —
   /// and its presence is the whole of what makes an enquiry a brief.
-  serviceBrief   ServiceBrief?
-  area           Area?              @relation(fields: [areaId], references: [id], onDelete: Restrict)
-  resentFrom     Enquiry?           @relation("EnquiryResent", fields: [resentFromId], references: [id], onDelete: SetNull)
-  resentAs       Enquiry[]          @relation("EnquiryResent")
+  serviceBrief    ServiceBrief?
+  area            Area?                 @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  resentFrom      Enquiry?              @relation("EnquiryResent", fields: [resentFromId], references: [id], onDelete: SetNull)
+  resentAs        Enquiry[]             @relation("EnquiryResent")
 
   @@index([buyerId])
   /// Board 10e. The inbox reads a buyer's enquiries newest first.
@@ -3169,6 +3518,8 @@ model Enquiry {
   /// enquiry on the platform, on a page a seller opens to find two names.
   @@index([contactReleasedToBusinessId, contactReleasedAt])
   @@index([areaId])
+  @@index([buyerCompanyId, contactReleasedAt])
+  @@index([deliveryAddressId])
   @@map("enquiry")
 }
 
@@ -4575,6 +4926,8 @@ model Quote {
   messages    Message[]
   attachments QuoteAttachment[]
   extendedBy  User?             @relation("QuoteExtender", fields: [extendedById], references: [id], onDelete: SetNull)
+  /// Board `7b`. Requests to accept this quote that went to a colleague.
+  approvals   QuoteApproval[]
   /// Board `3j-s`. Present on a reply to an enquiry for work, absent on a quote
   /// for things — and its presence is the whole of what makes a quote a
   /// proposal. A quote with one has no lines, and a trigger refuses any.
@@ -5149,12 +5502,12 @@ enum ReportDetector {
 /// No kind skips the queue: board 13c `B7` took the expedited path off with the
 /// off-platform-payment reason, and `lib/reports/sla.ts` is where urgency lives.
 model SupplierReport {
-  id                String         @id @default(cuid())
-  subjectBusinessId String         @map("subject_business_id")
-  reporterId        String?        @map("reporter_id") @db.Uuid
+  id                String     @id @default(cuid())
+  subjectBusinessId String     @map("subject_business_id")
+  reporterId        String?    @map("reporter_id") @db.Uuid
   kind              ReportKind
   /// Which field was reported, for the collapse and the three-report flag.
-  subjectField      String?        @map("subject_field")
+  subjectField      String?    @map("subject_field")
 
   /// Board 13c `B4` — what the reporter is given, and the only thing they are.
   ///
@@ -5168,7 +5521,7 @@ model SupplierReport {
   /// writers that never hand one to a person — the detectors, the message
   /// scanner, a row typed into the SQL editor — and the previous deployment,
   /// which inserts without the column while this migration is ahead of it.
-  reference         String         @unique @default(dbgenerated("('RP-'::text || upper(substr(md5((gen_random_uuid())::text), 1, 8)))"))
+  reference String @unique @default(dbgenerated("('RP-'::text || upper(substr(md5((gen_random_uuid())::text), 1, 8)))"))
 
   /// Board 13c `B2` — the value this report is objecting to, normalised.
   ///
@@ -5184,11 +5537,11 @@ model SupplierReport {
   /// competitor from one browser. Null where the field carries no value — a
   /// photograph, the opening hours — and the aggregation then falls back to the
   /// listing, which is `B2`'s *"and by listing otherwise"*.
-  subjectValueKey   String?        @map("subject_value_key")
+  subjectValueKey String? @map("subject_value_key")
   /// The same value as it was published, for a moderator to read. Kept beside
   /// the key because a seller who corrects the number between the report and
   /// the decision would otherwise leave a row about a number nobody can see.
-  subjectValue      String?        @map("subject_value")
+  subjectValue    String? @map("subject_value")
 
   /// Board 13c `B1` — what the reporter says it should say.
   ///
@@ -5200,7 +5553,7 @@ model SupplierReport {
   /// It groups nothing. Aggregation is on `subjectValueKey`, which the platform
   /// measured; this is a claim, and a claim that could form a group would be a
   /// group anybody could conjure.
-  suggestedValue    String?        @map("suggested_value")
+  suggestedValue String? @map("suggested_value")
 
   /// Board 13c `B9` — the trade *Not this trade* says it should be.
   ///
@@ -5212,7 +5565,7 @@ model SupplierReport {
   ///
   /// `SetNull` when the category goes: `4d` merges categories, and a merged
   /// node should not take the report that named it.
-  suggestedCategoryId String?      @map("suggested_category_id")
+  suggestedCategoryId String? @map("suggested_category_id")
 
   /// Board 13c `B4` — where to write back, when the reporter is not signed in.
   ///
@@ -5224,12 +5577,12 @@ model SupplierReport {
   /// Optional, and it stays optional: a directory that makes you identify
   /// yourself to tell it a telephone number is wrong will not be told. Never
   /// shown to the business being reported, and used for exactly one message.
-  reporterEmail     String?        @map("reporter_email")
+  reporterEmail     String?   @map("reporter_email")
   /// When the one message the address bought was attempted and the address
   /// erased. Without it a decided report whose address is gone reads exactly
   /// like one filed by somebody who left none, and the detail screen would tell
   /// a moderator nobody was told when somebody was.
-  reporterEmailedAt DateTime?      @map("reporter_emailed_at")
+  reporterEmailedAt DateTime? @map("reporter_emailed_at")
 
   /// Board 13c `B8` — one source is one signal, not three.
   ///
@@ -5240,7 +5593,7 @@ model SupplierReport {
   /// salted, and the raw value never reaches this table — the same decision
   /// `RateLimitHit.identifier` makes, for the same reason. Cleared when the
   /// report is decided: it counts an open report and nothing else.
-  reporterKey       String?        @map("reporter_key")
+  reporterKey String?         @map("reporter_key")
   /// The review this report is about, where it is about one.
   ///
   /// Board 11c `B6`: the incentivised-review log. The request panel promises
@@ -5254,7 +5607,7 @@ model SupplierReport {
   /// `SetNull` rather than `Cascade`: removing the review is frequently the
   /// *outcome* of the finding, and a log that deletes itself when the thing it
   /// found is acted on is not a log.
-  reviewId          String?        @map("review_id")
+  reviewId    String?         @map("review_id")
   /// The accepted enquiry this report is about — board `7c` `B8`, *goes to the
   /// trust team with the thread attached*.
   ///
@@ -5265,10 +5618,10 @@ model SupplierReport {
   ///
   /// `SetNull` for the reason `reviewId` gives: the report is a finding about a
   /// supplier, and it outlives the enquiry it was filed from.
-  enquiryId         String?        @unique @map("enquiry_id")
+  enquiryId   String?         @unique @map("enquiry_id")
   /// What was said: a reporter's own words, or a detector's description of what
   /// it matched. Null where neither has anything to add.
-  detail            String?
+  detail      String?
   /// What the platform already knows, in one line. Board 4h calls this the best
   /// thing on the screen, and it is: `SAME NUMBER ON 4 LISTINGS` under a phone
   /// report does the triage before anybody reads the complaint.
@@ -5280,9 +5633,9 @@ model SupplierReport {
   /// — three prior reports on the same field, a licence expiry, a flagged
   /// message. Null where there is nothing to say; never a restatement of the
   /// claim in capitals.
-  evidence          String?
+  evidence    String?
   /// Board 4h `B11`. Which detector filed this, or null for a person.
-  detector          ReportDetector?
+  detector    ReportDetector?
 
   /// Board 4h `B4` — the owner column. One moderator's name against one row.
   ///
@@ -5290,9 +5643,9 @@ model SupplierReport {
   /// rather than in a shared one: a supplier report is a queue item in its own
   /// right, and routing it through `QueueItem` would have meant a `QueueSubject`
   /// value for a subject that is not a submission awaiting approval.
-  assigneeId        String?        @map("assignee_id") @db.Uuid
-  assignedAt        DateTime?      @map("assigned_at")
-  assignedById      String?        @map("assigned_by_id") @db.Uuid
+  assigneeId   String?   @map("assignee_id") @db.Uuid
+  assignedAt   DateTime? @map("assigned_at")
+  assignedById String?   @map("assigned_by_id") @db.Uuid
 
   /// Board 4h `B2` — escalated to an ops lead, and still open.
   ///
@@ -5302,36 +5655,36 @@ model SupplierReport {
   /// `/admin/businesses`, by the one role that holds it. Escalation is not an
   /// outcome — the report is still open and still somebody's — so it is a
   /// timestamp beside the queue state rather than a fourth `ReportOutcome`.
-  escalatedAt       DateTime?      @map("escalated_at")
-  escalatedById     String?        @map("escalated_by_id") @db.Uuid
+  escalatedAt      DateTime? @map("escalated_at")
+  escalatedById    String?   @map("escalated_by_id") @db.Uuid
   /// Required when escalatedAt is set, by a check constraint. Every staff state
   /// change in this schema carries its reason.
-  escalationReason  String?        @map("escalation_reason")
+  escalationReason String?   @map("escalation_reason")
 
   /// Board 4h `B6` — the report this one duplicates.
   ///
   /// Set only together with `outcome: duplicate`, by a check constraint, and it
   /// points at an open report rather than at another duplicate: a chain would
   /// make "how many people reported this" a graph walk instead of a count.
-  duplicateOfId     String?        @map("duplicate_of_id")
+  duplicateOfId String? @map("duplicate_of_id")
 
-  outcome           ReportOutcome?
-  outcomeReason     String?        @map("outcome_reason")
-  resolvedAt        DateTime?      @map("resolved_at")
+  outcome       ReportOutcome?
+  outcomeReason String?        @map("outcome_reason")
+  resolvedAt    DateTime?      @map("resolved_at")
   /// Who decided. Null while open, and `SetNull` when they leave: the audit row
   /// is the record of who decided, and this is the queue's own copy for the
   /// screen that reports on itself.
-  resolvedById      String?        @map("resolved_by_id") @db.Uuid
-  createdAt         DateTime       @default(now()) @map("created_at")
+  resolvedById  String?        @map("resolved_by_id") @db.Uuid
+  createdAt     DateTime       @default(now()) @map("created_at")
 
-  subjectBusiness Business @relation("ReportSubject", fields: [subjectBusinessId], references: [id], onDelete: Cascade)
-  reporter        User?    @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: SetNull)
-  review          Review?  @relation(fields: [reviewId], references: [id], onDelete: SetNull)
-  enquiry         Enquiry? @relation(fields: [enquiryId], references: [id], onDelete: SetNull)
-  assignee        User?    @relation("ReportAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  assignedBy      User?    @relation("ReportAssigner", fields: [assignedById], references: [id], onDelete: SetNull)
-  escalatedBy     User?    @relation("ReportEscalator", fields: [escalatedById], references: [id], onDelete: SetNull)
-  resolvedBy      User?    @relation("ReportResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+  subjectBusiness   Business         @relation("ReportSubject", fields: [subjectBusinessId], references: [id], onDelete: Cascade)
+  reporter          User?            @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: SetNull)
+  review            Review?          @relation(fields: [reviewId], references: [id], onDelete: SetNull)
+  enquiry           Enquiry?         @relation(fields: [enquiryId], references: [id], onDelete: SetNull)
+  assignee          User?            @relation("ReportAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  assignedBy        User?            @relation("ReportAssigner", fields: [assignedById], references: [id], onDelete: SetNull)
+  escalatedBy       User?            @relation("ReportEscalator", fields: [escalatedById], references: [id], onDelete: SetNull)
+  resolvedBy        User?            @relation("ReportResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
   /// `Cascade`, not `SetNull`, and the check constraint is why.
   ///
   /// A duplicate is a row whose whole meaning is the decision it points at: the
@@ -5341,9 +5694,9 @@ model SupplierReport {
   /// so a `SetNull` here made deleting a decided report impossible rather than
   /// making it tidy. Both rows are about one business and go together anyway
   /// when that business does.
-  duplicateOf     SupplierReport?  @relation("ReportDuplicates", fields: [duplicateOfId], references: [id], onDelete: Cascade)
-  duplicates      SupplierReport[] @relation("ReportDuplicates")
-  suggestedCategory Category?      @relation("ReportSuggestedCategory", fields: [suggestedCategoryId], references: [id], onDelete: SetNull)
+  duplicateOf       SupplierReport?  @relation("ReportDuplicates", fields: [duplicateOfId], references: [id], onDelete: Cascade)
+  duplicates        SupplierReport[] @relation("ReportDuplicates")
+  suggestedCategory Category?        @relation("ReportSuggestedCategory", fields: [suggestedCategoryId], references: [id], onDelete: SetNull)
 
   @@index([subjectBusinessId, outcome])
   @@index([kind])
@@ -8715,6 +9068,16 @@ enum NotificationEvent {
   /// not a reason to re-ask them a question they have already answered.
   ramadan_dates_moved
   weekly_digest
+  /// Board `7b`. A colleague wants a quote accepted and the company's rule
+  /// says someone else must agree — to everybody who may approve it.
+  approval_requested
+  /// Board `7b`. The raiser hears the request was approved (and so the quote
+  /// accepted) or queried.
+  approval_decided
+  /// Board `7b` `B4`. The message scanner flagged a supplier asking to be paid
+  /// outside the platform on a company enquiry — to the company's admins,
+  /// when the company asked to be told.
+  off_platform_flagged
 
   @@map("notification_event")
 }

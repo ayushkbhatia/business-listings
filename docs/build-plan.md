@@ -400,8 +400,17 @@ is `7b`, and it is a tenancy question, not a screen.
   `/dashboard/leads/phone` (owner, manager) and `/admin/leads` (ops lead) — the owner's answer to
   `Q1`: the seller receives the three fields, and the form says so. The dead `card` layout is gone.
   Migration `20261101090000_contact_reveal_leads_1d`.
-- [ ] **3.7 `7b`** — build it, or delete the columns. `BuyerCompany` has five relation readers and
+- [x] **3.7 `7b`** — build it, or delete the columns. `BuyerCompany` has five relation readers and
   no writer; `approvalThresholdAed` has neither.
+  **Built with board `7b`'s handoff, 19 Sep 2026.** `/account/company` creates the company (the
+  first writer `buyerCompanyId` has had, through a membership table the column now mirrors by
+  trigger), holds its details, structured delivery addresses, a team of admin / procurement /
+  requester seats with monthly limits and a used-this-month counter, invitations that expire, and
+  one rule rendered from its settings. The gate is on accepting a quote: `acceptQuote` evaluates
+  it under the company lock, a held quote becomes a request that approving accepts, and nobody
+  approves their own. Open, and the owner's: Q2 (a finance role needs an invoice surface), Q3
+  (per-seller credit terms — not built, not lost), Q4/Q5 (verified-only stays on the approval gate;
+  one rule per company), Q6 (verifying a buyer company).
 
 ### Phase 4 · A queue with no worker — 6 boards, strict order
 

@@ -489,5 +489,73 @@ export const TEMPLATES: TemplateSeed[] = [
     actionPath: "/dashboard/hours",
     status: "live",
   },
+  /*
+     Board `7b` — the buying company. Neutral: a company's own approval process
+     is neither goods nor services. Email and in-app, because an approval is
+     acted on today but not at two in the morning.
+  */
+  {
+    event: "approval_requested",
+    channel: "email",
+    kind: "neutral",
+    subject: "{requester} asked you to approve {quoteRef}",
+    body:
+      "{requester} wants to accept {quoteRef} from {businessName} for {amount}, on enquiry {ref}. " +
+      "Your company's rule needs your approval first. Nothing is accepted and the supplier is not told until you approve it.",
+    actionLabel: "Review the request",
+    actionPath: "/account/company/approvals/{approvalId}",
+    status: "live",
+  },
+  {
+    event: "approval_requested",
+    channel: "in_app",
+    kind: "neutral",
+    body: "{requester} asked you to approve {quoteRef} from {businessName}, {amount}.",
+    actionLabel: "Review the request",
+    actionPath: "/account/company/approvals/{approvalId}",
+    status: "live",
+  },
+  {
+    event: "approval_decided",
+    channel: "email",
+    kind: "neutral",
+    subject: "Your request for {quoteRef}: {outcome}",
+    body:
+      "{approver} decided on your request to accept {quoteRef} from {businessName}, on enquiry {ref}. " +
+      "Outcome: {outcome}. {nextStep}",
+    actionLabel: "Open the request",
+    actionPath: "/account/company/approvals/{approvalId}",
+    status: "live",
+  },
+  {
+    event: "approval_decided",
+    channel: "in_app",
+    kind: "neutral",
+    body: "{approver} decided on {quoteRef} from {businessName}. Outcome: {outcome}. {nextStep}",
+    actionLabel: "Open the request",
+    actionPath: "/account/company/approvals/{approvalId}",
+    status: "live",
+  },
+  {
+    event: "off_platform_flagged",
+    channel: "email",
+    kind: "neutral",
+    subject: "A supplier asked to be paid outside Business Listings",
+    body:
+      "A message from {businessName} on enquiry {ref} asks for payment outside the platform, or shares bank details before a quote was accepted. " +
+      "Our review team has it. Nothing was blocked: check with the person who sent the enquiry before anyone pays.",
+    actionLabel: "Open your company account",
+    actionPath: "/account/company",
+    status: "live",
+  },
+  {
+    event: "off_platform_flagged",
+    channel: "in_app",
+    kind: "neutral",
+    body: "{businessName} asked to be paid outside the platform on enquiry {ref}. Our review team has it.",
+    actionLabel: "Open your company account",
+    actionPath: "/account/company",
+    status: "live",
+  },
 ];
 

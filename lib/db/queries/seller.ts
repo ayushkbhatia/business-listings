@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
-import { buyerForSeller, buyerSelectFor, type SellerVisibleBuyer } from "./seller-visibility";
+import { buyerForSeller, buyerSelectFor, RELEASED_COMPANY_SELECT, type SellerVisibleBuyer } from "./seller-visibility";
+import { constraintsOf, parseSnapshot, type DeliveryConstraints } from "@/lib/buyer-company/address";
 import { matchLines, type LineMatch, type MatchableProduct } from "@/lib/quote/match";
 import { quoteTotalAed } from "@/lib/quote/money";
 import { ENQUIRY_BRIEF_SELECT, toEnquiryBrief, type EnquiryBrief } from "./enquiry-brief";
@@ -184,6 +185,11 @@ export interface LeadDetail {
    */
   acceptedAt: Date | null;
   buyer: SellerVisibleBuyer;
+  /**
+   * Board `7b` `B6`: the saved delivery address the enquiry was sent for.
+   * `constraints` to every recipient; `address` only once released to this one.
+   */
+  delivery: SellerDelivery | null;
   lines: LeadLine[];
   quotes: {
     id: string;
@@ -259,6 +265,17 @@ export async function getLeadDetail(
       createdAt: true,
       contactReleasedToBusinessId: true,
       buyer: { select: buyerSelectFor(released.contactReleasedToBusinessId, businessId) },
+      /*
+         Board `7b`. The company is selected only once it is released to this
+         business — Rule 1 holds at the query, as it does for the buyer — and
+         the delivery snapshot always, because its area and access constraints
+         are what a quote is priced against. Its line and attn. contact are
+         held back below until the same release.
+      */
+      ...(released.contactReleasedToBusinessId === businessId
+        ? { buyerCompany: { select: RELEASED_COMPANY_SELECT } }
+        : {}),
+      deliverySnapshot: true,
       lines: {
         orderBy: { sortOrder: "asc" },
         include: { service: { select: { id: true, name: true, slug: true, businessId: true } } },
@@ -318,7 +335,13 @@ export async function getLeadDetail(
         ? (enquiry.quotes.find((q) => q.acceptedAt !== null)?.acceptedAt ??
           enquiry.contactReleasedAt)
         : null,
-    buyer: buyerForSeller(enquiry.buyer, enquiry.contactReleasedToBusinessId, businessId),
+    buyer: buyerForSeller(
+      enquiry.buyer,
+      enquiry.contactReleasedToBusinessId,
+      businessId,
+      "buyerCompany" in enquiry ? (enquiry.buyerCompany ?? null) : undefined,
+    ),
+    delivery: deliveryForSeller(enquiry.deliverySnapshot, enquiry.contactReleasedToBusinessId === businessId),
     lines: enquiry.lines.map((l, i) => ({
       id: l.id,
       description: l.description,
@@ -503,4 +526,22 @@ export async function getQuotesForBusiness(businessId: string): Promise<QuoteRow
     buyer: buyerForSeller(q.enquiry.buyer, q.enquiry.contactReleasedToBusinessId, businessId),
     lostReason: q.lostReason,
   }));
+}
+
+export interface SellerDelivery {
+  constraints: DeliveryConstraints;
+  /** Null until this supplier's quote is accepted. */
+  address: { label: string; addressLine: string; attnName: string | null; attnPhone: string | null } | null;
+}
+
+/** The delivery snapshot, narrowed to what this supplier may see. */
+export function deliveryForSeller(snapshot: unknown, released: boolean): SellerDelivery | null {
+  const parsed = parseSnapshot(snapshot);
+  if (!parsed) return null;
+  return {
+    constraints: constraintsOf(parsed),
+    address: released
+      ? { label: parsed.label, addressLine: parsed.addressLine, attnName: parsed.attnName, attnPhone: parsed.attnPhone }
+      : null,
+  };
 }

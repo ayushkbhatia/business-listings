@@ -1,5 +1,7 @@
 import "server-only";
 import { feeOnBasis } from "@/lib/quote/proposal-words";
+import { filsToAed } from "@/lib/quote/money";
+import { approversFor } from "@/lib/buyer-company/queue";
 import { prisma } from "@/lib/db/client";
 import { formatAED, formatCount, formatDate, UAE_LOCALE } from "@/lib/format";
 /*
@@ -1364,5 +1366,195 @@ export async function onRamadanDatesMoved(input: {
         to: formatDate(input.to),
       }),
     });
+  });
+}
+
+// ── Board `7b` — the buying company ─────────────────────────────────────────
+
+type CompanyEvent = "approval_requested" | "approval_decided" | "off_platform_flagged";
+
+const COMPANY_RECIPIENT_SELECT = {
+  id: true,
+  phone: true,
+  email: true,
+  claimToken: true,
+  isProvisional: true,
+} as const;
+
+/**
+ * One company notification to one member, through `BUYER_DEFAULT`, with the
+ * delivery row every other buyer emitter writes — including the payload a
+ * deferred message needs to go out when quiet hours lift.
+ *
+ * No trade kind: a request for approval is about the buyer's own process, not
+ * about goods or work, so its templates are `neutral`.
+ */
+async function deliverCompanyEvent(
+  event: CompanyEvent,
+  recipient: { id: string; phone: string | null; email: string | null; claimToken: string | null; isProvisional: boolean },
+  params: Record<string, string | number>,
+  enquiryId: string | null,
+  templates: Map<string, LiveTemplate>,
+): Promise<void> {
+  const senders = resolveNotificationSenders();
+  for (const decision of route(BUYER_DEFAULT, { event, now: new Date() })) {
+    const template = templates.get(decision.channel) ?? null;
+    if (!template) continue;
+    const rendered = render(template, params);
+    const outcome =
+      decision.action === "send"
+        ? await deliver(decision.channel, senders, rendered, recipient, template.metaTemplateName)
+        : { status: decision.action === "defer" ? ("deferred" as const) : ("skipped" as const), reason: decision.reason };
+    await prisma.notificationDelivery.create({
+      data: {
+        templateId: template.id,
+        event,
+        channel: decision.channel,
+        status: outcome.status,
+        recipientUserId: recipient.id,
+        enquiryId,
+        reason: outcome.reason ?? null,
+        scheduledFor: decision.action === "defer" ? decision.at : null,
+        payload:
+          decision.action === "defer"
+            ? ({
+                subject: rendered.subject,
+                body: rendered.body,
+                actionLabel: rendered.actionLabel,
+                actionUrl: rendered.actionPath ? buyerActionUrl(rendered.actionPath, recipient) : null,
+                metaTemplateName: template.metaTemplateName,
+              } as never)
+            : undefined,
+        sentAt: outcome.status === "sent" ? new Date() : null,
+      },
+    });
+  }
+}
+
+/** A first name, for a colleague. A company's own people know each other by it. */
+function firstNameFor(fullName: string | null | undefined, fallback: string): string {
+  return fullName?.trim().split(/\s+/)[0] || fallback;
+}
+
+/** `AED 15,624`, or the words for a quote with no single total. */
+function approvalAmount(valueFils: bigint | null): string {
+  return valueFils === null ? t("company.approval.no_total") : formatAED(filsToAed(valueFils));
+}
+
+/**
+ * A request for approval reached the people who may approve it — board `7b`.
+ *
+ * Everybody the rule allows, worked out now by the same function the approve
+ * button runs, so a message never goes to someone the button would refuse.
+ * `answered` is the second round: the raiser answered a query, and the
+ * request is back in front of the same people.
+ */
+export async function onApprovalRequested(input: { approvalId: string; answered?: boolean }): Promise<void> {
+  await safely("approval_requested", async () => {
+    const request = await prisma.quoteApproval.findUnique({
+      where: { id: input.approvalId },
+      select: {
+        id: true,
+        status: true,
+        enquiryId: true,
+        valueFils: true,
+        raisedBy: { select: { fullName: true } },
+        enquiry: { select: { ref: true } },
+        quote: { select: { ref: true, business: { select: { displayName: true } } } },
+      },
+    });
+    if (!request || request.status !== "pending") return;
+    const approverIds = await approversFor(request.id);
+    if (approverIds.length === 0) return;
+    const recipients = await prisma.user.findMany({
+      where: { id: { in: approverIds } },
+      select: COMPANY_RECIPIENT_SELECT,
+      orderBy: { id: "asc" },
+    });
+
+    const event = "approval_requested" as const;
+    const templates = await resolveLiveTemplates(event, null);
+    const params = withParams(event, {
+      ref: request.enquiry.ref,
+      quoteRef: request.quote.ref,
+      businessName: request.quote.business.displayName,
+      amount: approvalAmount(request.valueFils),
+      requester: firstNameFor(request.raisedBy.fullName, t("company.approval.a_colleague")),
+      approvalId: request.id,
+    });
+    for (const recipient of recipients) {
+      await deliverCompanyEvent(event, recipient, params, request.enquiryId, templates);
+    }
+  });
+}
+
+/** The raiser hears what was decided: approved (and so accepted), or queried. */
+export async function onApprovalDecided(input: { approvalId: string }): Promise<void> {
+  await safely("approval_decided", async () => {
+    const request = await prisma.quoteApproval.findUnique({
+      where: { id: input.approvalId },
+      select: {
+        id: true,
+        status: true,
+        enquiryId: true,
+        raisedBy: { select: COMPANY_RECIPIENT_SELECT },
+        decidedBy: { select: { fullName: true } },
+        enquiry: { select: { ref: true } },
+        quote: { select: { ref: true, business: { select: { displayName: true } } } },
+      },
+    });
+    if (!request || (request.status !== "approved" && request.status !== "queried")) return;
+
+    const event = "approval_decided" as const;
+    const templates = await resolveLiveTemplates(event, null);
+    const params = withParams(event, {
+      ref: request.enquiry.ref,
+      quoteRef: request.quote.ref,
+      businessName: request.quote.business.displayName,
+      approver: request.decidedBy?.fullName?.trim() || t("company.approval.a_colleague"),
+      outcome: t(request.status === "approved" ? "company.request.state.approved" : "company.request.state.queried"),
+      nextStep: t(request.status === "approved" ? "company.approval.next_approved" : "company.approval.next_queried"),
+      approvalId: request.id,
+    });
+    await deliverCompanyEvent(event, request.raisedBy, params, request.enquiryId, templates);
+  });
+}
+
+/**
+ * The message scanner flagged a supplier's ask to be paid outside the
+ * platform on a company's enquiry — board `7b` `B4`.
+ *
+ * Detection is `10h`'s and runs whatever the company chose; this is the part
+ * the company chose: its admins are told. Nothing is blocked, because nothing
+ * can be, and the message says that too.
+ */
+export async function onOffPlatformFlagged(input: { enquiryId: string; businessId: string }): Promise<void> {
+  await safely("off_platform_flagged", async () => {
+    const enquiry = await prisma.enquiry.findUnique({
+      where: { id: input.enquiryId },
+      select: {
+        id: true,
+        ref: true,
+        buyerCompany: { select: { id: true, tellAdminsOffPlatform: true } },
+      },
+    });
+    const company = enquiry?.buyerCompany;
+    if (!enquiry || !company || !company.tellAdminsOffPlatform) return;
+    const [business, admins] = await Promise.all([
+      prisma.business.findUnique({ where: { id: input.businessId }, select: { displayName: true } }),
+      prisma.buyerCompanyMember.findMany({
+        where: { companyId: company.id, deactivatedAt: null, role: "company_admin" },
+        select: { user: { select: COMPANY_RECIPIENT_SELECT } },
+        orderBy: { id: "asc" },
+      }),
+    ]);
+    if (!business || admins.length === 0) return;
+
+    const event = "off_platform_flagged" as const;
+    const templates = await resolveLiveTemplates(event, null);
+    const params = withParams(event, { ref: enquiry.ref, businessName: business.displayName });
+    for (const admin of admins) {
+      await deliverCompanyEvent(event, admin.user, params, enquiry.id, templates);
+    }
   });
 }

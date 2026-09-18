@@ -33,6 +33,8 @@ function fixture(overrides: Partial<AcceptedRecord> = {}): AcceptedRecord {
     enquiryId: "e1",
     ref: "ENQ-8841",
     buyerReference: "PO-2026-0418",
+    costCode: null,
+    delivery: null,
     acceptedAt: new Date("2026-08-21T08:00:00Z"),
     isBrief: false,
     declinedCount: 3,

@@ -1,5 +1,6 @@
 "use client";
 
+import type { DeliveryChoice } from "@/lib/buyer-company/address";
 import { useEffect, useId, useMemo, useState } from "react";
 import { Button, IconButton, Input, Select, Textarea } from "@/components/primitives";
 import { Close } from "@/components/primitives/icons";
@@ -59,6 +60,8 @@ export interface EnquiryComposerValue {
   lines: { description: string; qty: number; unit: string | null; size: string | null; targetUnitPriceAed: string | null; productId: string | null }[];
   emirate: string | null;
   deliverToArea: string | null;
+  /** Board `7b` `B6`: one of the buyer's company's saved addresses, or null for "somewhere else". */
+  deliveryAddressId: string | null;
   neededBy: string | null;
   termsWanted: string | null;
   closesInDays: number;
@@ -66,6 +69,8 @@ export interface EnquiryComposerValue {
   contactPhone: string;
   contactName: string;
 }
+
+export type { DeliveryChoice };
 
 export interface EnquiryComposerLabels {
   formLabel: string;
@@ -95,6 +100,10 @@ export interface EnquiryComposerLabels {
 
   area: string;
   areaHint: string;
+  /** Board `7b`: the saved-address picker. Only read when choices are passed. */
+  deliverTo?: string;
+  deliverToHint?: string;
+  deliverToElsewhere?: string;
   emirate: string;
   emirateOptions: readonly { value: string; label: string }[];
   neededBy: string;
@@ -152,6 +161,12 @@ export interface EnquiryComposerProps {
   /** Board 10e's re-send: where the expired enquiry was going. The buyer edits from there. */
   initialEmirate?: string;
   initialArea?: string;
+  /**
+   * Board `7b` `B6`: the company's saved addresses. With any, the composer
+   * offers them in place of the emirate and area fields — the default
+   * preselected — and "somewhere else" brings the fields back.
+   */
+  deliveryChoices?: readonly DeliveryChoice[];
   /** Shown in the wizard's third step. Recomputed by the caller as the count changes. */
   recipients?: readonly RecipientPreview[];
   /** Hidden entirely when the buyer is signed in. */
@@ -195,6 +210,7 @@ export function EnquiryComposer({
   initialRequirement = "",
   initialEmirate = "",
   initialArea = "",
+  deliveryChoices = [],
   recipients = [],
   askForContact = true,
   maxFanout = 8,
@@ -213,6 +229,18 @@ export function EnquiryComposer({
   );
   const [emirate, setEmirate] = useState(initialEmirate);
   const [area, setArea] = useState(initialArea);
+  /*
+     The default address preselected — unless the page brought an area of its
+     own (a re-send names where the expired enquiry was going), which the buyer
+     meant and a default must not quietly replace.
+  */
+  const [addressId, setAddressId] = useState<string>(
+    initialArea || initialEmirate ? "" : (deliveryChoices.find((c) => c.isDefault)?.id ?? deliveryChoices[0]?.id ?? ""),
+  );
+  const chosen = deliveryChoices.find((c) => c.id === addressId) ?? null;
+  const where = chosen
+    ? { emirate: chosen.emirate, deliverToArea: chosen.areaName, deliveryAddressId: chosen.id }
+    : { emirate: emirate || null, deliverToArea: area.trim() || null, deliveryAddressId: null };
   const [neededBy, setNeededBy] = useState("");
   const [terms, setTerms] = useState("");
   const [closesInDays, setClosesInDays] = useState("7");
@@ -232,8 +260,9 @@ export function EnquiryComposer({
     onChange({
       requirement: requirement.trim(),
       lines: [],
-      emirate: emirate || null,
-      deliverToArea: area.trim() || null,
+      emirate: where.emirate,
+      deliverToArea: where.deliverToArea,
+      deliveryAddressId: where.deliveryAddressId,
       neededBy: neededBy || null,
       termsWanted: terms || null,
       closesInDays: Number(closesInDays) || 7,
@@ -241,7 +270,19 @@ export function EnquiryComposer({
       contactPhone: contactPhone.trim(),
       contactName: contactName.trim(),
     });
-  }, [onChange, requirement, emirate, area, neededBy, terms, closesInDays, fanoutTo, contactPhone, contactName]);
+  }, [
+    onChange,
+    requirement,
+    where.emirate,
+    where.deliverToArea,
+    where.deliveryAddressId,
+    neededBy,
+    terms,
+    closesInDays,
+    fanoutTo,
+    contactPhone,
+    contactName,
+  ]);
 
   const totalSteps = labels.steps.length;
 
@@ -299,8 +340,7 @@ export function EnquiryComposer({
         targetUnitPriceAed: l.targetUnitPriceAed.trim() || null,
         productId: l.productId ?? null,
       })),
-      emirate: emirate || null,
-      deliverToArea: area.trim() || null,
+      ...where,
       neededBy: neededBy || null,
       termsWanted: terms || null,
       closesInDays: Number(closesInDays),
@@ -459,6 +499,28 @@ export function EnquiryComposer({
 
       {showStep() ? (
         <div className="grid gap-4 md:grid-cols-2">
+          {deliveryChoices.length > 0 ? (
+            <div className="md:col-span-2">
+              <label htmlFor={`${formId}-deliver`} className="mb-1.5 block text-body-sm text-ink">
+                {labels.deliverTo}
+              </label>
+              <Select
+                id={`${formId}-deliver`}
+                value={addressId}
+                options={[
+                  ...deliveryChoices.map((c) => ({ value: c.id, label: c.title })),
+                  { value: "", label: labels.deliverToElsewhere ?? "" },
+                ]}
+                aria-describedby={`${formId}-deliver-hint`}
+                onChange={(e) => setAddressId(e.target.value)}
+              />
+              <p id={`${formId}-deliver-hint`} className="mt-1.5 text-caption text-muted">
+                {chosen ? chosen.detail : labels.deliverToHint}
+              </p>
+            </div>
+          ) : null}
+          {chosen ? null : (
+          <>
           <div>
             <label htmlFor={`${formId}-emirate`} className="mb-1.5 block text-body-sm text-ink">
               {labels.emirate}
@@ -485,6 +547,8 @@ export function EnquiryComposer({
               {labels.areaHint}
             </p>
           </div>
+          </>
+          )}
           <div>
             <label htmlFor={`${formId}-needed`} className="mb-1.5 block text-body-sm text-ink">
               {labels.neededBy}

@@ -68,6 +68,14 @@ describe("what an event supplies", () => {
     const emitted = (Object.keys(EVENT_PARAMS) as (keyof typeof EVENT_PARAMS)[]).filter(isEmitted);
     expect([...emitted].sort()).toEqual([
       /*
+         Board `7b`'s two, sent by `lib/buyer-company/approvals.ts`: a request to
+         the people the rule lets approve it, and the decision to the person
+         who raised it. The first notifications that go from one buyer to
+         another, inside one company.
+      */
+      "approval_decided",
+      "approval_requested",
+      /*
          Board 3e §5, and the fifth event sent from a schedule. It was declared
          in the enum and seeded with a live email template from handoff 1, and
          emitted by nothing for the whole of it — so the verification screen
@@ -83,6 +91,8 @@ describe("what an event supplies", () => {
       // assumed to be read where it was written — and a buyer who has gone
       // quiet is by definition not looking at the thread.
       "message_received",
+      // Board `7b` `B4`: the scanner's finding, told to the company's admins.
+      "off_platform_flagged",
       /*
          Board `11e` `B10`. The waiting list's release rule — everybody on it is
          told the day the slot frees, and the first to answer takes it — only
@@ -150,7 +160,7 @@ describe("what an event supplies", () => {
   it("covers every event in the enum, so none is missing a row", () => {
     // `satisfies Record<NotificationEvent, …>` enforces this at compile time;
     // this fails loudly if somebody widens the enum and the type is loosened.
-    expect(Object.keys(EVENT_PARAMS)).toHaveLength(19);
+    expect(Object.keys(EVENT_PARAMS)).toHaveLength(22);
   });
 
   it("does not claim to emit the alert it only records", () => {

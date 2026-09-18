@@ -72,6 +72,7 @@ const COMPARISON: ProposalComparison = {
   engagementType: "ongoing_contract",
   cadence: "quarterly",
   acceptedBusinessId: null,
+  buyerCompanyId: null,
   recipientCount: 6,
   columns: [EFG, SHIRAWI, KHANSAHEB],
   declined: [{ businessId: "d", displayName: "Northern Cooling Services", declineReason: "Outside our area" }],

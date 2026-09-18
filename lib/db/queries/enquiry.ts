@@ -82,6 +82,12 @@ export interface BuyerEnquiry {
   closesAt: Date;
   createdAt: Date;
   contactReleasedToBusinessId: string | null;
+  /**
+   * Board `7b`: the buying company the enquiry was raised for, or null. Its
+   * rule governs acceptance, so the accept controls send a company enquiry to
+   * `/enquiry/:id/accept/:quote` rather than posting straight to the action.
+   */
+  buyerCompanyId: string | null;
   contactReleasedAt: Date | null;
   lines: {
     id: string;
@@ -128,6 +134,7 @@ export async function getBuyerEnquiry(buyerId: string, enquiryId: string): Promi
       closesAt: true,
       createdAt: true,
       contactReleasedToBusinessId: true,
+      buyerCompanyId: true,
       contactReleasedAt: true,
       lines: { orderBy: { sortOrder: "asc" } },
       recipients: {
@@ -183,6 +190,7 @@ export async function getBuyerEnquiry(buyerId: string, enquiryId: string): Promi
     closesAt: enquiry.closesAt,
     createdAt: enquiry.createdAt,
     contactReleasedToBusinessId: enquiry.contactReleasedToBusinessId,
+    buyerCompanyId: enquiry.buyerCompanyId,
     contactReleasedAt: enquiry.contactReleasedAt,
     lines: enquiry.lines.map((l) => ({
       id: l.id,

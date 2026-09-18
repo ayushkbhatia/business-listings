@@ -668,6 +668,54 @@ with the reason, ends every session and emails the reason. The sign-in screen sa
 emailed and never shows it (`B7`). `getActor` returns no actor for a suspended profile on every
 request.
 
+## The buying company — board 7b
+
+```prisma
+model BuyerCompany {
+  name, trn (15 digits, CHECK), licenceNumber, accountsEmail (lower-cased, CHECK)
+  approvalThresholdAed Int?    // above it, the named approver; null = no threshold
+  approverId           String? // an admin; null reads "an admin approves" (SET NULL, no CHECK)
+  requirePoNumber, requireCostCode, unverifiedNeedsApproval, tellAdminsOffPlatform
+}
+model BuyerCompanyMember { companyId, userId, role, monthlyLimitAed (procurement only, CHECK),
+                           joinedAt, invitedById, deactivatedAt, deactivatedById }
+model BuyerCompanyInvite { email, fullName, role, monthlyLimitAed, tokenHash @unique, expiresAt (7 d),
+                           acceptedAt, revokedAt }
+model BuyerDeliveryAddress { label, addressLine, emirate, areaId, attnName, attnPhone (E.164),
+                             accessPoint, accessFrom/accessUntil (minutes), loadLimit, isDefault, archivedAt }
+model QuoteApproval { quoteId, quoteRevision, valueFils BigInt?, raisedById, reasons ApprovalReason[],
+                      approverId, poNumber, costCode, note, status, decidedById, decidedAt,
+                      decisionNote, answer }
+model BuyerCompanyEvent { actorId (SET NULL), actorName (snapshot), kind, subject, before, after, note }
+// Enquiry gains: costCode, deliveryAddressId, deliverySnapshot (JSON, versioned)
+```
+
+**Membership is the record; `User.buyerCompanyId` is its mirror.** An `AFTER` trigger on
+`buyer_company_member` writes the column, and a `BEFORE` trigger on `user` refuses a direct write
+that disagrees. One active membership per person, by partial unique index.
+
+**The gate is on accepting a quote (`B1`).** `acceptQuote` runs `gateCompanyAcceptance` under the
+enquiry's claim and the company's advisory lock (`buyer_company:<id>`; lock order enquiry, then
+company). A quote the rule holds becomes a `QuoteApproval` instead; approving it runs `acceptQuote`
+with the request attached, and the request is marked approved in that transaction or not at all.
+The acceptance itself still creates no row.
+
+**The month's spend is derived (`B5`)** — summed from the company's accepted quotes whose
+`contactReleasedAt` falls in the Dubai calendar month, against whoever's authority committed each
+(the approver where one approved, the buyer otherwise). A proposal has a total only on a fixed
+fee; any other basis counts as over every limit.
+
+**Triggers.** `quote_approval_is_the_request` fixes what was asked (quote, revision, value,
+reasons, raiser, PO, cost code, note) and refuses reopening a decided request;
+`buyer_company_event_is_the_record` refuses edits and direct deletes (cascades and the
+`app.buyer_company_maintenance` session setting pass). One open request per enquiry, by partial
+unique index.
+
+**What a supplier sees.** Before acceptance, the delivery snapshot's area and access constraints
+(`B6`) and nothing that identifies the company. After, to the accepted supplier only: the address
+line, the attn. contact, and the enquiry's company — name, TRN, licence number, accounts email —
+for the tax invoice they issue.
+
 ## The buyer's inbox and saved searches — board 10e
 
 Nothing on the inbox is stored as a status. Bucket, verb, tone and the close cell are derived
