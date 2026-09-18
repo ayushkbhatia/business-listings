@@ -367,13 +367,33 @@ model SupplierReport {
   reviewId  String?     // board 11c B6 — the incentivised-review log had nothing to point at
   enquiryId String?  @unique  // board 7c B8 — one report per accepted enquiry; its thread is the evidence
   kind      ReportKind   // closed | wrong_details | wrong_trade | claim_conflict | off_platform_payment | content | review_integrity | accepted_quote
+  subjectField String?   // phone | address | website | name | category | photo | description | hours | licence
+  reference String @unique  // board 13c B4 — RP- + 8 Crockford chars, random; a DB default is the floor
+  subjectValueKey String?   // board 13c B2 — the value objected to, normalised, read from the listing
+  subjectValue    String?   // the same value as published when reported
+  suggestedValue  String?   // board 13c B1 — what the reporter says it should say; groups nothing
+  suggestedCategoryId String? // board 13c B9 — wrong_trade only (CHECK)
+  reporterEmail   String?   // board 13c B4 — signed-out only; used for one message, then erased
+  reporterEmailedAt DateTime? // when that message went and the address was erased
+  reporterKey     String?   // board 13c B8 — salted requester digest; one source is one signal
   detail    String?
-  outcome   ReportOutcome?  // seller_corrected | upheld | no_action
+  evidence  String?        // measured at filing: value spread, licence clause (board 13c B3)
+  outcome   ReportOutcome?  // seller_corrected | upheld | no_action | duplicate
   outcomeReason String?
 }
 ```
 
-Three reports on the same field auto-flag the listing. `off_platform_payment` skips the queue.
+**Three sources about one value flag the listing** (board 13c). Not three reports on one field:
+the modal's footer promised that, and a reason names no field or two. A report carries the
+value it objects to (`subjectValueKey`), read from the listing and never from the form, so the
+same wrong number on four listings is one value group — `3 SEPARATE REPORTS · SAME NUMBER ON 4
+LISTINGS`, which is the row board 4h drew. Where the field carries no value (hours, a
+photograph, the category) the group is the listing and field. Sources are distinct accounts,
+salted requester digests or detectors — one sweep's findings on four listings are one source.
+The count is a query on every read of the queue and nothing stores it.
+
+No kind skips the queue (board 13c `B7`); urgency is the per-type service level in
+`lib/reports/sla.ts`. A report never changes the listing (`B11`).
 
 **A review cannot exist without an enquiry.** `enquiryId` is `NOT NULL` and `UNIQUE` with a
 foreign key, and `canReview` admits a buyer only on an accepted quote or an enquiry this
@@ -383,7 +403,7 @@ ladder, and a third "no enquiry on record" state is unreachable rather than mere
 Board 11c `Q1` asked this as a blocking question; the schema had already answered it.
 
 **A dispute is not a `SupplierReport`.** A report is filed *against* a business, by a buyer or
-by the platform, carries a free-text `subjectField` for the three-strikes auto-flag, and
+by the platform, carries a `subjectField` and the value it objects to for the flag, and
 resolves to one of three outcomes. A dispute is filed *by* the business, about a review, on one
 of four fixed grounds, and resolves to one of two. They render on one screen and stay two
 tables — sharing one would make `subjectBusinessId` mean the complainant on some rows and the

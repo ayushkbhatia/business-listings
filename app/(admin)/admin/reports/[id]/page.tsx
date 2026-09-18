@@ -8,6 +8,7 @@ import { formatCount, formatDate, formatDateTime, formatDuration } from "@/lib/f
 import { t } from "@/lib/i18n";
 import { reportDetail, reportEvidence } from "@/lib/reports/service";
 import { slaMsFor, slaStateOf, slaTone } from "@/lib/reports/sla";
+import { isReportSubjectField } from "@/lib/reports/taxonomy";
 import { AdminPage, getAdminNavBadges } from "../../../_shell";
 import { duplicate, escalate, removeSellerReply, resolve } from "../actions";
 import { DecidePanel, MarkDuplicate } from "./Decide";
@@ -53,7 +54,7 @@ export default async function ReportDetailPage({
   const [detail, badges] = await Promise.all([reportDetail(id), getAdminNavBadges(seat)]);
   if (!detail) notFound();
 
-  const { report, priors, group, duplicatesClosed } = detail;
+  const { report, replyTo, priors, group, duplicatesClosed, valueGroup } = detail;
   const supplier = report.subjectBusiness.displayName;
   const now = new Date();
   const waitingMs = Math.max(
@@ -157,8 +158,73 @@ export default async function ReportDetailPage({
                   {
                     key: "field",
                     label: t("admin.report_detail.field"),
-                    value: report.subjectField ?? undefined,
+                    /*
+                       Worded where the field is one the public form names; the
+                       stored string otherwise. Detectors and the impersonation
+                       check write fields of their own (`display_name`,
+                       `message`), and a raw one is truer than a missing key.
+                    */
+                    value: report.subjectField
+                      ? isReportSubjectField(report.subjectField)
+                        ? t(`report_listing.field.${report.subjectField}` as "report_listing.field.phone")
+                        : report.subjectField
+                      : undefined,
                   },
+                  /*
+                     Board 13c. The value as the listing published it when the
+                     report arrived — not as it reads now, which a seller may
+                     have corrected since — and what the reporter says it
+                     should be. The first is measured; the second is a claim,
+                     and the labels say which is which.
+                  */
+                  ...(report.subjectValue
+                    ? [
+                        {
+                          key: "value",
+                          label: t("admin.report_detail.value_on_record"),
+                          value: report.subjectValue,
+                          mono: report.subjectField === "phone" || report.subjectField === "licence",
+                        },
+                      ]
+                    : []),
+                  ...(report.suggestedValue
+                    ? [
+                        {
+                          key: "suggested",
+                          label: t("admin.report_detail.suggested_value"),
+                          value: report.suggestedValue,
+                        },
+                      ]
+                    : []),
+                  ...(report.suggestedCategory
+                    ? [
+                        {
+                          key: "suggested_category",
+                          label: t("admin.report_detail.suggested_category"),
+                          value: report.suggestedCategory.name,
+                        },
+                      ]
+                    : []),
+                  {
+                    key: "reference",
+                    label: t("admin.report_detail.reference"),
+                    value: report.reference,
+                    mono: true,
+                  },
+                  ...(report.detector
+                    ? []
+                    : [
+                        {
+                          key: "reply",
+                          label: t("admin.report_detail.reply_to"),
+                          value:
+                            replyTo === "emailed" && report.reporterEmailedAt
+                              ? t("admin.report_detail.reply_to.emailed", {
+                                  date: formatDate(report.reporterEmailedAt),
+                                })
+                              : t(`admin.report_detail.reply_to.${replyTo}` as "admin.report_detail.reply_to.none"),
+                        },
+                      ]),
                   {
                     key: "owner",
                     /*
@@ -240,6 +306,43 @@ export default async function ReportDetailPage({
                       </span>
                     </span>
                     <span className="max-w-prose text-caption text-muted">{row.detail ?? "—"}</span>
+                  </li>
+                ))}
+              </ul>
+            </Panel>
+          )}
+
+          {/*
+             Board 13c `B2` — the same value on other listings. `4h`'s own row
+             reads `SAME NUMBER ON 4 LISTINGS`; this is the four, as links, so
+             a moderator correcting one sees the other three first.
+          */}
+          {valueGroup.otherListings.length > 0 && (
+            <Panel
+              title={t("admin.report_detail.value_group")}
+              description={t("admin.report_detail.value_group_note", {
+                listings: formatCount(valueGroup.otherListings.length + 1),
+                sources: formatCount(valueGroup.sources),
+              })}
+            >
+              <ul className="flex flex-col">
+                {valueGroup.otherListings.map((row) => (
+                  <li
+                    key={row.reportId}
+                    className="flex flex-wrap items-baseline justify-between gap-2 border-t border-line py-2 first:border-t-0"
+                  >
+                    <Link
+                      href={`/admin/reports/${row.reportId}`}
+                      className="rounded-tag text-body-sm text-moss underline-offset-2 hover:underline focus-visible:shadow-focus focus-visible:outline-none"
+                    >
+                      {row.businessName}
+                    </Link>
+                    <Link
+                      href={`/b/${row.slug}`}
+                      className="rounded-tag text-caption text-muted underline-offset-2 hover:underline focus-visible:shadow-focus focus-visible:outline-none"
+                    >
+                      {t("admin.report_detail.open_listing")}
+                    </Link>
                   </li>
                 ))}
               </ul>

@@ -58,7 +58,13 @@ export function directoryFooterColumns(): FooterColumn[] {
         { key: "terms", label: t("chrome.terms"), href: "/terms" },
         { key: "privacy", label: t("chrome.privacy"), href: "/privacy" },
         { key: "cookies", label: t("chrome.cookies"), href: "/cookies" },
-        { key: "report", label: t("home.link_report"), href: "/verification-policy" },
+        /*
+           Board 13c. Pointed at the verification policy until the report form
+           existed, and at nothing better until the form had a hub: a footer has
+           no listing to report, so it opens the page that finds one and looks
+           up a report already sent.
+        */
+        { key: "report", label: t("home.link_report"), href: "/report" },
       ],
     },
   ];

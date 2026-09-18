@@ -524,7 +524,8 @@ describe("B11 — the detectors", () => {
 
 describe("the public can reach this queue", () => {
   it("files a report from a listing, from a signed-in buyer and from nobody", async () => {
-    const business = await listing("Public");
+    // A listing that shows a telephone number, or there is no number to report.
+    const business = await listing("Public", { phone: "+971 4 550 1212" });
 
     const signedIn = await fileListingReport({
       slug: business.slug,
@@ -539,7 +540,8 @@ describe("the public can reach this queue", () => {
     const anonymous = await fileListingReport({
       slug: business.slug,
       kind: "closed",
-      field: "address",
+      // Board 13c: a closure is filed against the licence record.
+      field: "licence",
       detail: "The unit is empty and the signage has gone. Neighbour says they left in June.",
       reporterId: null,
       requester: `test-${Date.now()}-b`,
@@ -552,13 +554,13 @@ describe("the public can reach this queue", () => {
     const business = await listing("Public Refusals");
     const good = {
       slug: business.slug,
-      kind: "content" as const,
-      field: "photo",
-      detail: "The third photograph carries another supplier's watermark.",
+      kind: "wrong_details" as const,
+      field: "name",
+      detail: "The name on the unit's sign is a different company's.",
       reporterId: buyerId,
     };
     await expect(
-      fileListingReport({ ...good, field: "hours", requester: `test-${Date.now()}-c` }),
+      fileListingReport({ ...good, field: "category", requester: `test-${Date.now()}-c` }),
     ).resolves.toMatchObject({ ok: false, error: "invalid_field" });
     await expect(
       fileListingReport({ ...good, requester: `test-${Date.now()}-d` }),

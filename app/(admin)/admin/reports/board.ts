@@ -39,6 +39,8 @@ export interface ReportBoardRow {
   slaLabel: string;
   late: boolean;
   escalated: boolean;
+  /** Board 13c — three separate sources or more, across the value group. */
+  flagged: string | null;
   suspended: boolean;
   actionLabel: string;
   href: string;
@@ -71,8 +73,14 @@ export function reportBoardRows(
        as a separator with nothing on either side of it.
     */
     const parts = [
-      entry.reports > 1
-        ? t("admin.reports.evidence.separate", { count: formatCount(entry.reports) })
+      /*
+         Board 13c. Distinct sources across the value group, counted live —
+         the same number the flag reads, so the line and the badge beside it
+         cannot disagree. A detector's finding is a source of its own, which is
+         why this says *reports* and not *people*.
+      */
+      entry.corroboration.sources > 1
+        ? t("admin.reports.evidence.separate", { count: formatCount(entry.corroboration.sources) })
         : null,
       entry.evidence ??
         (entry.priorsOnField > 1
@@ -121,6 +129,19 @@ export function reportBoardRows(
             : t("admin.reports.sla.ok", { sla: formatDuration(entry.slaMs) }),
       late: entry.sla === "late",
       escalated: entry.escalatedAt !== null,
+      /*
+         The count and the spread, in words, because a badge reading *Flagged*
+         alone would say a threshold was crossed without saying by what — and
+         `3 sources · 4 listings` is the triage `4h`'s evidence line does.
+      */
+      flagged: entry.flagged
+        ? entry.corroboration.listings > 1
+          ? t("admin.reports.flagged_spread", {
+              sources: formatCount(entry.corroboration.sources),
+              listings: formatCount(entry.corroboration.listings),
+            })
+          : t("admin.reports.flagged", { sources: formatCount(entry.corroboration.sources) })
+        : null,
       suspended: entry.businessSuspended,
       actionLabel: t(`admin.reports.action.${actionKey(entry)}` as "admin.reports.action.review"),
       href: `${entry.href}${options.query ?? ""}`,

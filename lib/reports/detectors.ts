@@ -1,6 +1,8 @@
 import { Prisma, type PrismaClient } from "@/lib/db/generated/client";
 import { formatPhone } from "@/lib/format/phone";
 import { COOLING_DAYS, type DetectorRules } from "./detector-rules";
+import { licenceWords } from "./evidence";
+import { subjectValueKey } from "./value-key";
 
 /**
  * Board 4h — the sweeps that fill 61% of this queue.
@@ -56,8 +58,21 @@ export interface DetectorRun {
   licenceLongExpired: { found: number; filed: number };
 }
 
-/** A phone number's digits, last nine, which is a UAE subscriber number. */
-const PHONE_KEY_SQL = Prisma.sql`right(regexp_replace(l."phone", '[^0-9]', '', 'g'), 9)`;
+/**
+ * A phone number as its UAE national significant number: digits only, then the
+ * international prefix, the country code and the trunk zero taken off.
+ *
+ * Board 13c found the rule this replaced — *the last nine digits* — wrong for
+ * every landline. A Dubai landline is eight digits after the trunk zero, so
+ * `04 227 8890` kept nine digits (`042278890`) and `+971 4 227 8890` kept a
+ * different nine (`142278890`), and the two ways the licence registers print
+ * one number never met. Mobiles are nine digits and happened to work, which is
+ * why the sweep found anything at all.
+ *
+ * `subjectValueKey("phone")` in `./value-key.ts` is the same rule in TypeScript,
+ * and a unit test holds the two to the same strings.
+ */
+const PHONE_KEY_SQL = Prisma.sql`regexp_replace(regexp_replace(l."phone", '[^0-9]', '', 'g'), '^(00)?(971)?0?', '')`;
 
 interface PhoneGroup {
   key: string;
@@ -93,7 +108,7 @@ export async function sweepSharedPhones(
       FROM "location" l
       JOIN "business" b ON b."id" = l."business_id"
      WHERE l."phone" IS NOT NULL
-       AND length(regexp_replace(l."phone", '[^0-9]', '', 'g')) >= 9
+       AND length(${PHONE_KEY_SQL}) >= 8
        AND b."published_at" IS NOT NULL
        AND b."suspended_at" IS NULL
        AND b."closed_at" IS NULL
@@ -119,6 +134,14 @@ export async function sweepSharedPhones(
         detector: "shared_phone",
         kind: "wrong_details",
         subjectField: "phone",
+        /*
+           Board 13c `B2`. The group key, so a person reporting this number on
+           any of these listings joins the finding rather than starting beside
+           it. `PHONE_KEY_SQL` and `subjectValueKey("phone")` are one rule,
+           pinned by a test.
+        */
+        subjectValueKey: group.key,
+        subjectValue: group.sample,
         evidence: `Same number on ${listings} listings`,
         /*
            The other listings by name, because that is the question a moderator
@@ -163,18 +186,26 @@ export async function sweepLongExpiredLicences(
       closureRequestedAt: null,
     },
     orderBy: [{ licenceExpiry: "asc" }, { id: "asc" }],
-    select: { id: true, displayName: true, licenceExpiry: true },
+    select: { id: true, displayName: true, licenceExpiry: true, licenceNumber: true },
   });
 
   let filed = 0;
   for (const business of businesses) {
-    const months = Math.floor((now.getTime() - business.licenceExpiry.getTime()) / (30 * DAY_MS));
     const written = await fileFinding(db, {
       businessId: business.id,
       detector: "licence_long_expired",
       kind: "closed",
       subjectField: "licence",
-      evidence: months >= 1 ? `Licence expired ${months} months ago` : "Licence expired",
+      subjectValueKey: subjectValueKey("licence", business.licenceNumber),
+      subjectValue: business.licenceNumber,
+      /*
+         Board 13c. One rule for what the licence record says, read here and by
+         `evidenceLine` on the public form — a buyer's *permanently closed* and
+         this sweep now collapse into one work item, and two rows in one group
+         whose licence clause disagreed about the month would be two readings of
+         one date.
+      */
+      evidence: licenceWords(business.licenceExpiry, now),
       detail:
         `The trade licence expired on ${business.licenceExpiry.toISOString().slice(0, 10)} and no renewal has been recorded. ` +
         `The listing is still published and still taking enquiries.`,
@@ -200,6 +231,8 @@ async function fileFinding(
     detector: "shared_phone" | "licence_long_expired";
     kind: "wrong_details" | "closed";
     subjectField: string;
+    subjectValueKey: string | null;
+    subjectValue: string | null;
     evidence: string;
     detail: string;
     now: Date;
@@ -224,6 +257,8 @@ async function fileFinding(
       detector: input.detector,
       kind: input.kind,
       subjectField: input.subjectField,
+      subjectValueKey: input.subjectValueKey,
+      subjectValue: input.subjectValueKey ? input.subjectValue : null,
       evidence: input.evidence,
       detail: input.detail,
       createdAt: input.now,

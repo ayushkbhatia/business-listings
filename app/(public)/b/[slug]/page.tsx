@@ -1,6 +1,7 @@
 import { pairedCopies } from "@/lib/strings/store";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Suspense } from "react";
 import { notFound, permanentRedirect } from "next/navigation";
 import { redirectIfMoved, absorbedInto } from "@/lib/listing/redirect";
 import { Button, buttonClassName } from "@/components/primitives";
@@ -39,6 +40,10 @@ import { isShortlisted } from "@/lib/shortlist/service";
 import { storefrontPhotos } from "@/lib/storefront/photos";
 import { servicesStorefrontFor } from "@/lib/storefront/services";
 import { CredentialsSection, ServicesSection, ServicesStorefrontPage } from "./_services";
+import { ReportDialog, ReportTrigger } from "./ReportDialog";
+import { fileReport, loadReportForm } from "@/app/(public)/report/actions";
+import { reportFormData } from "@/lib/reports/form";
+import { reportSubject } from "@/lib/reports/subject";
 
 export const revalidate = 300;
 
@@ -68,8 +73,15 @@ interface Params {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }
 
-export async function generateMetadata({ params }: Params): Promise<Metadata> {
+export async function generateMetadata({ params, searchParams }: Params): Promise<Metadata> {
   const { slug } = await params;
+  /*
+     Board 13c `B6`. `?report=1` is the report modal, and a URL somebody can
+     share is a URL a crawler can find. The storefront underneath is the same
+     page, so it keeps its canonical; the modal's own address is `noindex`, and
+     `robots.txt` has disallowed `/b/*?` since the facet work.
+  */
+  const reporting = (await searchParams)?.["report"] !== undefined;
   const business = await getBusinessBySlug(slug);
   if (!business) {
     // Board 11i Q5. The notice is readable by direct link and indexed nowhere.
@@ -125,7 +137,11 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
     // An unclaimed page is thin by nature and honest about it. It stays
     // indexable — 30,000 of them are how a supplier first finds us — but it
     // never claims a rating it does not have.
-    robots: unclaimed ? { index: true, follow: true } : undefined,
+    robots: reporting
+      ? { index: false, follow: false }
+      : unclaimed
+        ? { index: true, follow: true }
+        : undefined,
   };
 }
 
@@ -152,6 +168,18 @@ export default async function StorefrontPage({ params, searchParams }: Params) {
 
   const movedTo = await absorbedInto(slug);
   if (movedTo) permanentRedirect(`/b/${movedTo}`);
+
+  /*
+     Board 13c. Built on the server only when the request already asks for the
+     modal — a shared `?report=1` link — so it opens on the form. Every other
+     storefront render skips it, and the modal fetches it on the click instead.
+  */
+  const reportData =
+    query.report === "1"
+      ? await reportSubject(slug).then(async (subject) =>
+          subject ? reportFormData(subject, (await getActor()) !== null) : null,
+        )
+      : null;
 
   return (
     <>
@@ -182,6 +210,28 @@ export default async function StorefrontPage({ params, searchParams }: Params) {
       ) : (
         <ClaimedStorefront business={business} requestedService={requestedService} />
       )}
+      {/*
+         Board 13c — the report modal, mounted once beside both compositions so
+         the unclaimed panel's link and the verification rail's link open the
+         same thing. In a `Suspense` because it reads the query string on the
+         client, and a component that does must not hold up the page around it.
+
+         After the page, not before it. A closed `<dialog>` is still in the
+         document, and the `Modal` panel carries a `<header>`: mounted first,
+         that header was the page's first one, ahead of the site's banner —
+         which is what the viewport spec's `header.first()` found, and what a
+         landmark-reading tool would find too. `showModal()` puts it in the top
+         layer wherever it sits in the source.
+      */}
+      <Suspense fallback={null}>
+        <ReportDialog
+          slug={business.slug}
+          businessName={business.displayName}
+          initialData={reportData}
+          loadReportForm={loadReportForm}
+          fileReport={fileReport}
+        />
+      </Suspense>
     </>
   );
 }
@@ -755,9 +805,9 @@ async function UnclaimedStorefront({ business }: { business: Business }) {
                four entry points and already reads a pre-filled `q`, so the
                destination and the intent existed and only the href was absent.
 
-               Report goes where its two siblings go — the footer's "Report a
-               listing" and the storefront rail's "Report an issue" both point
-               at the policy. Board `13c` replaces all three at once.
+               Report opens board `13c`'s modal, as the storefront rail's
+               *Report an issue* does; the footer's *Report a listing* goes to
+               the `/report` hub, which has no listing to open one over.
 
                `crawlRel` on the claim link because this composition renders on
                roughly 30,000 pages, each producing a distinct `?q=` URL into a
@@ -774,25 +824,19 @@ async function UnclaimedStorefront({ business }: { business: Business }) {
                 {t("listing.claim_cta")}
               </Link>
               {/*
-                 Board 4h. *Report this listing* opened the verification policy,
-                 which is the page that explains how a licence is checked rather
-                 than the one that takes a report. On an unclaimed listing this
-                 is the most likely thing on the page to be wrong, and the
-                 person who knows is standing in front of it.
+                 Boards 4h and 13c. *Report this listing* opened the
+                 verification policy until 4h; it opens the report modal now,
+                 over this page, and falls back to `/report/:slug` wherever a
+                 script cannot run. On an unclaimed listing this is the most
+                 likely thing on the page to be wrong, and the person who knows
+                 is standing in front of it.
               */}
-              <Link
-                href={`/report/${business.slug}`}
-                /*
-                   `nofollow` outright rather than through `crawlRel`, which
-                   reads query strings and would call this one followable. The
-                   form has no query string and is still thirty thousand pages
-                   of nothing to rank — see `DISALLOWED_PATHS`.
-                */
-                rel="nofollow"
+              <ReportTrigger
+                slug={business.slug}
                 className={buttonClassName({ variant: "link" })}
               >
                 {t("listing.report")}
-              </Link>
+              </ReportTrigger>
             </div>
           </Panel>
 

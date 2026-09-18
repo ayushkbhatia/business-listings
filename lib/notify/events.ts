@@ -13,7 +13,13 @@ import { formatAED, formatCount, formatDate, UAE_LOCALE } from "@/lib/format";
 */
 import type { Task } from "@/lib/onboarding/service";
 import { t } from "@/lib/i18n";
-import { buyerAddress, notify, resolveLiveTemplates, type NotifyOutcome } from "./service";
+import {
+  buyerAddress,
+  notify,
+  resolveLiveTemplates,
+  type LiveTemplate,
+  type NotifyOutcome,
+} from "./service";
 import { BUYER_DEFAULT, route } from "./routing";
 import { render } from "./render";
 import { resolveNotificationSenders } from "./senders";
@@ -765,12 +771,22 @@ export async function onReportResolved(input: { reportIds: readonly string[] }):
   if (input.reportIds.length === 0) return;
   await safely("report_resolved", async () => {
     const reports = await prisma.supplierReport.findMany({
-      where: { id: { in: [...input.reportIds] }, reporterId: { not: null } },
+      where: {
+        id: { in: [...input.reportIds] },
+        /*
+           Board 13c `B4`: an account, or an address left on the form. A report
+           with neither was filed by somebody who chose not to hear back, and
+           the form told them so at the time.
+        */
+        OR: [{ reporterId: { not: null } }, { reporterEmail: { not: null } }],
+      },
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       select: {
         id: true,
         outcome: true,
         kind: true,
+        reference: true,
+        reporterEmail: true,
         /*
            The decision this one was closed under, where it is a duplicate.
 
@@ -800,9 +816,8 @@ export async function onReportResolved(input: { reportIds: readonly string[] }):
     const templates = await resolveLiveTemplates(event, null);
 
     for (const report of reports) {
-      const reporter = report.reporter;
       const decided = report.duplicateOf?.outcome ?? report.outcome;
-      if (!reporter || !decided) continue;
+      if (!decided) continue;
       /*
          Our own finding about a review is filed by a moderator against the
          account. Writing back to say we decided our own report would be the
@@ -810,19 +825,33 @@ export async function onReportResolved(input: { reportIds: readonly string[] }):
       */
       if (report.kind === "review_integrity") continue;
 
+      const params = withParams(event, {
+        businessName: report.subjectBusiness.displayName,
+        businessSlug: report.subjectBusiness.slug,
+        outcome: t(`admin.reports.outcome.${decided}` as "admin.reports.outcome.upheld"),
+        reference: report.reference,
+      });
+
+      const reporter = report.reporter;
+      if (!reporter) {
+        if (report.reporterEmail) {
+          await writeToReportAddress({
+            reportId: report.id,
+            address: report.reporterEmail,
+            template: templates.get("email") ?? null,
+            params,
+            senders,
+          });
+        }
+        continue;
+      }
+
       const decisions = route(BUYER_DEFAULT, { event, now: new Date() });
       for (const decision of decisions) {
         const template = templates.get(decision.channel) ?? null;
         if (!template) continue;
 
-        const rendered = render(
-          template,
-          withParams(event, {
-            businessName: report.subjectBusiness.displayName,
-            businessSlug: report.subjectBusiness.slug,
-            outcome: t(`admin.reports.outcome.${decided}` as "admin.reports.outcome.upheld"),
-          }),
-        );
+        const rendered = render(template, params);
 
         const outcome =
           decision.action === "send"
@@ -859,6 +888,83 @@ export async function onReportResolved(input: { reportIds: readonly string[] }):
       }
     }
   });
+}
+
+/**
+ * Board 13c `B4` — the one message an address left on the report form buys.
+ *
+ * The schema's promise about `reporterEmail` is *used for exactly one message*,
+ * and this is where it is kept: one attempt, on email only, and then the
+ * address is erased whatever the attempt returned. Kept longer, it would be a
+ * list of people who once complained about a supplier, held for no purpose.
+ *
+ * ## Why not through `route()`
+ *
+ * `BUYER_DEFAULT` would defer an evening email to the morning, and a deferred
+ * delivery is sent later by `deliverQueued`, which finds its recipient through
+ * `recipientUserId` — there is none here, and the address is gone by then.
+ * Email is not a push; a message the reporter asked for, arriving at nine at
+ * night, is not the intrusion quiet hours exist to prevent. In-app has no
+ * inbox to land in without an account and is not attempted.
+ *
+ * The delivery row carries no address, the same as every other row in that
+ * log. The link is the listing, never a tokened path: there is no account for
+ * a token to sign in to.
+ */
+async function writeToReportAddress(input: {
+  reportId: string;
+  address: string;
+  template: LiveTemplate | null;
+  params: ReturnType<typeof withParams>;
+  senders: ReturnType<typeof resolveNotificationSenders>;
+}): Promise<void> {
+  const { template } = input;
+  let status: "sent" | "failed" | "skipped";
+  let reason: string | null = null;
+
+  if (!template) {
+    status = "skipped";
+    reason = "no_live_template";
+  } else {
+    const sender = input.senders.email;
+    const rendered = render(template, input.params);
+    if (!sender) {
+      status = "skipped";
+      reason = "no_carrier_configured";
+    } else {
+      const result = await sender.send({
+        channel: "email",
+        to: input.address,
+        subject: rendered.subject,
+        body: rendered.body,
+        actionLabel: rendered.actionLabel,
+        actionUrl: rendered.actionPath ? absoluteUrl(rendered.actionPath) : null,
+        metaTemplateName: null,
+        recipientUserId: null,
+      });
+      status = result.delivered ? "sent" : "failed";
+      reason = result.delivered ? null : (result.detail ?? null);
+    }
+  }
+
+  await prisma.$transaction([
+    prisma.notificationDelivery.create({
+      data: {
+        templateId: template?.id ?? null,
+        event: "report_resolved",
+        channel: "email",
+        status,
+        recipientUserId: null,
+        reason,
+        sentAt: status === "sent" ? new Date() : null,
+      },
+    }),
+    prisma.supplierReport.update({
+      where: { id: input.reportId },
+      data: { reporterEmail: null, reporterEmailedAt: new Date() },
+      select: { id: true },
+    }),
+  ]);
 }
 
 /**

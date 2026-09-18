@@ -643,6 +643,8 @@ model Category {
   curatedLists      CuratedList[]
   sectorSuggestions SectorSuggestion[]
   savedSearches     SavedSearch[]            @relation("SavedSearchCategory")
+  /// Board 13c `B9`. *Not this trade* names the trade it should be.
+  reportSuggestions SupplierReport[]         @relation("ReportSuggestedCategory")
 
   @@index([parentId])
   /// Synonyms are matched exactly — an Arabic term either is or is not in the
@@ -5143,15 +5145,102 @@ enum ReportDetector {
   @@map("report_detector")
 }
 
-/// The trust queue. Three reports on the same field auto-flag the listing.
-/// `off_platform_payment` skips the queue.
+/// The trust queue. Three reports about one value flag the listing for review.
+/// No kind skips the queue: board 13c `B7` took the expedited path off with the
+/// off-platform-payment reason, and `lib/reports/sla.ts` is where urgency lives.
 model SupplierReport {
   id                String         @id @default(cuid())
   subjectBusinessId String         @map("subject_business_id")
   reporterId        String?        @map("reporter_id") @db.Uuid
   kind              ReportKind
-  /// Which field was reported, for the three-strikes auto-flag.
+  /// Which field was reported, for the collapse and the three-report flag.
   subjectField      String?        @map("subject_field")
+
+  /// Board 13c `B4` — what the reporter is given, and the only thing they are.
+  ///
+  /// `RP-4K2M9XQT`. Random rather than sequential, unlike `Enquiry.ref`: a
+  /// report reference is handed to anybody who fills in a public form, and a
+  /// sequence there would publish the size of the moderation queue to the
+  /// street. `lib/reports/reference.ts` has the alphabet and the argument.
+  ///
+  /// The database default is the floor, not the generator: every public report
+  /// sets a forty-bit reference from the module, and the default covers the
+  /// writers that never hand one to a person — the detectors, the message
+  /// scanner, a row typed into the SQL editor — and the previous deployment,
+  /// which inserts without the column while this migration is ahead of it.
+  reference         String         @unique @default(dbgenerated("('RP-'::text || upper(substr(md5((gen_random_uuid())::text), 1, 8)))"))
+
+  /// Board 13c `B2` — the value this report is objecting to, normalised.
+  ///
+  /// The export's first correction: the footer promises *three reports on the
+  /// same field*, and a field is the wrong unit. `4h`'s own row is
+  /// `3 SEPARATE REPORTS · SAME NUMBER ON 4 LISTINGS` — three people, one
+  /// telephone number, four businesses. Counting by field finds three reports
+  /// about "phone" on one listing; counting by value finds the problem.
+  ///
+  /// Read from the listing at the moment of filing, never from the form. A key
+  /// the reporter could post is a key anybody could type to drop a report into
+  /// any group, which on a three-report threshold is a way to flag a
+  /// competitor from one browser. Null where the field carries no value — a
+  /// photograph, the opening hours — and the aggregation then falls back to the
+  /// listing, which is `B2`'s *"and by listing otherwise"*.
+  subjectValueKey   String?        @map("subject_value_key")
+  /// The same value as it was published, for a moderator to read. Kept beside
+  /// the key because a seller who corrects the number between the report and
+  /// the decision would otherwise leave a row about a number nobody can see.
+  subjectValue      String?        @map("subject_value")
+
+  /// Board 13c `B1` — what the reporter says it should say.
+  ///
+  /// *"One extra tap, and the whole downstream queue starts working."* The
+  /// difference between a moderator reading *the number is wrong* and knowing
+  /// what to check the register against. Optional, free text, short: it is a
+  /// replacement value rather than an argument, and `MAX_CORRECTION` caps it.
+  ///
+  /// It groups nothing. Aggregation is on `subjectValueKey`, which the platform
+  /// measured; this is a claim, and a claim that could form a group would be a
+  /// group anybody could conjure.
+  suggestedValue    String?        @map("suggested_value")
+
+  /// Board 13c `B9` — the trade *Not this trade* says it should be.
+  ///
+  /// *"A miscategorisation report that does not capture which trade it should
+  /// be gives the moderator a complaint and no candidate."* From `4d`'s tree,
+  /// so the candidate is a node rather than a sentence. Constrained to
+  /// `wrong_trade`: a suggested category on a report about a photograph is a
+  /// column filled in by accident.
+  ///
+  /// `SetNull` when the category goes: `4d` merges categories, and a merged
+  /// node should not take the report that named it.
+  suggestedCategoryId String?      @map("suggested_category_id")
+
+  /// Board 13c `B4` — where to write back, when the reporter is not signed in.
+  ///
+  /// The export's second correction: *"the reporter is anonymous, so nobody can
+  /// be told the outcome... this screen is where that becomes unfixable."* An
+  /// unclaimed storefront is met signed out, so `reporterId` is null on most of
+  /// these rows and `onReportResolved` skips them.
+  ///
+  /// Optional, and it stays optional: a directory that makes you identify
+  /// yourself to tell it a telephone number is wrong will not be told. Never
+  /// shown to the business being reported, and used for exactly one message.
+  reporterEmail     String?        @map("reporter_email")
+  /// When the one message the address bought was attempted and the address
+  /// erased. Without it a decided report whose address is gone reads exactly
+  /// like one filed by somebody who left none, and the detail screen would tell
+  /// a moderator nobody was told when somebody was.
+  reporterEmailedAt DateTime?      @map("reporter_emailed_at")
+
+  /// Board 13c `B8` — one source is one signal, not three.
+  ///
+  /// *"`Public ×3` is corroboration only if the three are three people."* The
+  /// salted digest `lib/rate-limit` already computes for the requester, stored
+  /// so that the second report from one browser about one field collapses
+  /// rather than counting again. Not an address: the digest is one-way and
+  /// salted, and the raw value never reaches this table — the same decision
+  /// `RateLimitHit.identifier` makes, for the same reason. Cleared when the
+  /// report is decided: it counts an open report and nothing else.
+  reporterKey       String?        @map("reporter_key")
   /// The review this report is about, where it is about one.
   ///
   /// Board 11c `B6`: the incentivised-review log. The request panel promises
@@ -5254,10 +5343,16 @@ model SupplierReport {
   /// when that business does.
   duplicateOf     SupplierReport?  @relation("ReportDuplicates", fields: [duplicateOfId], references: [id], onDelete: Cascade)
   duplicates      SupplierReport[] @relation("ReportDuplicates")
+  suggestedCategory Category?      @relation("ReportSuggestedCategory", fields: [suggestedCategoryId], references: [id], onDelete: SetNull)
 
   @@index([subjectBusinessId, outcome])
   @@index([kind])
   @@index([reviewId])
+  /// Board 13c `B2` — the value group, across listings. `SAME NUMBER ON 4
+  /// LISTINGS` is one indexed read on this.
+  @@index([kind, subjectField, subjectValueKey, outcome], map: "supplier_report_value_group_idx")
+  /// Board 13c `B8` — has this source already said this about this listing?
+  @@index([reporterKey, subjectBusinessId, kind, subjectField], map: "supplier_report_reporter_key_idx")
   /// The queue: open first, oldest first, the same key board 4b's sources use.
   @@index([outcome, createdAt], map: "supplier_report_queue_idx")
   /// The duplicate group, read from the report that holds it.

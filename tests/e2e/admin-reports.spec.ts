@@ -38,9 +38,9 @@ test.describe("the queue", () => {
 
     const perType = await chips.getByRole("link").allInnerTexts();
     const counted = perType
-      // Drop "All" and the escalated chip: one is the total and the other is a
-      // state that cuts across every type.
-      .filter((text) => !/^All /.test(text) && !/^Escalated /.test(text))
+      // Drop "All", the escalated chip and board 13c's flagged chip: one is the
+      // total and the other two are states that cut across every type.
+      .filter((text) => !/^All /.test(text) && !/^Escalated /.test(text) && !/^Flagged /.test(text))
       .map((text) => Number(/(\d+)$/.exec(text)![1]))
       .reduce((sum, n) => sum + n, 0);
     expect(counted).toBe(open);
@@ -129,11 +129,17 @@ test.describe("one report, filed and decided by this test", () => {
 
     // A listing this file is the only writer on: reported, then decided.
     await page.goto("/report/al-areen-industrial-supplies-llc");
-    await page.getByRole("radio", { name: "It is filed under the wrong trade" }).check();
-    await page.getByLabel("Which part").selectOption("category");
+    await page.getByRole("radio", { name: /Not this trade/ }).check();
+    /*
+       Board 13c. The form offers only the parts this listing shows, so the
+       sub-choice appears where the listing has a description as well as a
+       trade, and is filled in for the reporter where it does not.
+    */
+    const trade = page.getByRole("radio", { name: "Trade or category" });
+    if (await trade.count()) await trade.check();
     const said = "Their own page says they do scaffolding hire, and this is filed under valves.";
-    await page.getByLabel("What did you find").fill(said);
-    await page.getByRole("button", { name: "Send the report" }).click();
+    await page.getByLabel(/Anything that helps us check/).fill(said);
+    await page.getByRole("button", { name: "Send report" }).click();
     /*
        Wait for the server action to answer before reading which way it went.
        `count()` does not auto-wait, so branching on it straight after the click
@@ -146,7 +152,7 @@ test.describe("one report, filed and decided by this test", () => {
        region for announcements, and matching the role alone matched that on
        every run — so the test skipped itself while the form was still working.
     */
-    const refused = page.getByText(/already reported this|more reports than we take/);
+    const refused = page.getByText(/already been reported|more reports than we take|more reports in the last hour/);
     await expect(sent.or(refused).first()).toBeVisible();
     if ((await refused.count()) > 0) {
       /*

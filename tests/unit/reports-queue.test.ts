@@ -51,6 +51,8 @@ function entry(over: Partial<ReportEntry> = {}): ReportEntry {
     reports: over.reports ?? 1,
     duplicateIds: over.duplicateIds ?? [],
     priorsOnField: over.priorsOnField ?? 1,
+    corroboration: over.corroboration ?? { sources: 1, listings: 1 },
+    flagged: over.flagged ?? false,
     filedAt,
     waitingMs: over.waitingMs ?? 0,
     slaMs: over.slaMs ?? slaMsFor(over.type ?? "wrong_details"),

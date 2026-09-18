@@ -60,3 +60,41 @@ export function collapseKey(
 export function collapses(report: CollapsibleReport): boolean {
   return collapseKey("x", report) !== null;
 }
+
+/**
+ * Board 13c `B8` — who said it, as a key two reports share only when one
+ * source said both.
+ *
+ * *"`Public ×3` is corroboration only if the three are three people."* An
+ * account where there is one, the salted requester digest where there is not,
+ * and the detector by name where the platform filed it: the shared-number sweep
+ * files one finding per listing carrying the number, and three findings from
+ * one sweep are one measurement, not three witnesses. A person's report filed
+ * before the digest was stored is a source of its own, because there is
+ * nothing to say it shares one.
+ *
+ * Read by the writer, to count the evidence line, and by the queue, to count
+ * the flag. Two readers of one rule, so the line under the claim and the chip
+ * beside it cannot disagree about how many people spoke.
+ */
+export function reportSource(row: {
+  id: string;
+  reporterId: string | null;
+  reporterKey: string | null;
+  detector?: string | null;
+}): string {
+  if (row.reporterId) return `user:${row.reporterId}`;
+  if (row.detector) return `detector:${row.detector}`;
+  if (row.reporterKey) return `key:${row.reporterKey}`;
+  return `row:${row.id}`;
+}
+
+/** The value group two open reports share across listings, or null. */
+export function valueGroupKey(report: {
+  kind: $Enums.ReportKind;
+  subjectField: string | null;
+  subjectValueKey: string | null;
+}): string | null {
+  if (!report.subjectField || !report.subjectValueKey) return null;
+  return `${report.kind}|${report.subjectField}|${report.subjectValueKey}`;
+}

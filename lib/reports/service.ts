@@ -7,7 +7,7 @@ import { auditScopeFor } from "@/lib/auth/subject";
 import type { Actor } from "@/lib/auth/roles";
 import type { $Enums } from "@/lib/db/generated/client";
 import { onReportResolved } from "@/lib/notify/events";
-import { collapses } from "./collapse";
+import { collapses, reportSource } from "./collapse";
 
 /**
  * Board 4h — supplier reports.
@@ -24,14 +24,14 @@ import { collapses } from "./collapse";
  * thread — the third queue in this project to be filled by code and read by
  * nobody.
  *
- * ## Off-platform payment reports skip the queue
+ * ## No kind skips the queue
  *
- * The README says so outright, and the reason is that they are not a judgement
- * call. A message asking a buyer to pay an IBAN before contact release is
- * either there or it is not; the platform detected it, and what a moderator
- * adds is the decision about the *account*, not about the message. So they are
- * flagged separately and land in front of ops lead with the suspension control,
- * rather than in the conduct queue with the wrong-phone-number reports.
+ * The first README had off-platform payment reports skip it, straight to an
+ * ops lead with a suspension control. Board 4h put them in the one queue with
+ * the shortest service level instead (`lib/reports/sla.ts`), and board 13c's
+ * `B7` removed the last expedited path: urgency is a clock, not a side door.
+ * `openReports` below still leaves them out, for the trust suite that reads
+ * it; the queue the console renders is `lib/reports/queue.ts`.
  */
 
 export type ReportOutcome = $Enums.ReportOutcome;
@@ -243,6 +243,13 @@ export async function resolveReport(
             outcomeReason: input.reason,
             resolvedAt: now,
             resolvedById: input.actor.id,
+            /*
+               Board 13c `B8`. The requester digest exists to count one source
+               once while a report is open; a decided report is in no group and
+               counts nothing, so the digest goes with the decision rather than
+               staying on the row for as long as the row does.
+            */
+            reporterKey: null,
           },
           select: { outcome: true, resolvedAt: true },
         });
@@ -263,6 +270,7 @@ export async function resolveReport(
               outcomeReason: input.reason,
               resolvedAt: now,
               resolvedById: input.actor.id,
+              reporterKey: null,
             },
           });
         }
@@ -327,6 +335,16 @@ export async function reportDetail(reportId: string) {
       enquiryId: true,
       duplicateOfId: true,
       subjectBusinessId: true,
+      /* Board 13c — what the modal now captures. */
+      reference: true,
+      subjectValue: true,
+      subjectValueKey: true,
+      suggestedValue: true,
+      suggestedCategory: { select: { id: true, name: true } },
+      reporterId: true,
+      reporterKey: true,
+      reporterEmail: true,
+      reporterEmailedAt: true,
       reporter: { select: { id: true, fullName: true } },
       assignee: { select: { id: true, fullName: true } },
       escalatedBy: { select: { id: true, fullName: true } },
@@ -362,7 +380,7 @@ export async function reportDetail(reportId: string) {
   });
   if (!report) return null;
 
-  const [priors, group, duplicatesClosed] = await Promise.all([
+  const [priors, group, duplicatesClosed, valueGroup] = await Promise.all([
     priorsFor(report.subjectBusinessId, report.subjectField),
     /*
        The rest of the work item. Same rule as the collapse and the resolve: the
@@ -391,9 +409,72 @@ export async function reportDetail(reportId: string) {
       : Promise.resolve([]),
     /* What this report already closed, where it has been decided. */
     prisma.supplierReport.count({ where: { duplicateOfId: report.id } }),
+    /*
+       Board 13c `B2` — the same value, open, on other listings. `4h`'s
+       `SAME NUMBER ON 4 LISTINGS`, made into links: a moderator deciding one
+       of them should see the other three before deciding the first.
+    */
+    report.subjectValueKey
+      ? prisma.supplierReport.findMany({
+          where: {
+            kind: report.kind,
+            subjectField: report.subjectField,
+            subjectValueKey: report.subjectValueKey,
+            outcome: null,
+          },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+          take: 200,
+          select: {
+            id: true,
+            reporterId: true,
+            reporterKey: true,
+            detector: true,
+            subjectBusinessId: true,
+            subjectBusiness: { select: { displayName: true, slug: true } },
+          },
+        })
+      : Promise.resolve([]),
   ]);
 
-  return { report, priors, group, duplicatesClosed };
+  /*
+     The address itself stays in the row, for the one message it buys; the
+     screen is told only that there is one. A moderator deciding a report has
+     no use for a stranger's mailbox, and a field nobody renders is a field
+     nobody copies into a ticket.
+  */
+  const replyTo: "account" | "email" | "emailed" | "none" = report.reporterId
+    ? "account"
+    : report.reporterEmail
+      ? "email"
+      : report.reporterEmailedAt
+        ? "emailed"
+        : "none";
+  const shown = { ...report, reporterEmail: null, reporterKey: null };
+
+  const otherListings = new Map<string, { businessName: string; slug: string; reportId: string }>();
+  for (const row of valueGroup) {
+    if (row.subjectBusinessId === report.subjectBusinessId || otherListings.has(row.subjectBusinessId)) continue;
+    otherListings.set(row.subjectBusinessId, {
+      businessName: row.subjectBusiness.displayName,
+      slug: row.subjectBusiness.slug,
+      reportId: row.id,
+    });
+  }
+  const sources = new Set([...valueGroup, report].map(reportSource)).size;
+
+  return {
+    report: shown,
+    replyTo,
+    priors,
+    group,
+    duplicatesClosed,
+    valueGroup: {
+      /** Distinct sources across the value group, this report included. */
+      sources,
+      /** One row per other listing carrying the value, oldest report first. */
+      otherListings: [...otherListings.values()],
+    },
+  };
 }
 
 export type ReportDetail = NonNullable<Awaited<ReturnType<typeof reportDetail>>>;

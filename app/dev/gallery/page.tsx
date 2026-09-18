@@ -37,6 +37,7 @@ import { PairedStringsGallery } from "./_sections/PairedStrings";
 import { NegotiationThreadGallery } from "./_sections/NegotiationThread";
 import { WriteReviewGallery } from "./_sections/WriteReview";
 import { ContactRevealGallery } from "./_sections/ContactRevealGallery";
+import { ReportListingGallery } from "./_sections/ReportListing";
 import { TaxonomyGallery } from "./_sections/Taxonomy";
 import { Shells } from "./_sections/Shells";
 import { Structure } from "./_sections/Structure";
@@ -351,6 +352,8 @@ export default function Gallery() {
       <PlanConfigGallery />
       {/* After plan config, for the same axe-grid reason: nothing new above Shells. */}
       <PlacementGallery />
+      {/* After placement, for the same axe-grid reason: nothing new above Shells. */}
+      <ReportListingGallery />
     </main>
   );
 }
