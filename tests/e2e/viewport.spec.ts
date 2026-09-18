@@ -20,7 +20,8 @@ const ROUTES = [
   "/",
   "/c/valves-and-fittings",
   "/search?q=valve",
-  "/compare?p=al-marwan-industrial-supplies-llc",
+  /* The four-column table at phone width is checked in compare-products.spec.ts, which reads real ids off the seed. */
+  "/compare",
   "/b/al-marwan-industrial-supplies-llc",
   "/b/al-marwan-industrial-supplies-llc/products",
   /*

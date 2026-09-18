@@ -202,6 +202,7 @@ export function EnquiryCard({
          in the accessibility tree at any width.
       */}
       <div
+        data-action-bar=""
         className={cn(
           "fixed inset-x-0 bottom-0 z-40 flex items-center gap-3 border-t border-line",
           "bg-card px-4 py-2.5 shadow-overlay md:hidden",

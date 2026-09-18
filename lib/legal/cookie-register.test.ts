@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ATTRIBUTION_COOKIE } from "@/lib/campaign/attribution";
+import { COMPARE_COOKIE } from "@/lib/compare/tray";
 import { en } from "@/lib/i18n";
 import {
   COOKIE_CATEGORIES,
@@ -74,5 +75,18 @@ describe("the cookie register", () => {
   */
   it("does not yet name the attribution cookie the proxy sets", () => {
     expect(REGISTERED_COOKIE_NAMES.has(ATTRIBUTION_COOKIE)).toBe(false);
+  });
+
+  /*
+     The same gap, twice more since. Board `1d`'s reveal cookies (`bl_rsid`,
+     `bl_vid`) and board `10d`'s comparison tray (`bl_cmp`) are first-party,
+     set only on the buyer's own action, and documented in `docs/telemetry.md`
+     §4a and §4b as strictly necessary. None is on the register, because the
+     register is a dated legal document and amending it is the owner's call.
+     The one of the three whose name this suite can import is pinned; the diff
+     that registers it breaks this and fixes the page.
+  */
+  it("does not yet name the comparison tray's cookie", () => {
+    expect(REGISTERED_COOKIE_NAMES.has(COMPARE_COOKIE)).toBe(false);
   });
 });

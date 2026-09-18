@@ -73,22 +73,12 @@ interface Props {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-/** The comparison tray, straight off the URL — `compare` is not part of `SearchQuery`. */
-function trayFrom(value: string | string[] | undefined): string[] {
-  if (!value) return [];
-  return (Array.isArray(value) ? value : [value])
-    .flatMap((entry) => entry.split(","))
-    .map((slug) => slug.trim())
-    .filter(Boolean)
-    .slice(0, 4);
-}
-
 export default async function SearchPage({ searchParams }: Props) {
   const sp = await searchParams;
   const query = adoptLegacyTab(parseSearchQuery(sp));
 
   if (compositionFor(query) === "blended") {
-    return <BlendedSearchPage query={query} tray={trayFrom(sp.compare)} />;
+    return <BlendedSearchPage query={query} />;
   }
 
   const [results, mapData, freeZones, crossLink] = await Promise.all([

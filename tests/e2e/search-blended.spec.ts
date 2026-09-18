@@ -292,17 +292,25 @@ test.describe("`10c`'s contributions, on the blended screen", () => {
     }
   });
 
-  test("B8/Q1 — compare ticks a supplier, never a service, and is absent in the services scope", async ({ page }) => {
+  test("B8/Q1 — compare ticks a product, never a supplier or a service", async ({ page }) => {
+    /*
+       Board `10d` made the comparison products-only: the rows come from one
+       spec template, and neither a supplier nor a service has one. The tray
+       is a cookie now, so a tick leaves the URL as it was.
+    */
     await page.goto("/search?q=valve&kind=products");
-    const tick = page.getByRole("link", { name: /^Compare / }).first();
+    const tick = page.locator("[data-compare-product]").first();
     await expect(tick).toBeVisible();
     await tick.click();
-    await expect(page).toHaveURL(/compare=/);
-    await expect(page.getByRole("link", { name: "Compare them" })).toBeVisible();
-    await expect(page.getByText(/supplier(s)? selected/)).toBeVisible();
+    await expect(tick).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByRole("region", { name: "Comparison tray" })).toBeVisible();
+    await expect(page).not.toHaveURL(/compare=/);
+
+    await page.goto("/search?q=valve&kind=suppliers");
+    await expect(page.locator("[data-compare-product]")).toHaveCount(0);
 
     await page.goto("/search?q=vat+return+filing&kind=services");
-    await expect(page.getByRole("link", { name: /^Compare / })).toHaveCount(0);
+    await expect(page.locator("[data-compare-product]")).toHaveCount(0);
   });
 });
 

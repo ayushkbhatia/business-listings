@@ -97,19 +97,10 @@ export interface ListingCardProps {
   /** Labelled sponsor mark, already localised. */
   sponsoredLabel?: string;
   /**
-   * Where "Compare" goes. Compare is a real feature this handoff — only the
-   * "Enquire with all 4" action on the tray is disabled — so this is a link,
-   * not a dead button. Defaults to starting a fresh tray with this supplier.
-   */
-  compareHref?: string;
-  /**
    * Where the enquiry affordance goes. Absent leaves it disabled, which is the
    * state handoff 1 shipped and the one the gallery still shows.
    */
   enquireHref?: string;
-  /** Already in the tray: the control says so and removes instead. */
-  inCompare?: boolean;
-  compareLabel?: string;
   /**
    * The WhatsApp reveal, rendered by the caller.
    *
@@ -135,10 +126,7 @@ export function ListingCard({
   href,
   selected = false,
   sponsoredLabel,
-  compareHref,
   enquireHref,
-  inCompare = false,
-  compareLabel,
   contactAction,
 }: ListingCardProps) {
   const spec = tierSpec(business.verificationTier);
@@ -645,44 +633,22 @@ export function ListingCard({
                           rel={crawlRel(enquireHref)}
                           className={cn(buttonClassName({ size: "sm", variant: "secondary" }), "flex-1")}
                         >
-                          {t("product.enquire")}
+                          {t("listing.enquire")}
                         </a>
                       ) : (
                         <span className="flex-1">
                           <Button size="sm" variant="secondary" block disabled title={t("enquiry.disabled")}>
-                            {t("product.enquire")}
+                            {t("listing.enquire")}
                           </Button>
                         </span>
                       )}
                     </div>
                     {/*
-                       Board 1b does not draw this, and it stays anyway. The
-                       comparison tray is a shipped feature with its own board
-                       and its own tests — a buyer builds a shortlist from this
-                       row and nowhere else, so dropping the control to match a
-                       render would quietly delete the feature. Kept as a link
-                       under the buttons rather than a third button, so the two
-                       the board does draw keep their weight.
+                       No compare control on a supplier. Board `10d` made the
+                       comparison a product comparison — four products against
+                       one trade's spec template — and a firm is not a row of
+                       those fields. The tick lives on product cards and rows.
                     */}
-                    <a
-                      href={compareHref ?? `/compare?p=${business.slug}`}
-                      /*
-                         Adding a supplier to the tray preserves every other
-                         parameter, so this control is a second combinatorial
-                         space stacked on the facet one — 1.3 million tray
-                         permutations from the 75 slugs a crawler reached on a
-                         single shelf. The fallback href points at /compare,
-                         which is disallowed outright.
-                      */
-                      rel={crawlRel(compareHref ?? `/compare?p=${business.slug}`)}
-                      className={cn(
-                        "rounded-tag text-center text-caption underline-offset-2 hover:underline",
-                        "focus-visible:outline-none focus-visible:shadow-focus",
-                        inCompare ? "font-medium text-moss-deep" : "text-moss",
-                      )}
-                    >
-                      {compareLabel ?? t("action.compare")}
-                    </a>
                   </>
                 )}
               </div>

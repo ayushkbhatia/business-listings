@@ -322,7 +322,7 @@ export function ContactActions({ masked, whatsAppHref, enquire, saveAction, layo
 
   if (layout === "bar") {
     return (
-      <div className="fixed inset-x-0 bottom-0 z-40 flex gap-2 border-t border-line bg-card p-2 md:hidden">
+      <div data-action-bar="" className="fixed inset-x-0 bottom-0 z-40 flex gap-2 border-t border-line bg-card p-2 md:hidden">
         {whatsapp && <div className="flex-1">{whatsapp}</div>}
         {landline && <div className="flex-1">{landline}</div>}
         <div className="flex-1">{enquire}</div>

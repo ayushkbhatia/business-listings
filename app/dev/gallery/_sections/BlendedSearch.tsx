@@ -24,6 +24,7 @@ import {
 import { SERVICE_FACET_KEYS, emptyServiceFacets, parseSearchQuery } from "@/lib/search/query";
 import { Breakdown, Pager, RailGroup, RfqPrompt, SortControl } from "@/app/(public)/search/_blended-view";
 import { ZeroInKind, ZeroNothing } from "@/app/(public)/_results/BlendedZero";
+import { CompareTick } from "@/app/(public)/_compare/CompareTick";
 import { Section, States } from "../_kit";
 
 /**
@@ -131,6 +132,7 @@ const PRODUCT: ProductResultView = {
   place: "Jebel Ali · Dubai",
   chips: ["120 TR", "R-410A"],
   replyMs: 5 * 3_600_000,
+  categoryId: "cgallerychillers0000000000",
 };
 
 const MADE_TO_ORDER: ProductResultView = {
@@ -146,6 +148,7 @@ const MADE_TO_ORDER: ProductResultView = {
   place: null,
   chips: ["DN100 · 4 inch"],
   replyMs: null,
+  categoryId: "cgalleryvalves00000000000",
 };
 
 /* A rail from documents, through the page's own counting. */
@@ -350,14 +353,7 @@ export function BlendedSearchGallery() {
 
       <States label="supplier row" stack>
         <div className="w-full">
-          <BlendedResultList
-            copy={CODE_COPIES}
-            rows={[SUPPLIER, NAME_ONLY]}
-            compare={{
-              "supplier:gallery-supplier-1": { href: "/search?q=chiller&compare=ardent", selected: false },
-              "supplier:gallery-supplier-2": { href: "/search?q=chiller", selected: true },
-            }}
-          />
+          <BlendedResultList copy={CODE_COPIES} rows={[SUPPLIER, NAME_ONLY]} />
         </div>
       </States>
 
@@ -367,7 +363,7 @@ export function BlendedSearchGallery() {
             copy={CODE_COPIES}
             rows={[PRODUCT, MADE_TO_ORDER]}
             compare={{
-              "product:gallery-product-1": { href: "/search?q=chiller&compare=technopump", selected: false },
+              [PRODUCT.id]: <CompareTick productId={PRODUCT.id} productName={PRODUCT.name} tradeId={PRODUCT.categoryId} />,
             }}
           />
         </div>

@@ -80,6 +80,9 @@ Two of the answers changed what was proposed, and both changes matter:
   a scoped category, because `SpecField` remains per-template. What is now dead rather than
   half-built: `SpecFieldProposal` and its counter, which had no writer anyway. Retired — the
   panel was rebuilt on `SellerTemplate.ownFields` in #154 and the table dropped in #155.
+  *18 Sep:* the `10d` half is overtaken by the board itself, which compares products — but
+  within **one trade**, on that trade's own template, so it still needs no dictionary and D3
+  stands.
 - **D4 is not the ratification it was offered as.** The cap stays and buyers still never see it
   — but a capped seller's enquiries **stack up behind a subscription paywall** rather than being
   written off as missed. `MissedEnquiry` already is that stack; what is missing is the
@@ -502,8 +505,17 @@ the screen is permanently empty above copy reading "Run the matcher after an imp
   specs* in the products scope (Q3), a pager that states its window (Q5), and compare on the two
   shapes whose subject is a supplier (Q1). **Not built:** a services-capable anonymous alert —
   `ProductAlert` fires on a product, and the kind-agnostic watch is a saved search (Q4).
-- [ ] **5.4 `10d`** — decide what `/compare` compares. The spec machinery exists in
-  `lib/db/queries/product-detail.ts:81`.
+- [x] **5.4 `10d`** — built 18 Sep 2026. `/compare` compares **products**, not suppliers: up to
+  four, one trade, rows from that trade's resolved spec template in template order whether or
+  not anyone filled them (`B1`). A tinted row is computed, not painted — closed vocabularies
+  compare the option chosen, free text compares through `valueAliases`, so `DN100` and `4"`
+  agree and `Not provided` never makes a row differ (`B4`–`B6`). Availability tints on the
+  state, never the count; reply time is measured and completeness is a count with no colour,
+  and neither seller row ever tints (`B9`, `B11`). *Hide matching rows*, print, per-column and
+  all-at-once *Ask for a quote*. The tray is the `bl_cmp` session cookie written by
+  `POST /api/compare`, four at most with the fifth refused and the four named, one trade at a
+  time with another trade starting afresh and saying so. The supplier comparison and the URL
+  tray are retired. **Owed:** the cookie policy's register does not name `bl_cmp` (§4b).
 
 ### Phase 6 · Money and trust, closed out — 5 boards
 
@@ -713,7 +725,7 @@ the only large piece and the only one selling something it does not deliver.
 | `7f` | Notification specimens | partial ↓ | export only | All four channels render; SMS has no carrier and records a skip with a reason. | 7.4 |
 | ~~`6g`~~ | ~~Admin copy audit~~ | **cut** | — | Cut 14 Sep 2026, unbuilt. The CI scan still reads exactly one file; every word held in the database is invisible to it. | ~~7.5~~ |
 | `10c` | Search — one blended set | **built** | medium | Three-part rail, three zero states, D1. | 5.3 |
-| `10d` | Comparison tray | partial | medium | Compares ten fixed business attributes and touches the dictionary nowhere. | 5.4 |
+| `10d` | Product comparison | **built** | 18 Sep 2026 | Products only, one trade, template rows; tints computed on normalised values; cookie tray capped at four. Supplier comparison retired. | 5.4 |
 | `12d` | Ops CRM — supply gaps | built | medium | Tasks only a derivation writes; the lock is `assignedToId`; every rate carries its denominator. | 7.2 |
 | `12f` | Support desk & view-as | partial ↓ | small | View-as is the best-guarded thing in the console. | 7.3 |
 | ~~`5a`~~ | ~~Builder shell~~ | **cut** | — | Cut 15 Sep 2026 with the rest of the builder; code and routes removed. | ~~8.4~~ |

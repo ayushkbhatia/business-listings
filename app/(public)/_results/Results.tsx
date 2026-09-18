@@ -26,7 +26,7 @@ import { FacetLinks } from "./FacetLinks";
 import { AlertForm } from "./AlertForm";
 import { setAlert } from "./alert-actions";
 import { ZeroResult } from "./ZeroResult";
-import { AppliedChips, CompareTray, ResultsList, ResultsTabs } from "./ResultsSurface";
+import { AppliedChips, ResultsList, ResultsTabs } from "./ResultsSurface";
 
 /**
  * Everything below the breadcrumb on a category page or a search.
@@ -54,10 +54,6 @@ export interface ResultsProps {
      */
     templateIds?: string[];
   };
-  /** The comparison tray, carried in the URL so adding is a navigation. */
-  tray?: string[];
-  /** The raw query string, so tray links can preserve every other facet. */
-  search?: string;
 }
 
 /**
@@ -76,7 +72,7 @@ const FIXED_FACET_LABELS = {
   yearsTrading: "facet.years",
 } as const;
 
-export async function Results({ query, basePath, category, tray = [], search = "" }: ResultsProps) {
+export async function Results({ query, basePath, category }: ResultsProps) {
   const categoryIds = category?.ids;
 
   const [businessTotal, productTotal, sponsoredId, specTemplate] = await Promise.all([
@@ -288,7 +284,6 @@ export async function Results({ query, basePath, category, tray = [], search = "
 
         <div className="mt-3 flex flex-col gap-2">
           <AppliedChips query={query} basePath={basePath} facets={facets} />
-          <CompareTray tray={tray} basePath={basePath} search={search} />
         </div>
 
         {/*
@@ -339,8 +334,6 @@ export async function Results({ query, basePath, category, tray = [], search = "
                 businesses={businesses}
                 products={products}
                 specFields={specTemplate?.fields}
-                tray={tray}
-                search={search}
               />
             )}
           </div>

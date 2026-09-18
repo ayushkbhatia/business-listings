@@ -6,6 +6,7 @@ import { SelectionBar } from "@/components/structure";
 import { ProductCard, type ProductCardProduct, type RecipientPreview } from "@/components/domain";
 import { t } from "@/lib/i18n";
 import { EnquireDrawer } from "../EnquireDrawer";
+import { CompareTick } from "../../../_compare/CompareTick";
 import {
   selectionKey,
   selectionServerSnapshot,
@@ -41,6 +42,8 @@ import {
  */
 export interface TrayProduct extends ProductCardProduct {
   id: string;
+  /** The product's own category — the trade its compare tick is in (`10d`). */
+  categoryId: string;
   /** The nominal size as stored, for the composer's size column. */
   size: string | null;
   /**
@@ -114,6 +117,14 @@ export function ProductTray({
               product={product}
               {...(product.notify ? { notifyAction: product.notify } : {})}
               {...(product.specs ? { specs: product.specs } : {})}
+              /*
+                 Board `10d`. Not the checkbox below: that one picks products to
+                 enquire about from this seller; this one adds a product to the
+                 cross-seller comparison, which follows the buyer off this page.
+              */
+              compareAction={
+                <CompareTick productId={product.id} productName={product.name} tradeId={product.categoryId} />
+              }
             />
             <div className="mt-1.5">
               <Checkbox
@@ -141,7 +152,7 @@ export function ProductTray({
            checkboxes, so the accelerator is most valuable exactly where the
            screen is smallest.
         */
-        <div className="sticky bottom-0 z-20 -mx-5 mt-4 border-t border-line bg-card px-5 py-2 lg:mx-0 lg:bottom-4 lg:border-0 lg:bg-transparent lg:px-0 lg:py-0">
+        <div className="sticky bottom-[var(--compare-tray-h,0px)] z-20 -mx-5 mt-4 border-t border-line bg-card px-5 py-2 lg:mx-0 lg:bottom-[calc(var(--compare-tray-h,0px)+1rem)] lg:border-0 lg:bg-transparent lg:px-0 lg:py-0">
           <SelectionBar
             count={chosen.length}
             countLabel={(count) => t("tray.selected", { count })}

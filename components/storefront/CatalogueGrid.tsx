@@ -9,7 +9,18 @@ import type { SectionProps } from "@/lib/storefront/render-data";
  * No price on any card: `ProductCard` is availability-led by construction and there is no
  * price field on `Product` to show even if somebody wanted one.
  */
-export function CatalogueGrid({ data, enquireHref }: SectionProps) {
+export function CatalogueGrid({
+  data,
+  enquireHref,
+  compare,
+}: SectionProps & {
+  /**
+   * Board `10d` — each product's comparison tick, keyed by product id and
+   * rendered by the page. The tick posts to an app route and reads the buyer's
+   * tray, so a storefront section draws it and does not build it.
+   */
+  compare?: Readonly<Record<string, React.ReactNode>>;
+}) {
   return (
     <section>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -32,6 +43,7 @@ export function CatalogueGrid({ data, enquireHref }: SectionProps) {
             <ProductCard
               key={product.id}
               enquireHref={enquireHref}
+              compareAction={compare?.[product.id]}
               product={{
                 slug: product.slug,
                 businessSlug: data.business.slug,

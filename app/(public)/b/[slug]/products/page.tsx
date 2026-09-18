@@ -397,6 +397,7 @@ export default async function CataloguePage({ params, searchParams }: Params) {
                     }}
                     products={view.products.map((product) => ({
                       id: product.id,
+                      categoryId: product.categoryId,
                       slug: product.slug,
                       businessSlug: business.slug,
                       name: product.name,

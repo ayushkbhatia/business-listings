@@ -96,6 +96,8 @@ export interface ProductResultView {
   chips: readonly string[];
   /** Measured median for the firm behind it — B5 puts it on every row of both kinds. */
   replyMs: number | null;
+  /** The product's own category — the trade its compare tick is in (`10d`). */
+  categoryId: string;
 }
 
 export type BlendedResultView = ServiceResultView | SupplierResultView | ProductResultView;
