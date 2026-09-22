@@ -524,7 +524,8 @@ the screen is permanently empty above copy reading "Run the matcher after an imp
   all-at-once *Ask for a quote*. The tray is the `bl_cmp` session cookie written by
   `POST /api/compare`, four at most with the fifth refused and the four named, one trade at a
   time with another trade starting afresh and saying so. The supplier comparison and the URL
-  tray are retired. **Owed:** the cookie policy's register does not name `bl_cmp` (§4b).
+  tray are retired. The cookie policy's register named none of the three cookies a buyer's own
+  actions set; all three were added under Essential on 22 Sep 2026, dated in the policy's rail.
 
 ### Phase 6 · Money and trust, closed out — 5 boards
 

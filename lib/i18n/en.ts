@@ -12029,12 +12029,18 @@ export const en = {
   //
   // The register in §02 is a contract, not a description: it names every cookie
   // the application is permitted to set. `lib/legal/cookie-register.ts` holds
-  // the same nine names as data so a crawl can assert against them, and 13h §3
-  // asks for the CI job that makes the two agree.
+  // the same names as data so a crawl can assert against them, and 13h §3
+  // asks for the CI job that makes the two agree. The counts on the page are the
+  // register's length; the words ("Twelve") are asserted against it.
+  //
+  // 22 Sep 2026: bl_cmp, bl_rsid and bl_vid added under Essential, which stops
+  // claiming to be "set on load". §01 p2 and §02 p1 keep their earlier wording
+  // under the bare key and the current one under `.v2`, as the Terms do, so the
+  // version rail can print both.
   "legal.cookies.title": "Cookie policy",
-  "legal.cookies.meta": "Updated 4 Sep 2026 · 9 cookies · 4 categories",
+  "legal.cookies.meta": "Updated {date} · {count} cookies · {bands} categories",
   "legal.cookies.glance.1": "Essential cookies only, until you choose otherwise.",
-  "legal.cookies.glance.2": "Nine cookies in four categories, every one of them listed.",
+  "legal.cookies.glance.2": "Twelve cookies in four categories, every one of them listed.",
   "legal.cookies.glance.3": "Analytics declined means no identifier is set at all.",
   "legal.cookies.glance.4": "No third-party advertising, retargeting or social trackers.",
   "legal.cookies.glance.5": "Global Privacy Control is honoured without asking again.",
@@ -12043,13 +12049,14 @@ export const en = {
   "legal.cookies.01.heading": "What a cookie does here",
   "legal.cookies.01.p1": "A cookie is a small file the site asks your browser to keep. We use them to keep you signed in, to remember choices such as language and emirate, and to count what gets used. We use browser storage for the same purposes, and this policy covers both.",
   "legal.cookies.01.p2": "Essential cookies are set when the site loads, because it cannot work without them. Everything else waits for your answer on the banner, and declining leaves the site fully usable.",
+  "legal.cookies.01.p2.v2": "Essential cookies are the ones the site cannot work without. Some are set when a page loads; others only when you ask for the thing they keep, such as a phone number you revealed or products you are comparing. Everything else waits for your answer on the banner, and declining leaves the site fully usable.",
 
   "legal.cookies.02.heading": "What we set",
-  "legal.cookies.02.caption": "The nine cookies this site may set, in four categories",
+  "legal.cookies.02.caption": "The {count} cookies this site may set, in {bands} categories",
   "legal.cookies.02.col.name": "Name",
   "legal.cookies.02.col.purpose": "Purpose",
   "legal.cookies.02.col.life": "Life",
-  "legal.cookies.02.band.essential": "Essential — set on load",
+  "legal.cookies.02.band.essential": "Essential — no consent needed",
   "legal.cookies.02.band.preferences": "Preferences — set on use",
   "legal.cookies.02.band.analytics": "Analytics — optional",
   "legal.cookies.02.band.advertising": "Advertising — optional",
@@ -12059,6 +12066,12 @@ export const en = {
   "legal.cookies.02.bl_csrf.life": "Session",
   "legal.cookies.02.bl_consent.purpose": "Remembers your cookie choice",
   "legal.cookies.02.bl_consent.life": "12 months",
+  "legal.cookies.02.bl_cmp.purpose": "Up to four products you ticked to compare, in one trade",
+  "legal.cookies.02.bl_cmp.life": "Session",
+  "legal.cookies.02.bl_rsid.purpose": "Keeps a phone number you revealed shown for this visit",
+  "legal.cookies.02.bl_rsid.life": "Session",
+  "legal.cookies.02.bl_vid.purpose": "Remembers you filled in a supplier's contact form, so it is not asked again",
+  "legal.cookies.02.bl_vid.life": "180 days",
   "legal.cookies.02.bl_lang.purpose": "Language, English or Arabic",
   "legal.cookies.02.bl_lang.life": "12 months",
   "legal.cookies.02.bl_emirate.purpose": "Emirate and area you last browsed",
@@ -12072,6 +12085,9 @@ export const en = {
   "legal.cookies.02.bl_sp.purpose": "Sponsored slots already shown, so they are not repeated",
   "legal.cookies.02.bl_sp.life": "7 days",
   "legal.cookies.02.p1": "Nine cookies, four categories, and the register above is the whole of it. A cookie not on this list is a defect; report it to privacy@businesslistings.me.",
+  "legal.cookies.02.p1.v2": "Twelve cookies, four categories, and the register above is the whole of it. A cookie not on this list is a defect; report it to privacy@businesslistings.me.",
+  "legal.cookies.change.02.before": "Nine cookies. The Essential band read \"set on load\" and held bl_session, bl_csrf and bl_consent.",
+  "legal.cookies.change.02.after": "Twelve cookies. Essential now also holds bl_cmp, bl_rsid and bl_vid, each set only when you ask for what it keeps, and no longer says \"set on load\".",
 
   "legal.cookies.03.heading": "Your choices",
   "legal.cookies.03.p1": "The banner appears on the first visit and your answer is remembered for twelve months. Change it any time from Cookie settings in the footer. Withdrawing analytics consent stops collection and clears the identifiers on your next page load.",

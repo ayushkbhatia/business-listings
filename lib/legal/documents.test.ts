@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { formatDate } from "@/lib/format";
-import { CLOSURE_AMENDMENT_FROM, cookiesDocument, privacyDocument, termsDocument } from "./documents";
+import {
+  CLOSURE_AMENDMENT_FROM,
+  COOKIE_REGISTER_AMENDED_FROM,
+  cookiesDocument,
+  privacyDocument,
+  termsDocument,
+} from "./documents";
 import type { LegalDocument } from "./documents";
-import { COOKIE_REGISTER } from "./cookie-register";
+import { COOKIE_CATEGORIES, COOKIE_REGISTER } from "./cookie-register";
 import { LEGAL_PAGES } from "./pages";
 
 /**
@@ -133,7 +139,7 @@ describe("privacy", () => {
 });
 
 describe("cookies", () => {
-  it("renders the register as nine rows under four bands", () => {
+  it("renders the register as twelve rows under four bands", () => {
     const table = cookiesDocument()
       .sections.flatMap((section) => section.blocks)
       .find((block) => block.kind === "table");
@@ -142,9 +148,49 @@ describe("cookies", () => {
     const rows = table?.rows.filter((row) => row.kind === "row") ?? [];
 
     expect(bands).toHaveLength(4);
-    expect(rows).toHaveLength(9);
-    expect(new Set(rows.map((row) => row.cells[0])).size).toBe(9);
+    expect(rows).toHaveLength(12);
+    expect(new Set(rows.map((row) => row.cells[0])).size).toBe(12);
     for (const row of rows) expect(row.cells[0]).toMatch(/^bl_[a-z_]+$/);
+  });
+
+  it("states the count the table holds, everywhere it states one", () => {
+    // CLAUDE.md's fourth checkpoint: a number in a header is checked against the markup.
+    const doc = cookiesDocument();
+    const table = doc.sections.flatMap((section) => section.blocks).find((block) => block.kind === "table");
+    const rows = table?.kind === "table" ? table.rows.filter((row) => row.kind === "row") : [];
+    const bands = COOKIE_CATEGORIES.length;
+
+    expect(doc.metaLine).toContain(`${rows.length} cookies · ${bands} categories`);
+    expect(table?.kind === "table" && table.caption).toBe(`The ${rows.length} cookies this site may set, in ${bands} categories`);
+
+    // The two sentences that spell the number out, spelled from the same count.
+    const WORDS: Record<number, string> = { 12: "Twelve" };
+    const word = WORDS[rows.length];
+    expect(word, "add the word for the new count, and fix the two sentences").toBeDefined();
+    expect(doc.glance.join(" ")).toContain(`${word} cookies in four categories`);
+    const register = doc.sections.find((section) => section.number === "02")!;
+    expect(JSON.stringify(register.blocks)).toContain(`${word} cookies, four categories`);
+  });
+
+  it("dates the 22 September amendment, and keeps the wording it replaced", () => {
+    const doc = cookiesDocument();
+    expect(doc.effectiveFrom).toEqual(COOKIE_REGISTER_AMENDED_FROM);
+    expect(doc.metaLine).toContain(formatDate(COOKIE_REGISTER_AMENDED_FROM));
+    expect(doc.pendingChange).toBeNull();
+
+    const change = doc.previousChange!;
+    expect(change.until).toEqual(new Date(Date.UTC(2026, 8, 21)));
+    expect(change.items.map((item) => item.section)).toEqual(["01", "02"]);
+    expect(change.items[0]!.before).toContain("Essential cookies are set when the site loads");
+    expect(change.items[1]!.after).toContain("bl_cmp, bl_rsid and bl_vid");
+  });
+
+  it("no longer claims every essential cookie is set on load", () => {
+    const doc = cookiesDocument();
+    const text = JSON.stringify(doc.sections);
+    expect(text).not.toContain("Essential — set on load");
+    expect(text).not.toContain("Essential cookies are set when the site loads");
+    expect(text).toContain("only when you ask for the thing they keep");
   });
 
   it("renders every cookie the register holds, and no other", () => {

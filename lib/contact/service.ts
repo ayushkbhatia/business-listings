@@ -49,15 +49,8 @@ import {
  * in thirty seconds.
  */
 
-export const VISITOR_COOKIE = "bl_vid";
-export const SESSION_COOKIE = "bl_rsid";
-
-/**
- * How long the form stays answered for one browser. Half a year: long enough
- * that a buyer comparing the same suppliers next quarter is not asked again,
- * short enough that a shared office machine forgets.
- */
-export const VISITOR_COOKIE_MAX_AGE_S = 60 * 60 * 24 * 180;
+/* The names live in `./cookies`, where the cookie policy's register test can read them. */
+export { SESSION_COOKIE, VISITOR_COOKIE, VISITOR_COOKIE_MAX_AGE_S } from "./cookies";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SESSION = /^[A-Za-z0-9_-]{16,64}$/;

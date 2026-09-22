@@ -264,11 +264,16 @@ and must stay true; `lib/compare/service.ts` `trayCookie` is where each is set:
    buyer can keep or send. On a seller's subdomain the cookie is not visible,
    and the tray's link to the comparison carries the set in `?p=` instead.
 
-**Owed, not done here:** the cookie policy's register (`lib/legal/cookie-register.ts`,
-rendered at `/cookies`) calls itself the whole list and does not name `bl_cmp` —
-nor `bl_rsid` and `bl_vid` from §4a. Amending a dated legal document is the
-owner's call; the gap is pinned in `lib/legal/cookie-register.test.ts` beside
-`bl_attr`'s.
+**Registered 22 Sep 2026.** The owner approved amending the cookie policy, and
+`bl_cmp`, `bl_rsid` and `bl_vid` joined its register (`lib/legal/cookie-register.ts`,
+rendered at `/cookies`) under **Essential**, as a dated change to §01 and §02
+with the earlier wording kept in the version rail. Essential rather than
+Preferences because §01 says everything outside Essential waits for a banner
+answer, and none of these does: each is set because the buyer asked for what it
+keeps. The band stopped reading *set on load* in the same change, since these
+three are not. `lib/legal/cookie-register.test.ts` imports the names from the
+modules that set them, so a rename in code without the register fails there.
+`bl_attr` and Supabase's `sb-*` session cookies are still unregistered.
 
 ## 5. Retention
 

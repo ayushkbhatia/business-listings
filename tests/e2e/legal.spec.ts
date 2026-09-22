@@ -170,7 +170,7 @@ test.describe("the legal template", () => {
     expect(box?.y ?? 0).toBeLessThan(200);
   });
 
-  test("the register is a real table of nine cookies under four bands", async ({ page }) => {
+  test("the register is a real table of twelve cookies under four bands", async ({ page }) => {
     // 13h criteria 2 and 3, and CLAUDE.md's fourth non-negotiable.
     await page.setViewportSize(WIDE);
     await page.goto("/cookies");
@@ -184,9 +184,25 @@ test.describe("the legal template", () => {
     const names = await table
       .locator("tbody tr td:first-child")
       .evaluateAll((nodes) => nodes.map((node) => node.textContent?.trim() ?? ""));
-    expect(names).toHaveLength(9);
-    expect(new Set(names).size).toBe(9);
+    expect(names).toHaveLength(12);
+    expect(new Set(names).size).toBe(12);
     for (const name of names) expect(name).toMatch(/^bl_/);
+    // The three a buyer's own actions set, listed since the 22 Sep 2026 amendment.
+    for (const name of ["bl_cmp", "bl_rsid", "bl_vid"]) expect(names).toContain(name);
+  });
+
+  test("the register's amendment is dated in the rail, with the wording it replaced", async ({ page }) => {
+    // §05: "Changes are listed here with the date they take effect."
+    await page.setViewportSize(WIDE);
+    await page.goto("/cookies");
+
+    await expect(page.getByText("Updated 22 Sep 2026 · 12 cookies · 4 categories", { exact: false })).toBeVisible();
+    const rail = page.locator("aside");
+    await expect(rail.getByText("22 Sep 2026", { exact: true })).toBeVisible();
+    await expect(rail.getByText("4–21 Sep 2026", { exact: true })).toBeVisible();
+    await expect(rail.getByText("This is the first published version.")).toHaveCount(0);
+    await rail.getByText("What the earlier wording said").click();
+    await expect(rail.getByText(/Essential now also holds bl_cmp, bl_rsid and bl_vid/)).toBeVisible();
   });
 
   test("the privacy tables are tables, with header cells", async ({ page }) => {

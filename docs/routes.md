@@ -58,7 +58,7 @@ and it is the one that argues back.
 /report/:slug                           Report a listing — the page the modal degrades to [4h · 13c] built 4h, 13c
 /terms                                  Terms of use, 16 clauses             [13f]  built h7s1
 /privacy                                Privacy policy, 12 sections          [13g]  built h7s1
-/cookies                                Cookie policy + 9-cookie register    [13h]  built h7s1
+/cookies                                Cookie policy + 12-cookie register   [13h]  built h7s1, amended 19 Sep
 /cookies/settings                       Consent toggles                       later
 /maintenance                            Scheduled maintenance — 503, Retry-After [13e] built 13e
                                         served by proxy.ts on every route a window takes down; 404 with no window
