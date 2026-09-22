@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ATTRIBUTION_COOKIE } from "@/lib/campaign/attribution";
 import { COMPARE_COOKIE } from "@/lib/compare/tray";
+import { SESSION_COOKIE, VISITOR_COOKIE, VISITOR_COOKIE_MAX_AGE_S } from "@/lib/contact/cookies";
 import { en } from "@/lib/i18n";
 import {
   COOKIE_CATEGORIES,
@@ -22,9 +23,10 @@ import {
  */
 
 describe("the cookie register", () => {
-  it("holds nine distinct cookies", () => {
-    expect(COOKIE_REGISTER).toHaveLength(9);
-    expect(REGISTERED_COOKIE_NAMES.size).toBe(9);
+  it("holds twelve distinct cookies", () => {
+    // Nine from board 13h, and the three the 22 Sep 2026 amendment added.
+    expect(COOKIE_REGISTER).toHaveLength(12);
+    expect(REGISTERED_COOKIE_NAMES.size).toBe(12);
   });
 
   it("uses the four categories the page bands, in that order", () => {
@@ -77,16 +79,34 @@ describe("the cookie register", () => {
     expect(REGISTERED_COOKIE_NAMES.has(ATTRIBUTION_COOKIE)).toBe(false);
   });
 
-  /*
-     The same gap, twice more since. Board `1d`'s reveal cookies (`bl_rsid`,
-     `bl_vid`) and board `10d`'s comparison tray (`bl_cmp`) are first-party,
-     set only on the buyer's own action, and documented in `docs/telemetry.md`
-     §4a and §4b as strictly necessary. None is on the register, because the
-     register is a dated legal document and amending it is the owner's call.
-     The one of the three whose name this suite can import is pinned; the diff
-     that registers it breaks this and fixes the page.
-  */
-  it("does not yet name the comparison tray's cookie", () => {
-    expect(REGISTERED_COOKIE_NAMES.has(COMPARE_COOKIE)).toBe(false);
+});
+
+/*
+   The names the code sets, held to the names the page lists.
+
+   Board `1d`'s reveal cookies and board `10d`'s comparison tray were each set
+   for days before the register named them — found by a person reading, not by
+   a test. The names are imported from the modules that set them, so renaming
+   one in code without the register fails here rather than on the policy page.
+*/
+describe("the cookies a buyer's own actions set", () => {
+  const OWN_ACTION = [
+    [COMPARE_COOKIE, "Session"],
+    [SESSION_COOKIE, "Session"],
+    [VISITOR_COOKIE, "180 days"],
+  ] as const;
+
+  it.each(OWN_ACTION)("lists %s under Essential", (name) => {
+    const entry = COOKIE_REGISTER.find((cookie) => cookie.name === name);
+    expect(entry?.category).toBe("essential");
+  });
+
+  it.each(OWN_ACTION)("states the life %s is actually given", (name, life) => {
+    const entry = COOKIE_REGISTER.find((cookie) => cookie.name === name)!;
+    expect(en[entry.lifeKey]).toBe(life);
+  });
+
+  it("says 180 days because the code sets 180 days", () => {
+    expect(VISITOR_COOKIE_MAX_AGE_S / 86_400).toBe(180);
   });
 });

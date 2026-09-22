@@ -30,7 +30,7 @@ import type { LegalPageSlug } from "./pages";
  * and the build must not. Describing a table as columns and rows here is what
  * lets the renderer emit `<table>`, `<th scope="col">` and a caption without
  * every page restating the markup — and it is what `documents.test.ts` counts
- * when it checks that the meta line's "9 cookies" matches nine rendered rows.
+ * when it checks that the meta line's cookie count matches the rendered rows.
  */
 
 /** Emphasis inside a paragraph is written `**like this**`. Nothing else. */
@@ -171,6 +171,24 @@ const EFFECTIVE_FROM = new Date(Date.UTC(2026, 8, 4));
 export const CLOSURE_AMENDMENT_FROM = new Date(Date.UTC(2026, 8, 29));
 
 const DAY_MS = 86_400_000;
+
+/*
+   The cookie register's first amendment, effective 22 September 2026 — the day
+   it was made, with no notice period.
+
+   Three cookies were being set and not listed: `bl_rsid` and `bl_vid` since
+   board 1d (15 Sep), `bl_cmp` since board 10d (18 Sep). §02 calls a cookie not
+   on the list a defect, so the fix is a correction to make the page true, not a
+   new practice to announce. §05 asks for fresh consent only when a cookie joins
+   an *optional* category; all three are Essential — each is set only when the
+   buyer asks for the thing it keeps — so none is asked for. What §05 does ask,
+   that changes are listed with the date they take effect, the version rail
+   does, with the earlier wording beside the new.
+
+   If this ships later than the 22nd, move the date with it: a page that says a
+   change took effect before the deploy that made it is misdating itself.
+*/
+export const COOKIE_REGISTER_AMENDED_FROM = new Date(Date.UTC(2026, 8, 22));
 
 function closureAmendment(): Omit<LegalChange, "items"> {
   return {
@@ -472,7 +490,10 @@ function registerTable(): LegalBlock {
 
   return {
     kind: "table",
-    caption: t("legal.cookies.02.caption"),
+    caption: t("legal.cookies.02.caption", {
+      count: COOKIE_REGISTER.length,
+      bands: COOKIE_CATEGORIES.length,
+    }),
     columns: [
       { head: t("legal.cookies.02.col.name"), width: "8.25rem", mono: true },
       { head: t("legal.cookies.02.col.purpose") },
@@ -487,19 +508,33 @@ export function cookiesDocument(): LegalDocument {
     slug: "cookies",
     href: "/cookies",
     title: t("legal.cookies.title"),
-    metaLine: t("legal.cookies.meta"),
-    effectiveFrom: EFFECTIVE_FROM,
+    /* The count is the register's, so the line under the h1 cannot disagree with the table under it. */
+    metaLine: t("legal.cookies.meta", {
+      date: formatDate(COOKIE_REGISTER_AMENDED_FROM),
+      count: COOKIE_REGISTER.length,
+      bands: COOKIE_CATEGORIES.length,
+    }),
+    effectiveFrom: COOKIE_REGISTER_AMENDED_FROM,
+    pendingChange: null,
+    previousChange: {
+      effectiveFrom: COOKIE_REGISTER_AMENDED_FROM,
+      until: new Date(COOKIE_REGISTER_AMENDED_FROM.getTime() - DAY_MS),
+      items: [
+        { section: "01", before: t("legal.cookies.01.p2"), after: t("legal.cookies.01.p2.v2") },
+        { section: "02", before: t("legal.cookies.change.02.before"), after: t("legal.cookies.change.02.after") },
+      ],
+    },
     glance: glance("legal.cookies"),
     sections: [
       section({
         number: "01",
         headingKey: "legal.cookies.01.heading",
-        blocks: [p("legal.cookies.01.p1"), p("legal.cookies.01.p2")],
+        blocks: [p("legal.cookies.01.p1"), p("legal.cookies.01.p2.v2")],
       }),
       section({
         number: "02",
         headingKey: "legal.cookies.02.heading",
-        blocks: [registerTable(), p("legal.cookies.02.p1")],
+        blocks: [registerTable(), p("legal.cookies.02.p1.v2")],
       }),
       section({
         number: "03",

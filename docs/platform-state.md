@@ -70,7 +70,7 @@ My recommendation: **stop building features.** The next unit of work is closing 
 | `/best/[slug]` | Wired | Membership is a comparator in code. Nothing here is purchasable. |
 | `/categories` | Wired | Full taxonomy index. |
 | `/lp/[campaign]` | Wired | Attribution captured in `proxy.ts`, survives the whole walk to enquiry. |
-| `/terms`, `/privacy`, `/cookies` | Wired | Boards 13f, 13g and 13h on the shared `LegalPage` template — 16 clauses, 12 sections, and a register of nine cookies. Content is `lib/legal/documents.ts` over `lib/i18n/en.ts`; a change costs a deploy. |
+| `/terms`, `/privacy`, `/cookies` | Wired | Boards 13f, 13g and 13h on the shared `LegalPage` template — 16 clauses, 12 sections, and a register of twelve cookies (nine at launch; `bl_cmp`, `bl_rsid` and `bl_vid` added 22 Sep 2026 as a dated amendment). Content is `lib/legal/documents.ts` over `lib/i18n/en.ts`; a change costs a deploy. |
 | `/review-policy`, `/verification-policy` | Wired | Still board 10j's wording-in-a-row renderer, reading `legal_page`. Linked from the footer on every page, with a test that clicks each one through. |
 | Cookie consent — banner, `/cookies/settings`, GPC | Owed | The cookie policy asserts all three and none is built. `bl_consent` is not set, so no consent state exists to honour. |
 | Cookie register vs. what the code sets | Drifted | `bl_attr` is set by `proxy.ts` and is not in the register; the session cookie the register calls `bl_session` is Supabase's `sb-*`. Pinned in `lib/legal/cookie-register.test.ts`. |

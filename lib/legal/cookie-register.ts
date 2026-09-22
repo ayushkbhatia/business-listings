@@ -6,8 +6,19 @@ import type { MessageKey } from "@/lib/i18n";
  * The page is the contract: it names every cookie the application is permitted
  * to set, and 13h §3 asks for a crawl that asserts `Set-Cookie` across the
  * public routes and a signed-in dashboard, in three consent states, equals this
- * set. That test cannot read prose, so the nine names live here and the page
- * renders them — one source, and a new cookie means editing the register first.
+ * set. That test cannot read prose, so the names live here and the page renders
+ * them — one source, and a new cookie means editing the register first. The
+ * count on the page (meta line, caption) is this array's length, not a word
+ * somebody remembered to change.
+ *
+ * **Essential means strictly necessary, not "set on load".** Three of the six
+ * are set only when a buyer asks for the thing they keep — a phone number
+ * revealed (`bl_rsid`, `bl_vid`, board `1d`) or products held for comparison
+ * (`bl_cmp`, board `10d`). Asking is the request that makes them necessary;
+ * no banner answer is needed or waited for. They were set for days before they
+ * were listed here, and were added on 22 Sep 2026 as a dated change to §01 and
+ * §02 (`lib/legal/documents.ts`). `docs/telemetry.md` §4a and §4b are the
+ * reasoning, claim by claim.
  *
  * `bl_consent` is essential and set whatever the answer is. A "no" that is not
  * remembered means asking again on every page, which is worse than the cookie.
@@ -55,6 +66,27 @@ export const COOKIE_REGISTER: readonly RegisteredCookie[] = [
     category: "essential",
     purposeKey: "legal.cookies.02.bl_consent.purpose",
     lifeKey: "legal.cookies.02.bl_consent.life",
+  },
+  /* Board `10d` — `COMPARE_COOKIE` in `lib/compare/tray.ts`. */
+  {
+    name: "bl_cmp",
+    category: "essential",
+    purposeKey: "legal.cookies.02.bl_cmp.purpose",
+    lifeKey: "legal.cookies.02.bl_cmp.life",
+  },
+  /* Board `1d` — `SESSION_COOKIE` in `lib/contact/cookies.ts`. */
+  {
+    name: "bl_rsid",
+    category: "essential",
+    purposeKey: "legal.cookies.02.bl_rsid.purpose",
+    lifeKey: "legal.cookies.02.bl_rsid.life",
+  },
+  /* Board `1d` — `VISITOR_COOKIE` in `lib/contact/cookies.ts`. */
+  {
+    name: "bl_vid",
+    category: "essential",
+    purposeKey: "legal.cookies.02.bl_vid.purpose",
+    lifeKey: "legal.cookies.02.bl_vid.life",
   },
   {
     name: "bl_lang",
