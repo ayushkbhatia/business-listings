@@ -28,6 +28,8 @@ import { sweepSetupNudges } from "@/lib/setup/nudge-job";
 import { sweepExpiringQuotes } from "@/lib/quotes/expiry-job";
 import { sweepRamadanShift } from "@/lib/trade/ramadan-shift-job";
 import { authorizeJob, runSteps } from "@/lib/jobs/authorize";
+import { JOB_RUN_KEEP_DAYS } from "@/lib/jobs/health";
+import { pruneJobRuns } from "@/lib/jobs/record";
 import { sweepClosures } from "@/lib/closure/service";
 import { purgeRetainedDocuments } from "@/lib/closure/retention";
 import { revalidateClosure } from "@/lib/closure/revalidate";
@@ -54,6 +56,11 @@ import { dubaiDayStart } from "@/lib/format";
  * schedule has no actor to attribute. The non-negotiable is about staff state
  * changes; a cron is not a member of staff. `lib/billing/dunning-job.ts` makes
  * the same argument at more length.
+ *
+ * What it does write is its own record: `runSteps` keeps a `job_run` row for
+ * the run and a `job_run_step` for each step below, including any that threw,
+ * and `/admin/jobs` reads them (standing item 9.5). Nothing here has to ask for
+ * that — a step is recorded by being a key in the object.
  *
  * Order matters. Renewals run first: a payment that fails today has to be
  * marked past due before dunning reads the row, or the D0 retry waits a day and
@@ -98,12 +105,12 @@ const RATE_HIT_MARGIN = 12;
 const KEEP_PRODUCT_EVENTS_DAYS = 180;
 
 export async function GET(request: NextRequest) {
-  const refusal = authorizeJob(request, "daily");
+  const refusal = await authorizeJob(request, "daily");
   if (refusal) return refusal;
 
   const olderThan = new Date(Date.now() - KEEP_ATTEMPTS_MS);
 
-  const outcome = await runSteps({
+  const outcome = await runSteps("daily", {
     /*
        Trials first. A fortnight that ran out today has to be off Pro before
        anything else reads the row: a trial carries a `renewsAt` equal to its own
@@ -195,6 +202,24 @@ export async function GET(request: NextRequest) {
     async prunedOnboardingDrafts() {
       const cutoff = new Date(Date.now() - DRAFT_KEEP_DAYS * 24 * 60 * 60 * 1000);
       const pruned = await pruneDrafts(cutoff);
+      return { pruned, olderThan: cutoff };
+    },
+    /*
+       Standing item 9.5's own record, on the same argument as the prunes above:
+       `job_run` gains a row an hour from the sweep and one a night from this
+       route, each with its steps, and nothing else would ever delete from it.
+
+       Ninety days (`JOB_RUN_KEEP_DAYS`). Long enough to hold three of the
+       first-of-the-month nights `demandBands` actually runs on, and to say
+       whether a failure on `/admin/jobs` is new or has been happening all
+       quarter; short enough that the table stays near twenty thousand rows.
+
+       This run's own row is minutes old and never near the cutoff, so the
+       record of the sweep that did the pruning survives it.
+    */
+    async prunedJobRuns() {
+      const cutoff = new Date(Date.now() - JOB_RUN_KEEP_DAYS * 24 * 60 * 60 * 1000);
+      const pruned = await pruneJobRuns(cutoff);
       return { pruned, olderThan: cutoff };
     },
     /*
@@ -464,7 +489,7 @@ export async function GET(request: NextRequest) {
       if (today.getUTCDate() !== 1) return { skipped: "not the first of the month" };
       return runDemandBands();
     },
-  });
+  }, request);
 
   console.info("[jobs] daily", outcome.steps);
   return NextResponse.json(outcome, { status: outcome.ok ? 200 : 500 });

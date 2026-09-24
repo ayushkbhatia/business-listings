@@ -285,6 +285,17 @@ export const CAPABILITIES = {
     why: "§07 staff table: ops lead reads all of it, every other staff role reads their own actions. Was inferred as ops-lead-only, which is the wrong shape — a moderator being able to see what they themselves did is not a loosening of the check on staff, it is how somebody answers a question about their own work.",
     subject: "other_business",
   },
+  /*
+     Standing item 9.5. `/admin/jobs` borrowed nothing: the nearest rows were
+     `audit.read`, whose reason is about decisions staff took, and `staff.read`,
+     about the roster — and a schedule is neither.
+  */
+  "jobs.read": {
+    roles: ["staff_ops_lead", "staff_moderator", "staff_finance"],
+    audited: false,
+    source: "inferred",
+    why: "Not a row in §07. Standing item 9.5: the record of the two scheduled job routes — when each last ran, which steps threw and what they said. Every staff seat answers for something those routes do: finance for renewals and dunning, a moderator for the notifications held overnight and the report detectors, an ops lead for the licence sweep. A nightly that has not run is everybody's problem to notice, so every seat reads it. The stored error text masks addresses and secrets. Reading changes nothing, and there is nothing on the screen to press, so it is not audited.",
+  },
 
   // ── Seller (board 7d) ─────────────────────────────────────────────────────
   "listing.edit": {

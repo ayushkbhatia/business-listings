@@ -229,6 +229,9 @@ and it is the one that argues back.
 /admin/compliance                       PDPL data requests                   [12h]
 /admin/audit                            Audit log, filtered and paged         [4i]  built 4i
 /admin/audit/export                     The log as CSV, carrying the filter   [4i]  built 4i
+/admin/jobs                             Scheduled jobs — last run per cron, missed runs [9.5] built 9.5
+/admin/jobs?cron=:cron&after=:cursor    The same, one cron's runs, keyset-paged  [9.5] built 9.5
+/admin/jobs/:id                         One run — every step it planned, recorded or not [9.5] built 9.5
 ```
 
 ## Development surfaces
@@ -406,6 +409,27 @@ Two things moved with the split and both are recorded above:
 - The account menu with *Sign out* (Q1) renders on public pages that are already dynamic.
   A static page keeps the signed-out header rather than giving up its cache to learn who is
   looking. Sign-out is a POST to `signOutAction` and lands on `/`.
+
+### Standing item 9.5 note — the two crons have a record
+
+`/api/jobs/daily` and `/api/jobs/sweep` wrote nothing anybody could read, so a nightly that
+stopped firing changed no screen. `/admin/jobs` is the record, and three things about where
+it sits:
+
+- **Under Platform, beside the audit log** — the other record of what happened — gated on
+  its own `jobs.read`, which every staff seat holds. Finance answers for renewals and dunning,
+  a moderator for the notifications held overnight, an ops lead for the licence sweep; a run
+  that did not happen is everybody's to notice. The sidebar row carries a count of the crons
+  that want looking at, so a stopped nightly shows on every console screen, not only this one.
+- **One screen, one cron at a time below the summary.** `?cron=daily|sweep` picks whose runs,
+  failing steps and refused calls are listed; `?after=` is the keyset cursor over runs. The
+  summary above them always shows both crons.
+- **`/admin/jobs/:id` draws the whole plan** — every step the run set out to take, including
+  the ones it never reached — rather than the steps that left a row. A refused call has a page
+  too, and says nothing ran.
+
+It is a report: nothing on either route writes, so nothing needs an audit row, and the rows it
+reads are written by `runSteps` alone. A cron has no actor to put in one anyway.
 
 ## Rules
 

@@ -32,6 +32,7 @@ import { BuyerInboxGallery } from "./_sections/BuyerInbox";
 import { BlendedSearchGallery } from "./_sections/BlendedSearch";
 import { CompareGallery } from "./_sections/Compare";
 import { CompanyAccountGallery } from "./_sections/CompanyAccount";
+import { ScheduledJobsGallery } from "./_sections/ScheduledJobs";
 import { NotificationTemplatesGallery } from "./_sections/NotificationTemplates";
 import { MaintenanceGallery } from "./_sections/Maintenance";
 import { HomeCurationGallery } from "./_sections/HomeCuration";
@@ -229,6 +230,8 @@ const UNLISTED = [
   "product-comparison",
   // Board `7b`: the buying company — details, addresses, team, rule, a request in each state.
   "company-account",
+  // Standing item 9.5: the scheduled jobs — each cron's standing, its runs with their gaps, a run's steps.
+  "scheduled-jobs",
 ] as const;
 
 export default function Gallery() {
@@ -364,6 +367,8 @@ export default function Gallery() {
       <CompareGallery />
       {/* After compare, for the same axe-grid reason: nothing new above Shells. */}
       <CompanyAccountGallery />
+      {/* After company account, for the same axe-grid reason: nothing new above Shells. */}
+      <ScheduledJobsGallery />
     </main>
   );
 }
