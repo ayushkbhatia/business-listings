@@ -50,6 +50,8 @@ export async function previewServiceBrief(input: {
   const category = await prisma.category.findUnique({ where: { id: input.categoryId }, select: { id: true } });
   if (!category) return nobody;
 
+  // The viewer's own firm never receives their brief, so it is never named here — see `createEnquiry`.
+  const actor = await getActor();
   return previewBrief({
     categoryId: category.id,
     site,
@@ -57,6 +59,7 @@ export async function previewServiceBrief(input: {
     engagement: (BRIEF_ENGAGEMENTS as readonly string[]).includes(input.engagement)
       ? (input.engagement as EngagementType)
       : null,
+    excludeBusinessId: actor?.businessId ?? null,
   });
 }
 
@@ -101,7 +104,9 @@ export async function submitServiceBrief(input: SendServiceBriefInput): Promise<
         ? t("rfq.contact_required")
         : result.error === "no_recipients"
           ? t("brief.undelivered")
-          : t("brief.gone"),
+          : result.error === "own_business"
+            ? t("rfq.own_business")
+            : t("brief.gone"),
   };
 }
 

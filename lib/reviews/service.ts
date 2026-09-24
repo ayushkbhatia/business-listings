@@ -88,6 +88,7 @@ export type CreateReviewResult =
         | "already_reviewed"
         | "not_yet_open"
         | "window_closed"
+        | "own_business"
         | FieldsRefusal;
     };
 
@@ -163,11 +164,12 @@ function isUniqueViolation(error: unknown): boolean {
  * on every path toward a new review: the post, the draft that becomes it, and
  * the photographs signed for it. Throws `PermissionError`.
  *
- * `canReview` decides whether *this enquiry* earned a review; this decides
- * whether *this person* may write one at all. They are different questions,
- * and a staff seat with no buyer role fails only the second. A provisional
- * identity passes by name, which is the point: most reviews are written from a
- * claim-token link.
+ * `canReview` decides whether *this enquiry* earned a review, and of whom — never
+ * of the business the writer's own seat is on; this decides whether *this
+ * person* may write one at all. They are different questions: a staff seat with
+ * no buyer role fails only the second, and a supplier's owner rating their own
+ * reply fails only the first. A provisional identity passes by name, which is
+ * the point: most reviews are written from a claim-token link.
  *
  * Not asked of the fortnight's edit. That is the author's own words, already
  * published under a check that held when they were posted, and board 10f gives
@@ -292,6 +294,8 @@ export async function enquiryForReview(enquiryId: string): Promise<EnquiryForRev
 export const ENQUIRY_FOR_REVIEW_SELECT = {
   id: true,
   buyerId: true,
+  // The team the buyer sits on. No supplier reviews itself — see `canReview`.
+  buyer: { select: { businessId: true } },
   ...CONTRACT_FACTS_SELECT,
   review: { select: { id: true } },
   recipients: {
@@ -310,6 +314,7 @@ export function toEnquiryForReview(
     engagement: { ongoing: isOngoing(facts), termEndsOn: termDates(facts)?.end ?? null },
     id: enquiry.id,
     buyerId: enquiry.buyerId,
+    buyerBusinessId: enquiry.buyer.businessId,
     contactReleasedToBusinessId: enquiry.contactReleasedToBusinessId,
     contactReleasedAt: enquiry.contactReleasedAt,
     repliedBusinessIds: enquiry.recipients.map((recipient) => recipient.businessId),
@@ -331,6 +336,7 @@ export type SaveDraftResult =
         | "already_reviewed"
         | "not_yet_open"
         | "window_closed"
+        | "own_business"
         | "invalid_ratings"
         | "body_long"
         | "photos_invalid";
@@ -411,6 +417,7 @@ export type WritableSubject =
         | "ambiguous_subject"
         | "not_yet_open"
         | "window_closed"
+        | "own_business"
         | "frozen";
     };
 

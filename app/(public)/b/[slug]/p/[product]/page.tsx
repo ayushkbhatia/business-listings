@@ -22,6 +22,7 @@ import { JsonLd } from "@/app/(public)/_json-ld";
 import { EMIRATES } from "@/lib/uae";
 import { getActor } from "@/lib/auth/session";
 import { EnquiryCard, SpecRequestButton } from "./_enquiry-card";
+import { OwnListingNote, isOwnListing } from "../../_own";
 import { ProductEnquiryProvider } from "./_enquiry-context";
 import { redirectIfClosed } from "@/lib/listing/redirect";
 import { CompareTick } from "@/app/(public)/_compare/CompareTick";
@@ -151,10 +152,12 @@ export default async function ProductPage({ params }: Params) {
        rename is safe.
     */
     buyerPreviewFor(product.businessId, product.categoryId, product.specValues),
-    // Only to decide whether the composer asks for a phone number.
+    // Whether the composer asks for a phone number, and whether it is offered at all.
     getActor(),
   ]);
   const { rows, filled, fields, primary: sizeLabel } = preview;
+  // A seat on this seller's own team is offered no composer. See `../../_own.tsx`.
+  const own = isOwnListing(actor, product.businessId);
   const filterableIds = fields.filter((f) => f.isFilterable).map((f) => f.id);
   /*
      Whether there is a spec to compare on at all.
@@ -532,6 +535,7 @@ export default async function ProductPage({ params }: Params) {
               incrementLabel={t("stepper.increment")}
               productName={product.name}
               storefrontSlug={business.slug}
+              {...(own ? { ownNote: <OwnListingNote /> } : {})}
               confidence={
                 <>
                   {/*
@@ -710,13 +714,15 @@ export default async function ProductPage({ params }: Params) {
                  material and the face-to-face dimension" can answer in a line,
                  and that is what makes it high-intent rather than a chore.
               */}
-              <SpecRequestButton
-                label={t("pdp.request_specs")}
-                seed={t("pdp.request_specs_seed", {
-                  product: product.name,
-                  fields: missing.join(", "),
-                })}
-              />
+              {own ? null : (
+                <SpecRequestButton
+                  label={t("pdp.request_specs")}
+                  seed={t("pdp.request_specs_seed", {
+                    product: product.name,
+                    fields: missing.join(", "),
+                  })}
+                />
+              )}
             </div>
           )}
         </section>

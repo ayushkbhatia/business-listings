@@ -146,16 +146,20 @@ export async function findFanoutCandidates(
 ): Promise<FanoutCandidate[]> {
   const since = monthStart(now);
 
-  const pinned = [...(request.pinned ?? [])];
+  /*
+     Excluded outranks pinned. A sender's own business can arrive pinned — the
+     storefront composer pins the page it is on — and the top-up below fetches a
+     missing pinned id by id, which would put it straight back in the pool.
+  */
+  const excluded = new Set(request.excludeBusinessIds ?? []);
+  const pinned = (request.pinned ?? []).filter((id) => !excluded.has(id));
   const open = await rfqOpenCategoryIds(request.categoryIds);
 
   const businesses = await prisma.business.findMany({
     where: {
       ...PUBLIC_BUSINESS,
       claimStatus: "claimed",
-      ...(request.excludeBusinessIds?.length
-        ? { id: { notIn: [...request.excludeBusinessIds] } }
-        : {}),
+      ...(excluded.size ? { id: { notIn: [...excluded] } } : {}),
       OR: [
         { primaryCategoryId: { in: open } },
         /*
@@ -498,7 +502,16 @@ export type CreateEnquiryResult =
        */
       claimToken: string | null;
     }
-  | { ok: false; error: "no_buyer" | "no_lines" | "no_recipients" };
+  | {
+      ok: false;
+      /**
+       * `own_business`: the sender named the business their own seat is on, or
+       * it was the only supplier left to send to. Said as that rather than as
+       * `no_recipients`, which tells them to widen a category that was never
+       * the problem.
+       */
+      error: "no_buyer" | "no_lines" | "no_recipients" | "own_business";
+    };
 
 /** Board 1h's picker. Anything else is coerced rather than trusted. */
 const CLOSES_IN_DAYS_CHOICES = [3, 5, 7, 14, 21] as const;
@@ -519,7 +532,8 @@ export async function createEnquiry(
      Throws `PermissionError`: a staff seat with no buyer role is refused here
      however the request reached this function (§07: moderator —, superadmin —).
   */
-  if (input.buyerId) assertCanCreateEnquiry(await actorFor(input.buyerId));
+  let sender = input.buyerId ? await actorFor(input.buyerId) : null;
+  if (sender) assertCanCreateEnquiry(sender);
 
   if (input.lines.length === 0) return { ok: false, error: "no_lines" };
 
@@ -549,7 +563,8 @@ export async function createEnquiry(
        round it. A suspended provisional identity holds nothing, so suspending
        one is what stops its number sending.
     */
-    assertCanCreateEnquiry(await actorFor(buyerId));
+    sender = await actorFor(buyerId);
+    assertCanCreateEnquiry(sender);
 
     const provisional = await prisma.user.findUnique({
       where: { id: buyerId },
@@ -603,10 +618,43 @@ export async function createEnquiry(
       }
     : input;
 
-  const { recipients, skipped } = located.selection
+  /*
+     No business enquires to itself.
+
+     A seller's seat holds `buyer` as well — sign-up grants it, and a claim or a
+     team invitation adds the seller role beside it — and the storefront composer
+     pins the business the page is about. So an owner could send their own
+     business an enquiry, answer it from the leads inbox and accept their own
+     quote. None of that is trade, and all of it is counted: the reply lands in
+     the response time we publish as measured, the lead in the seller's funnel
+     and monthly cap, and the reply or the acceptance was the rung a review of
+     themselves stood on until `canReview` refused it.
+
+     The business is read from the record for the id the enquiry goes out under,
+     after a signed-out send has resolved its number — which can be that same
+     owner's. Named by the sender, pinned or ticked, it refuses the send: the
+     storefront composer pins one supplier and sends to one, and dropping the pin
+     would hand its place to whoever ranks next, a supplier nobody chose. Matched
+     rather than named, it is out of the pool, so it takes no place in the
+     ranking; and a recipient list that arrived already chosen is filtered, for
+     the matcher that ran before the number was resolved.
+  */
+  const ownBusinessId = sender?.businessId ?? null;
+  if (
+    ownBusinessId &&
+    [...(input.pinnedBusinessIds ?? []), ...(input.chosenBusinessIds ?? [])].includes(ownBusinessId)
+  ) {
+    return { ok: false, error: "own_business" };
+  }
+  const matched = located.selection
     ? { recipients: [...located.selection.recipients], skipped: located.selection.skipped }
-    : await matchGoods(located, now);
-  if (recipients.length === 0) return { ok: false, error: "no_recipients" };
+    : await matchGoods(located, now, ownBusinessId);
+  const recipients = matched.recipients.filter((r) => r.businessId !== ownBusinessId);
+  const skipped = matched.skipped.filter((s) => s.businessId !== ownBusinessId);
+  if (recipients.length === 0) {
+    // Their own business was all there was: say that, not "widen the category".
+    return { ok: false, error: matched.recipients.length > 0 ? "own_business" : "no_recipients" };
+  }
 
   /*
      Resolve the landing slug the proxy stored into a campaign row.
@@ -840,6 +888,8 @@ export async function createEnquiry(
 async function matchGoods(
   input: CreateEnquiryInput,
   now: Date,
+  /** The business the sender's own seat is on. Never a candidate. */
+  ownBusinessId: string | null,
 ): Promise<{ recipients: EnquiryRecipientSummary[]; skipped: FanoutResult["skipped"] }> {
   const request: FanoutRequest = {
     categoryId: input.categoryId,
@@ -850,7 +900,10 @@ async function matchGoods(
     ...(input.pinnedBusinessIds ? { pinned: input.pinnedBusinessIds } : {}),
   };
 
-  const candidates = await findFanoutCandidates(request, now);
+  const candidates = await findFanoutCandidates(
+    { ...request, ...(ownBusinessId ? { excludeBusinessIds: [ownBusinessId] } : {}) },
+    now,
+  );
   const selection = selectRecipients(candidates, request);
 
   /*

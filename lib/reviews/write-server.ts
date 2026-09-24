@@ -5,7 +5,7 @@ import { mayWriteReview } from "@/lib/auth/guards";
 import { requirementHeadline } from "@/lib/enquiry/inbox-status";
 import { quoteTotalFils } from "@/lib/quote/money";
 import { toProposalFigure, PROPOSAL_FIGURE_SELECT } from "@/lib/quote/proposal";
-import { canReview, isEditable, provenanceOf, reviewWindowFor } from "./eligibility";
+import { canReview, isEditable, provenanceOf, reviewableReplies, reviewWindowFor } from "./eligibility";
 import { reviewPhotoStorage, type ReviewPhotoStorage } from "./photos";
 import { ENQUIRY_FOR_REVIEW_SELECT, toEnquiryForReview } from "./service";
 import { EMPTY_REVIEW_FIELDS, parsePhotoRefs, type ReviewFields } from "./write";
@@ -27,8 +27,8 @@ import type {
  * the same refusal, so the route cannot be used to find out which references
  * exist.
  *
- * The page never decides a state itself. It is handed one of six, each with the
- * facts its render needs and nothing else.
+ * The page never decides a state itself. It is handed one of seven, each with
+ * the facts its render needs and nothing else.
  */
 
 /** Board 10f's *Your other enquiries* panel lists at most this many. The rest are in the inbox. */
@@ -87,7 +87,8 @@ export async function loadReviewWrite(input: {
       requirement: true,
       deliverToArea: true,
       area: { select: { name: true } },
-      buyer: { select: { buyerCompany: { select: { name: true } } } },
+      // `businessId` is the gate's (ENQUIRY_FOR_REVIEW_SELECT); one key, so both here.
+      buyer: { select: { businessId: true, buyerCompany: { select: { name: true } } } },
       reviewDraft: true,
     },
   });
@@ -220,7 +221,8 @@ export async function loadReviewWrite(input: {
     switch (verdict.reason) {
       case "ambiguous_subject": {
         const suppliers = await prisma.business.findMany({
-          where: { id: { in: [...gate.repliedBusinessIds] } },
+          // The gate's list: never the buyer's own business, which it would refuse.
+          where: { id: { in: [...reviewableReplies(gate)] } },
           orderBy: [{ displayName: "asc" }, { id: "asc" }],
           select: SUPPLIER_SELECT,
         });
@@ -251,6 +253,14 @@ export async function loadReviewWrite(input: {
           others,
         };
       }
+      case "own_business":
+        // Named, so the refusal reads as a fact about this supplier and this account.
+        return {
+          kind: "own_business",
+          enquiry: { id: row.id, ref: row.ref, headline: requirementHeadline(row.requirement) },
+          supplier: await supplierById(verdict.businessId),
+          others,
+        };
       case "already_reviewed":
       // Unreachable — `existing` above — but a review written between the two
       // reads is a review, and the refusal says so rather than offering a form.
@@ -296,6 +306,52 @@ export async function loadReviewWrite(input: {
     editableUntil: null,
     others,
   };
+}
+
+/**
+ * The link *Write a review* opens on a storefront's reviews page, for a buyer
+ * who may write one about this business — or null, and the button is absent.
+ *
+ * Deliberately narrow: their own enquiry, this supplier, and the gate still
+ * open on it. `canReview` is asked rather than reimplemented, so the button and
+ * the page it opens cannot disagree about who is eligible — including the rule
+ * that no supplier reviews itself, which keeps it off a supplier's own reviews
+ * page for everyone on its team.
+ *
+ * Board 10f: the page it opens resolves its own subject, and on a fan-out that
+ * several suppliers replied to it cannot tell which one the buyer means. This
+ * page already knows — it is the supplier's own — so it says so with `&about=`,
+ * which nothing produced before (build plan 3.5). The reference rather than the
+ * id, because that is what the buyer reads on the page it opens.
+ */
+export async function writeReviewLinkFor(
+  buyerId: string,
+  businessId: string,
+  now: Date = new Date(),
+): Promise<string | null> {
+  const candidates = await prisma.enquiry.findMany({
+    where: {
+      buyerId,
+      review: null,
+      OR: [
+        { contactReleasedToBusinessId: businessId },
+        { recipients: { some: { businessId, firstReplyAt: { not: null } } } },
+      ],
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: 5,
+    // The gate's own select, so each candidate is judged on the fields `createReview` reads.
+    select: { ...ENQUIRY_FOR_REVIEW_SELECT, ref: true },
+  });
+
+  for (const candidate of candidates) {
+    // The window counts too: a link to a form that has closed is the disabled
+    // button the reviews page promises never to show.
+    if (canReview(buyerId, toEnquiryForReview(candidate), businessId, now).ok) {
+      return `/review/new?${new URLSearchParams({ enq: candidate.ref, about: businessId }).toString()}`;
+    }
+  }
+  return null;
 }
 
 function photoUrls(storage: ReviewPhotoStorage, fields: ReviewFields): Record<string, string> {
@@ -368,10 +424,22 @@ async function otherEnquiries(
     }),
   ]);
 
+  /*
+     The verdicts first, then the names they need. Which supplier a row is about
+     is the gate's answer rather than the row's shape: with the buyer's own
+     business out of the running, one reply of two can be the whole of it.
+  */
+  const judged = rows.map((row) => {
+    const gate = toEnquiryForReview(row);
+    return { row, gate, verdict: canReview(buyerId, gate, undefined, now) };
+  });
   const subjectIds = new Set<string>();
-  for (const row of rows) {
-    if (row.contactReleasedToBusinessId) subjectIds.add(row.contactReleasedToBusinessId);
-    if (row.recipients.length === 1) subjectIds.add(row.recipients[0]!.businessId);
+  for (const { row, gate, verdict } of judged) {
+    if (row.review) continue;
+    if ("businessId" in verdict) subjectIds.add(verdict.businessId);
+    else if (verdict.reason === "not_yet_open" && gate.contactReleasedToBusinessId) {
+      subjectIds.add(gate.contactReleasedToBusinessId);
+    }
   }
   const names = new Map(
     (
@@ -382,7 +450,7 @@ async function otherEnquiries(
     ).map((business) => [business.id, business.displayName]),
   );
 
-  const listed: (OtherEnquiry & { sortKey: [number, number] })[] = rows.map((row) => {
+  const listed: (OtherEnquiry & { sortKey: [number, number] })[] = judged.map(({ row, gate, verdict }) => {
     const base = { id: row.id, ref: row.ref, headline: requirementHeadline(row.requirement) };
     if (row.review) {
       return {
@@ -391,8 +459,6 @@ async function otherEnquiries(
         sortKey: [1, -row.createdAt.getTime()],
       };
     }
-    const gate = toEnquiryForReview(row);
-    const verdict = canReview(buyerId, gate, undefined, now);
     if (verdict.ok) {
       const window = reviewWindowFor(gate, verdict.businessId);
       return {
@@ -408,7 +474,7 @@ async function otherEnquiries(
     }
     switch (verdict.reason) {
       case "ambiguous_subject":
-        return { ...base, state: { kind: "choose", count: gate.repliedBusinessIds.length }, sortKey: [0, Number.MAX_SAFE_INTEGER] };
+        return { ...base, state: { kind: "choose", count: reviewableReplies(gate).length }, sortKey: [0, Number.MAX_SAFE_INTEGER] };
       case "window_closed":
         return {
           ...base,
@@ -423,6 +489,12 @@ async function otherEnquiries(
             opensOn: verdict.opensOn,
             supplierName: names.get(gate.contactReleasedToBusinessId ?? "") ?? "",
           },
+          sortKey: [1, -row.createdAt.getTime()],
+        };
+      case "own_business":
+        return {
+          ...base,
+          state: { kind: "own_business", supplierName: names.get(verdict.businessId) ?? "" },
           sortKey: [1, -row.createdAt.getTime()],
         };
       default:

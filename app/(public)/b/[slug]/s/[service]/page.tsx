@@ -17,6 +17,7 @@ import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { PageEvent } from "@/components/telemetry";
 import { composerOptions } from "../../_services";
 import { ServiceEnquireDrawer } from "../../ServiceEnquireDrawer";
+import { OwnListingNote, isOwnListing } from "../../_own";
 import { redirectIfClosed } from "@/lib/listing/redirect";
 
 /**
@@ -320,7 +321,10 @@ export default async function ServiceDetailPage({ params }: Params) {
                  chosen; one that sells both opens the service composer here,
                  because that storefront's rail is the goods one.
               */}
-              {business.sellsKind === "both" ? (
+              {/* A seat on the firm's own team is offered no composer. See `../../_own.tsx`. */}
+              {isOwnListing(actor, business.id) ? (
+                <OwnListingNote />
+              ) : business.sellsKind === "both" ? (
                 <ServiceEnquireDrawer
                   businessId={business.id}
                   businessName={business.displayName}

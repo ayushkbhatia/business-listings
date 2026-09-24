@@ -707,8 +707,11 @@ the only large piece and the only one selling something it does not deliver.
   the composer, both comparisons, the thread, the company accept page, the accepted record and the
   review page. `tests/integration/buyer-capabilities.test.ts` fails all twelve of its refusals with
   the asserts removed, and the seven passes that depend on the new definition with the old one
-  restored. Found alongside, not fixed: nothing stops a seller's own seat enquiring to, and then
-  reviewing, its own business.
+  restored. Found alongside, and closed separately on 24 Sep 2026: nothing stopped a seller's own
+  seat enquiring to, and then reviewing, its own business. `canReview` now refuses a subject that is
+  the reviewer's own business (`own_business`, with a state on `/review/new` and no button on the
+  storefront or the accepted record), and `createEnquiry` refuses a send that names the sender's own
+  business and keeps it out of every fan-out, so response time and lead counts stop taking it in.
 - [x] **9.5 Standing: 29 scheduled jobs, no run persisted.** Two crons, 29 steps, no row written
   anywhere. If the nightly stops firing nothing changes appearance and nobody is told. *Done 24
   Sep 2026:* `runSteps` is the one writer of a record for every job behind it. It writes a

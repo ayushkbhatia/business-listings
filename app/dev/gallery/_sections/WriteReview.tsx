@@ -22,6 +22,7 @@ import {
   notEligible,
   notPermitted,
   notYetOpen,
+  ownBusiness,
   reviewedEditable,
   reviewedFixed,
   reviewedHeld,
@@ -150,6 +151,9 @@ export function WriteReviewGallery() {
       </States>
       <States label="account cannot write reviews · staff role, no buyer role (build plan 9.4)" stack>
         <Specimen data={notPermitted()} name="not-permitted" />
+      </States>
+      <States label="the supplier is the buyer's own business · no supplier reviews itself" stack>
+        <Specimen data={ownBusiness()} name="own-business" />
       </States>
       <States label="several suppliers replied · choose one" stack>
         <Specimen data={chooseSupplier()} name="choose" />

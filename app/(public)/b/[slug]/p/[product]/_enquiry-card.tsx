@@ -56,6 +56,12 @@ export interface EnquiryCardProps {
   productName: string;
   /** Adds this product to the catalogue's selection, per board 1e. */
   storefrontSlug: string;
+  /**
+   * In place of the controls, for a seat on this seller's own team, which is
+   * offered no composer (`../../_own.tsx`). The confidence line, the bands and
+   * the details stay: they are what a buyer reads here.
+   */
+  ownNote?: React.ReactNode;
 }
 
 export function EnquiryCard({
@@ -78,6 +84,7 @@ export function EnquiryCard({
   details,
   productName,
   storefrontSlug,
+  ownNote,
 }: EnquiryCardProps) {
   const { open } = useEnquiry();
   const { qty, setQty } = useQuantity();
@@ -138,57 +145,61 @@ export function EnquiryCard({
         {confidence}
         <div className="mt-4">{bands}</div>
 
-        <div className="mt-4 flex flex-col gap-2.5">
-          <Stepper
-            value={Math.max(qty, minOrderQty)}
-            onChange={setQty}
-            min={Math.max(1, minOrderQty)}
-            label={quantityLabel}
-            decrementLabel={decrementLabel}
-            incrementLabel={incrementLabel}
-            suffix="pcs"
-          />
-          {primary}
+        {ownNote ? (
+          <div className="mt-4">{ownNote}</div>
+        ) : (
+          <div className="mt-4 flex flex-col gap-2.5">
+            <Stepper
+              value={Math.max(qty, minOrderQty)}
+              onChange={setQty}
+              min={Math.max(1, minOrderQty)}
+              label={quantityLabel}
+              decrementLabel={decrementLabel}
+              incrementLabel={incrementLabel}
+              suffix="pcs"
+            />
+            {primary}
 
-          <div className="flex flex-wrap gap-2">
-            {whatsappHref && (
-              <a href={whatsappHref} rel="nofollow noopener" className={SECONDARY}>
-                {whatsappLabel}
-              </a>
-            )}
-            <button type="button" onClick={addToRfq} className={SECONDARY} disabled={added}>
-              {added ? rfqAddedLabel : rfqLabel}
-            </button>
-            {/*
-               The crossover, once there is more than one thing to ask about.
-               Below that it would be a fan-out button on a single item, which
-               is the enquiry the primary already sends.
-            */}
-            {selected.length > 1 && (
-              <a
-                href={`/rfq/new?products=${encodeURIComponent(selected.join(","))}`}
-                className={SECONDARY}
-              >
-                {rfqCrossoverLabel}
-              </a>
-            )}
-            {/*
-               Out of stock keeps an enquiry path. The primary becomes "Notify
-               me", so this is the door for a buyer who wants the lead time
-               rather than a notification — removing it would leave the state
-               with no way to ask a question.
-            */}
-            {leadTimeLabel && leadTimeSeed && (
-              <button
-                type="button"
-                onClick={() => open(leadTimeSeed)}
-                className={SECONDARY}
-              >
-                {leadTimeLabel}
+            <div className="flex flex-wrap gap-2">
+              {whatsappHref && (
+                <a href={whatsappHref} rel="nofollow noopener" className={SECONDARY}>
+                  {whatsappLabel}
+                </a>
+              )}
+              <button type="button" onClick={addToRfq} className={SECONDARY} disabled={added}>
+                {added ? rfqAddedLabel : rfqLabel}
               </button>
-            )}
+              {/*
+                 The crossover, once there is more than one thing to ask about.
+                 Below that it would be a fan-out button on a single item, which
+                 is the enquiry the primary already sends.
+              */}
+              {selected.length > 1 && (
+                <a
+                  href={`/rfq/new?products=${encodeURIComponent(selected.join(","))}`}
+                  className={SECONDARY}
+                >
+                  {rfqCrossoverLabel}
+                </a>
+              )}
+              {/*
+                 Out of stock keeps an enquiry path. The primary becomes "Notify
+                 me", so this is the door for a buyer who wants the lead time
+                 rather than a notification — removing it would leave the state
+                 with no way to ask a question.
+              */}
+              {leadTimeLabel && leadTimeSeed && (
+                <button
+                  type="button"
+                  onClick={() => open(leadTimeSeed)}
+                  className={SECONDARY}
+                >
+                  {leadTimeLabel}
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="mt-4 border-t border-line pt-3">{details}</div>
       </div>
@@ -199,24 +210,26 @@ export function EnquiryCard({
          fold loses the enquiry.
 
          Hidden with `display` above the breakpoint, so exactly one trigger is
-         in the accessibility tree at any width.
+         in the accessibility tree at any width. None for the seller's own team.
       */}
-      <div
-        data-action-bar=""
-        className={cn(
-          "fixed inset-x-0 bottom-0 z-40 flex items-center gap-3 border-t border-line",
-          "bg-card px-4 py-2.5 shadow-overlay md:hidden",
-        )}
-      >
-        <p className="min-w-0 flex-1 truncate text-caption text-body">{productName}</p>
-        <button
-          type="button"
-          onClick={() => open(enquirySeed)}
-          className={cn(PRIMARY, "w-auto shrink-0 px-5")}
+      {ownNote ? null : (
+        <div
+          data-action-bar=""
+          className={cn(
+            "fixed inset-x-0 bottom-0 z-40 flex items-center gap-3 border-t border-line",
+            "bg-card px-4 py-2.5 shadow-overlay md:hidden",
+          )}
         >
-          {primaryLabel}
-        </button>
-      </div>
+          <p className="min-w-0 flex-1 truncate text-caption text-body">{productName}</p>
+          <button
+            type="button"
+            onClick={() => open(enquirySeed)}
+            className={cn(PRIMARY, "w-auto shrink-0 px-5")}
+          >
+            {primaryLabel}
+          </button>
+        </div>
+      )}
     </>
   );
 }

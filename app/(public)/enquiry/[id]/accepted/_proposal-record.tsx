@@ -10,6 +10,7 @@ import {
   reviewTiming,
   type ProposalRecordValue,
 } from "@/lib/enquiry/accepted-proposal-words";
+import { reviewRefusalWords, type ReviewRefusal } from "@/lib/enquiry/accepted-record-words";
 import { formatDate } from "@/lib/format";
 import { t } from "@/lib/i18n";
 
@@ -221,13 +222,13 @@ export function ProposalReviewCard({
   record,
   now,
   reviewHref,
-  writable = true,
+  refusal = null,
 }: {
   record: ProposalRecordValue;
   now: Date;
   reviewHref: string;
-  /** Build plan 9.4: false for a person `createReview` would refuse. */
-  writable?: boolean;
+  /** Why this reader may not write it, where they may not. See `AcceptedRecordView`. */
+  refusal?: ReviewRefusal | null;
 }) {
   const { review, supplier } = record;
   const timing = reviewTiming(record, now);
@@ -236,9 +237,9 @@ export function ProposalReviewCard({
     <Card padded>
       <h2 className={`${EYEBROW} text-faint`}>{timing.eyebrow}</h2>
       {review.kind === "none" ? (
-        timing.open && !writable ? (
-          // Build plan 9.4: no button to a form `createReview` would refuse.
-          <p className="mt-2 text-body-sm text-body">{t("reviewwrite.error.not_permitted")}</p>
+        timing.open && refusal ? (
+          // No button to a form `createReview` would refuse.
+          <p className="mt-2 text-body-sm text-body">{reviewRefusalWords(refusal, supplier.displayName)}</p>
         ) : timing.open ? (
           <>
             <p className="mt-2 text-body-sm text-body">

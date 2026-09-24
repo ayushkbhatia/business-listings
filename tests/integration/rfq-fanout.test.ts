@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { previewRecipients } from "@/app/(public)/rfq/actions";
+import { previewRecipientsFor } from "@/app/(public)/rfq/preview";
 import { prisma } from "@/lib/db/client";
 import { descendantsOf, findFanoutCandidates } from "@/lib/enquiry/service";
 import {
@@ -23,8 +23,9 @@ import {
  * exactly the rows this file created and an assertion about who is missing
  * cannot be explained by a seeded supplier ranking above them.
  *
- * The path under test is `previewRecipients` where the assertion is about the
- * list a buyer sees, because that is what the composer calls, and the matcher
+ * The path under test is `previewRecipientsFor` where the assertion is about
+ * the list a buyer sees, because that is what the composer's action calls — for
+ * a visitor, with no business of their own to leave out — and the matcher
  * underneath it where the assertion is about the `skipped` rows, which the
  * preview deliberately throws away.
  */
@@ -215,13 +216,16 @@ function withinThisMonth(count: number): Date[] {
 
 /** The composer's own call, with the fixture defaults filled in. */
 function preview(categoryId: string, opts: { fanoutTo?: number; pinned?: string[] } = {}) {
-  return previewRecipients({
-    categoryId,
-    emirate: "dubai",
-    lineCount: 2,
-    fanoutTo: opts.fanoutTo ?? MAX_RECIPIENTS,
-    ...(opts.pinned ? { pinnedBusinessIds: opts.pinned } : {}),
-  });
+  return previewRecipientsFor(
+    {
+      categoryId,
+      emirate: "dubai",
+      lineCount: 2,
+      fanoutTo: opts.fanoutTo ?? MAX_RECIPIENTS,
+      ...(opts.pinned ? { pinnedBusinessIds: opts.pinned } : {}),
+    },
+    { excludeBusinessId: null },
+  );
 }
 
 /** The matcher underneath it, for the assertions about who was left out. */

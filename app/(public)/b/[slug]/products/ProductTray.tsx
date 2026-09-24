@@ -68,6 +68,7 @@ export function ProductTray({
   emirates,
   recipient,
   signedIn,
+  enquirable = true,
 }: {
   products: readonly TrayProduct[];
   businessId: string;
@@ -77,6 +78,11 @@ export function ProductTray({
   emirates: readonly { value: string; label: string }[];
   recipient: RecipientPreview;
   signedIn: boolean;
+  /**
+   * False for a seat on this seller's own team, which is offered no composer —
+   * and so nothing to pick products for (`../_own.tsx`). The grid stays.
+   */
+  enquirable?: boolean;
 }) {
   const [composing, setComposing] = useState(false);
 
@@ -126,24 +132,26 @@ export function ProductTray({
                 <CompareTick productId={product.id} productName={product.name} tradeId={product.categoryId} />
               }
             />
-            <div className="mt-1.5">
-              <Checkbox
-                checked={selected.includes(product.id)}
-                label={t("tray.select", { name: product.name })}
-                onChange={(e) =>
-                  setSelected(
-                    e.target.checked
-                      ? [...selected, product.id]
-                      : selected.filter((id) => id !== product.id),
-                  )
-                }
-              />
-            </div>
+            {enquirable && (
+              <div className="mt-1.5">
+                <Checkbox
+                  checked={selected.includes(product.id)}
+                  label={t("tray.select", { name: product.name })}
+                  onChange={(e) =>
+                    setSelected(
+                      e.target.checked
+                        ? [...selected, product.id]
+                        : selected.filter((id) => id !== product.id),
+                    )
+                  }
+                />
+              </div>
+            )}
           </li>
         ))}
       </ul>
 
-      {chosen.length > 0 ? (
+      {enquirable && chosen.length > 0 ? (
         /*
            Sticky at every width, and stuck to the viewport bottom below 1024.
 
@@ -169,26 +177,28 @@ export function ProductTray({
         </div>
       ) : null}
 
-      <EnquireDrawer
-        open={composing}
-        onClose={() => setComposing(false)}
-        businessId={businessId}
-        businessSlug={businessSlug}
-        displayName={displayName}
-        categoryId={categoryId}
-        emirates={emirates}
-        recipient={recipient}
-        signedIn={signedIn}
-        initialLines={chosen.map((p) => ({
-          key: p.id,
-          productId: p.id,
-          description: p.name,
-          qty: p.minOrderQty ?? 1,
-          unit: "pcs",
-          size: p.size ?? "",
-          targetUnitPriceAed: "",
-        }))}
-      />
+      {enquirable && (
+        <EnquireDrawer
+          open={composing}
+          onClose={() => setComposing(false)}
+          businessId={businessId}
+          businessSlug={businessSlug}
+          displayName={displayName}
+          categoryId={categoryId}
+          emirates={emirates}
+          recipient={recipient}
+          signedIn={signedIn}
+          initialLines={chosen.map((p) => ({
+            key: p.id,
+            productId: p.id,
+            description: p.name,
+            qty: p.minOrderQty ?? 1,
+            unit: "pcs",
+            size: p.size ?? "",
+            targetUnitPriceAed: "",
+          }))}
+        />
+      )}
     </>
   );
 }

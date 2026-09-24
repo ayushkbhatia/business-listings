@@ -41,6 +41,7 @@ import { isShortlisted } from "@/lib/shortlist/service";
 import { storefrontPhotos } from "@/lib/storefront/photos";
 import { servicesStorefrontFor } from "@/lib/storefront/services";
 import { CredentialsSection, ServicesSection, ServicesStorefrontPage } from "./_services";
+import { OwnListingNote, isOwnListing } from "./_own";
 import { ReportDialog, ReportTrigger } from "./ReportDialog";
 import { fileReport, loadReportForm } from "@/app/(public)/report/actions";
 import { reportFormData } from "@/lib/reports/form";
@@ -264,6 +265,9 @@ async function ClaimedStorefront({
   */
   const saved = actor ? await isShortlisted(actor.id, business.id) : false;
 
+  // A seat on this business's own team gets no composer and nothing that opens one. See `./_own.tsx`.
+  const own = isOwnListing(actor, business.id);
+
   /*
      Board `1d-s`. A firm that sells only work gets the storefront with the
      catalogue taken out of it — its own composition, not this one with
@@ -279,6 +283,7 @@ async function ClaimedStorefront({
       <ServicesStorefrontPage
         business={business}
         actor={actor}
+        own={own}
         saved={saved}
         requestedService={requestedService}
       />
@@ -309,7 +314,7 @@ async function ClaimedStorefront({
      is where a buyer looks for them. The rail keeps the composer — a form is
      not a button row, and the two are doing different jobs.
   */
-  const enquireTrigger = (
+  const enquireTrigger = own ? null : (
     <EnquireButton
       block
       size="lg"
@@ -414,28 +419,30 @@ async function ClaimedStorefront({
       masked={contact.masked}
       whatsAppHref={contact.whatsAppHref}
       enquire={
-        <EnquireButton
-          businessId={business.id}
-          businessSlug={business.slug}
-          displayName={business.displayName}
-          categoryId={business.primaryCategoryId}
-          emirates={EMIRATES}
-          signedIn={Boolean(actor)}
-          triggerLabel={t("storefront.request_quote")}
-          recipient={{
-            businessId: business.id,
-            displayName: business.displayName,
-            areaName: head?.area?.name ?? null,
-            verificationTier: business.verificationTier,
-            responseLabel:
-              business.responseTimeMedianMs === null
-                ? t("response.unmeasured")
-                : t("response.median", {
-                    duration: formatDuration(business.responseTimeMedianMs),
-                  }),
-            pinned: true,
-          }}
-        />
+        own ? null : (
+          <EnquireButton
+            businessId={business.id}
+            businessSlug={business.slug}
+            displayName={business.displayName}
+            categoryId={business.primaryCategoryId}
+            emirates={EMIRATES}
+            signedIn={Boolean(actor)}
+            triggerLabel={t("storefront.request_quote")}
+            recipient={{
+              businessId: business.id,
+              displayName: business.displayName,
+              areaName: head?.area?.name ?? null,
+              verificationTier: business.verificationTier,
+              responseLabel:
+                business.responseTimeMedianMs === null
+                  ? t("response.unmeasured")
+                  : t("response.median", {
+                      duration: formatDuration(business.responseTimeMedianMs),
+                    }),
+              pinned: true,
+            }}
+          />
+        )
       }
       saveAction={saveAction}
     />
@@ -592,21 +599,25 @@ async function ClaimedStorefront({
         */}
         <div className="mx-auto mt-6 grid max-w-7xl gap-[var(--gutter)] px-5 pb-[var(--section-pad)] lg:grid-cols-[minmax(0,1fr)_18.75rem] lg:grid-rows-[auto_1fr] xl:grid-cols-[minmax(0,1fr)_21.25rem]">
           <div className="order-1 min-w-0 lg:order-none lg:col-start-2 lg:row-start-1">
-            <EnquiryComposer
-              business={business}
-              emirates={EMIRATES}
-              signedIn={Boolean(actor)}
-              responseLabel={
-                business.responseTimeMedianMs === null
-                  ? t("response.unmeasured")
-                  : t("response.median", {
-                      duration: formatDuration(business.responseTimeMedianMs),
-                    })
-              }
-              {...(business.responseTimeMedianMs !== null
-                ? { answeredWithin: formatDuration(business.responseTimeMedianMs) }
-                : {})}
-            />
+            {own ? (
+              <OwnListingNote />
+            ) : (
+              <EnquiryComposer
+                business={business}
+                emirates={EMIRATES}
+                signedIn={Boolean(actor)}
+                responseLabel={
+                  business.responseTimeMedianMs === null
+                    ? t("response.unmeasured")
+                    : t("response.median", {
+                        duration: formatDuration(business.responseTimeMedianMs),
+                      })
+                }
+                {...(business.responseTimeMedianMs !== null
+                  ? { answeredWithin: formatDuration(business.responseTimeMedianMs) }
+                  : {})}
+              />
+            )}
           </div>
           <div className="order-2 flex min-w-0 flex-col gap-8 lg:order-none lg:col-start-1 lg:row-span-2 lg:row-start-1">
             {/*
@@ -662,6 +673,7 @@ async function ClaimedStorefront({
                 business={business}
                 data={work}
                 mode="drawer"
+                own={own}
                 signedIn={Boolean(actor)}
                 composerTitle={composerTitle}
               />
@@ -694,6 +706,7 @@ async function ClaimedStorefront({
               <CatalogueGrid
                 data={data}
                 enquireHref={sectionEnquireHref}
+                enquirable={!own}
                 compare={Object.fromEntries(
                   data.products.map((product) => [
                     product.id,

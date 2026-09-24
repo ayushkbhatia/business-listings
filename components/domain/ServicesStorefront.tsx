@@ -61,7 +61,8 @@ export function ServiceSummaryCard({
    * A slot because its behaviour depends on the page it is on: a storefront
    * whose rail carries the service composer moves focus into it, and one whose
    * rail carries the goods composer — `sellsKind = both` — opens the service
-   * composer in a drawer instead. Defaults to the first.
+   * composer in a drawer instead. Defaults to the first. Null for none: a seat
+   * on the firm's own team, which is offered no composer to move focus into.
    */
   enquire?: React.ReactNode;
 }) {
@@ -112,7 +113,7 @@ export function ServiceSummaryCard({
            "Enquire" — the compact form, per the vocabulary rule. It prefills the
            composer with this service (B11) and moves focus into it.
         */}
-        {enquire ?? (
+        {enquire !== undefined ? enquire : (
           <EnquireServiceLink
             href={`/b/${businessSlug}?service=${encodeURIComponent(service.slug)}#enquire`}
             service={service.slug}

@@ -20,6 +20,7 @@ import {
   ratingsAreValid,
   replyWindowEnds,
   replyWindowOpen,
+  reviewableReplies,
   reviewWindowFor,
   type EnquiryForReview,
 } from "./eligibility";
@@ -34,6 +35,7 @@ function enquiry(over: Partial<EnquiryForReview> = {}): EnquiryForReview {
   return {
     id: "enq_1",
     buyerId: BUYER,
+    buyerBusinessId: null,
     contactReleasedToBusinessId: BUSINESS,
     contactReleasedAt: new Date("2026-08-20T10:00:00+04:00"),
     repliedBusinessIds: [BUSINESS],
@@ -145,6 +147,70 @@ describe("board 1m criterion 3 — the gate, and the two rungs it admits", () =>
 
   it("allows one per enquiry, and no more", () => {
     expect(canReview(BUYER, enquiry({ alreadyReviewed: true }))).toEqual({
+      ok: false,
+      reason: "already_reviewed",
+    });
+  });
+});
+
+describe("no supplier reviews itself — the buyer's own business is never a subject", () => {
+  /*
+     A seller seat holds `buyer` as well, so the owner of a business can enquire
+     to it, reply from its leads inbox, and — without this — rate the reply. The
+     accepted records have told buyers since board 7c that no supplier can write
+     one about themselves.
+  */
+  const seat = (over: Partial<EnquiryForReview> = {}) => enquiry({ buyerBusinessId: BUSINESS, ...over });
+
+  it("refuses a seat that names its own business, on either rung", () => {
+    expect(canReview(BUYER, seat(), BUSINESS, NOW)).toEqual({ ok: false, reason: "own_business", businessId: BUSINESS });
+    expect(
+      canReview(BUYER, seat({ contactReleasedToBusinessId: null, repliedBusinessIds: [BUSINESS] }), BUSINESS, NOW),
+    ).toEqual({ ok: false, reason: "own_business", businessId: BUSINESS });
+  });
+
+  it("refuses by name where its own business is the only one that engaged, rather than saying nobody replied", () => {
+    // Its own quote, accepted: the self-dealt accepted-quote rung.
+    expect(canReview(BUYER, seat(), undefined, NOW)).toEqual({ ok: false, reason: "own_business", businessId: BUSINESS });
+    // Its own reply: the verified-enquiry rung, stamped from the leads inbox.
+    expect(
+      canReview(BUYER, seat({ contactReleasedToBusinessId: null, repliedBusinessIds: [BUSINESS] }), undefined, NOW),
+    ).toEqual({ ok: false, reason: "own_business", businessId: BUSINESS });
+  });
+
+  it("chooses among the others: one other reply is the subject, not a choice between two", () => {
+    const both = seat({ contactReleasedToBusinessId: null, repliedBusinessIds: [BUSINESS, REPLIED] });
+    expect(reviewableReplies(both)).toEqual([REPLIED]);
+    expect(canReview(BUYER, both, undefined, NOW)).toEqual({ ok: true, businessId: REPLIED, provenance: "verified_enquiry" });
+
+    const three = seat({ contactReleasedToBusinessId: null, repliedBusinessIds: [BUSINESS, REPLIED, "biz_other"] });
+    expect(reviewableReplies(three)).toEqual([REPLIED, "biz_other"]);
+    expect(canReview(BUYER, three, undefined, NOW)).toEqual({ ok: false, reason: "ambiguous_subject" });
+  });
+
+  it("does not let its own accepted quote stand in for the subject of another supplier's reply", () => {
+    const accepted = seat({ repliedBusinessIds: [BUSINESS, REPLIED] });
+    expect(canReview(BUYER, accepted, undefined, NOW)).toEqual({ ok: true, businessId: REPLIED, provenance: "verified_enquiry" });
+    expect(canReview(BUYER, accepted, REPLIED, NOW)).toMatchObject({ ok: true, provenance: "verified_enquiry" });
+  });
+
+  it("lets a seat review a supplier it bought from — another business is that supplier's customer", () => {
+    expect(canReview(BUYER, enquiry({ buyerBusinessId: "biz_elsewhere" }), undefined, NOW)).toEqual({
+      ok: true,
+      businessId: BUSINESS,
+      provenance: "accepted_quote",
+    });
+  });
+
+  it("leaves a buyer with no business exactly where the gate had them", () => {
+    expect(canReview(BUYER, enquiry(), BUSINESS, NOW)).toEqual({ ok: true, businessId: BUSINESS, provenance: "accepted_quote" });
+    expect(reviewableReplies(enquiry({ repliedBusinessIds: [BUSINESS, REPLIED] }))).toEqual([BUSINESS, REPLIED]);
+  });
+
+  it("answers whose enquiry it is, and whether it was reviewed, before whose business it is", () => {
+    // Somebody else's enquiry says nothing about which supplier their seat is on.
+    expect(canReview("user_other", seat(), BUSINESS, NOW)).toEqual({ ok: false, reason: "not_your_enquiry" });
+    expect(canReview(BUYER, seat({ alreadyReviewed: true }), BUSINESS, NOW)).toEqual({
       ok: false,
       reason: "already_reviewed",
     });

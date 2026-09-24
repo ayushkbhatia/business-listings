@@ -214,6 +214,31 @@ export function notPermitted(): ReviewWriteData {
   };
 }
 
+/**
+ * No supplier reviews itself. Al Waha's owner, whose seat holds `buyer`, sent
+ * `ENQ-8820` from Al Waha's own storefront and answered it from the leads inbox
+ * before the fan-out stopped carrying a sender's own business. Their other
+ * enquiry shows the same state in the rail.
+ */
+export function ownBusiness(): ReviewWriteData {
+  return {
+    kind: "own_business",
+    enquiry: { id: "enq-8820", ref: "ENQ-8820", headline: "Butterfly valves DN150, PN16" },
+    supplier: alWaha,
+    others: {
+      rows: [
+        {
+          id: "enq-8818",
+          ref: "ENQ-8818",
+          headline: "Gate valves DN100, test run",
+          state: { kind: "own_business", supplierName: alWaha.displayName },
+        },
+      ],
+      more: 0,
+    },
+  };
+}
+
 export function chooseSupplier(): ReviewWriteData {
   return {
     kind: "choose",

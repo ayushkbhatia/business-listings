@@ -3,6 +3,7 @@ import { render, screen, within } from "@testing-library/react";
 import { expectNoAxeViolations } from "../axe";
 import { AcceptedRecordView } from "@/app/(public)/enquiry/[id]/accepted/_record";
 import { recordLines, type AcceptedRecord } from "@/lib/enquiry/accepted-record";
+import type { ReviewRefusal } from "@/lib/enquiry/accepted-record-words";
 import { t } from "@/lib/i18n";
 
 /**
@@ -71,13 +72,13 @@ function fixture(overrides: Partial<AcceptedRecord> = {}): AcceptedRecord {
   };
 }
 
-function renderRecord(record: AcceptedRecord, now = NOW, reviewWritable = true) {
+function renderRecord(record: AcceptedRecord, now = NOW, reviewRefusal: ReviewRefusal | null = null) {
   return render(
     <AcceptedRecordView
       record={record}
       now={now}
       links={LINKS}
-      reviewWritable={reviewWritable}
+      reviewRefusal={reviewRefusal}
       breadcrumb={null}
       referenceForm={<span>reference slot</span>}
       reportForm={<button type="button">{t("accepted.report.open")}</button>}
@@ -198,9 +199,20 @@ describe("the other documented states", () => {
 
   it("an account that may not review: no button to the form, and the reason instead", async () => {
     // Build plan 9.4: `createReview` asks `review.create` before anything else.
-    const { container } = renderRecord(fixture(), NOW, false);
+    const { container } = renderRecord(fixture(), NOW, "not_permitted");
     expect(screen.queryByRole("link", { name: t("accepted.review.write") })).toBeNull();
     expect(screen.getByText(t("reviewwrite.error.not_permitted"))).toBeInTheDocument();
+    await expectNoAxeViolations(container);
+  });
+
+  it("the accepted supplier is the reader's own business: no button, and the rule said by name", async () => {
+    // `canReview` refuses it — no supplier reviews itself — so the card offers no form to be refused on.
+    const record = fixture();
+    const { container } = renderRecord(record, NOW, "own_business");
+    expect(screen.queryByRole("link", { name: t("accepted.review.write") })).toBeNull();
+    expect(
+      screen.getByText(t("accepted.review.own_business", { supplier: record.supplier.displayName })),
+    ).toBeInTheDocument();
     await expectNoAxeViolations(container);
   });
 

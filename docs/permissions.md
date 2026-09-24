@@ -44,6 +44,14 @@ no seat can start an enquiry it cannot finish — and each is also about one enq
 actor's own: `acceptQuote` and `canReview` check that against the row. A staff member who also buys
 holds all three through `buyer`, which board 4i's staff policy keeps.
 
+**No business enquires to itself, and no supplier reviews itself.** A seller seat holds `buyer` as
+well, so the rows above let it send — to another supplier. Which supplier is a subject question, not
+a role one, and the record answers it through `User.businessId`: `createEnquiry` refuses a send that
+names the sender's own business and keeps it out of every fan-out (`addSuppliers`, the `1h-s` brief
+and every preview likewise), and `canReview` refuses a review whose subject is the reviewer's own
+business, on either rung and from any seat on its team. The storefront offers its own team no
+composer. A seat on another business reviewing a supplier it bought from passes, as before.
+
 **Asked in the service, of the record.** `createEnquiry` (and `addSuppliers`), `acceptQuote` (and
 the company approval that ends in it), and every path toward a new review — the post, its draft, its
 photographs — call the `assertCan*` as their first line, against `actorFor(id)` rather than anything a
@@ -178,7 +186,7 @@ beside a list that grows goes wrong quietly — the test is the one that argues 
 | `contact_lead.platform.read` | ops lead | The `1d` amendment's `/admin/leads`: every phone lead on the platform, each a buyer's name, work email and mobile. A lead list is the asset most likely to walk out, so it is held at the top rather than with moderation — erring **higher**. Not audited: reading changes nothing. |
 | `contact_lead.read` | seller owner · manager | The `1d` amendment's `/dashboard/leads/phone`: the buyers who revealed this seller's landline. A phone lead is assigned to nobody, so it sits with the two seats that read the whole unassigned queue rather than with a sales seat — erring **higher**. Not a staff row; listed here because it is inferred. |
 | `quote.accept` | buyer · every seller seat · provisional | Build plan 9.4. Was marked `stated` and buyer-only with no row to state it. Asked, it refused the provisional identity most enquiries belong to, and a supplier's seat on the enquiry §07 lets it send. It follows `enquiry.create` — erring **lower**, to the principals the product already lets send. |
-| `review.create` | buyer · every seller seat · provisional | Build plan 9.4, for the same reasons. Whether an enquiry earned a review is board 10f's gate (`canReview`), not a role; a competitor posing as a customer is the `no_traceable_enquiry` dispute ground. Erring **lower**, to the same principals. |
+| `review.create` | buyer · every seller seat · provisional | Build plan 9.4, for the same reasons. Whether an enquiry earned a review is board 10f's gate (`canReview`), not a role — and so is the rule that no supplier reviews itself, which the gate reads from the reviewer's `User.businessId`; a competitor posing as a customer is the `no_traceable_enquiry` dispute ground. Erring **lower**, to the same principals. |
 
 If §07 gains a row for any of these, the row wins and the `source` becomes `stated`.
 

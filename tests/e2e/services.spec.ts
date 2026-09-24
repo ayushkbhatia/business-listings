@@ -1065,7 +1065,10 @@ test.describe("board 1d-s — the storefront with the catalogue taken out of it"
     expect(text).not.toContain("premises visited");
   });
 
-  test("opens the composer on the service the buyer arrived from — AC10", async ({ page }) => {
+  test("opens the composer on the service the buyer arrived from — AC10", async ({ browser }) => {
+    // A buyer, in a context of their own: the firm's own seat is offered no composer (the test below).
+    const buyer = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+    const page = await buyer.newPage();
     await page.goto(`${storefront}/s/vat-and-corporate-tax-filing`);
     await page.getByRole("link", { name: "Enquire about this" }).click();
     await page.waitForURL(/\?service=vat-and-corporate-tax-filing#enquire$/);
@@ -1086,9 +1089,12 @@ test.describe("board 1d-s — the storefront with the catalogue taken out of it"
     );
     await expect(need).toHaveValue("Year-end audit for a trading company.");
     await expect(need).toBeFocused();
+    await buyer.close();
   });
 
-  test("asks no quantity, and refuses a thin description beside the field", async ({ page }) => {
+  test("asks no quantity, and refuses a thin description beside the field", async ({ browser }) => {
+    const buyer = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+    const page = await buyer.newPage();
     await page.goto(storefront);
     const form = page.locator("#enquire");
     await expect(form.getByRole("spinbutton")).toHaveCount(0);
@@ -1097,6 +1103,27 @@ test.describe("board 1d-s — the storefront with the catalogue taken out of it"
     await form.getByRole("textbox", { name: "What you need, in your words" }).fill("audit");
     await form.getByRole("button", { name: "Send enquiry" }).click();
     await expect(form.getByText(/at least 10 characters/)).toBeVisible();
+    await buyer.close();
+  });
+
+  test("offers the firm's own seat no composer, and says where its enquiries arrive", async ({ page }) => {
+    /*
+       This project signs in as the firm. No business enquires to itself —
+       `createEnquiry` refuses a send that names the sender's own business — so
+       its own storefront offers its team no form, and nothing that opens one.
+    */
+    await page.goto(`${storefront}?service=statutory-audit`);
+    const composer = page.locator("#enquire");
+    await expect(composer.getByRole("button", { name: "Send enquiry" })).toHaveCount(0);
+    await expect(composer.getByText("This is your listing")).toBeVisible();
+    await expect(composer.getByRole("link", { name: "Open leads" })).toHaveAttribute("href", "/dashboard/leads");
+    await expect(
+      page.getByRole("region", { name: "Services" }).getByRole("link", { name: /^Enquire about / }),
+    ).toHaveCount(0);
+
+    await page.goto(`${storefront}/s/vat-and-corporate-tax-filing`);
+    await expect(page.getByRole("link", { name: "Enquire about this" })).toHaveCount(0);
+    await expect(page.getByText("This is your listing")).toBeVisible();
   });
 
   test("delivers a buyer's enquiry as the service it asked about, and the seller reads it so", async ({
@@ -1224,7 +1251,10 @@ test.describe("board 1e-s — the services list, rows not a photo grid", () => {
     }
   });
 
-  test("opens the composer on the card's service, and the catch-all on something not listed — AC9", async ({ page }) => {
+  test("opens the composer on the card's service, and the catch-all on something not listed — AC9", async ({ browser }) => {
+    // A buyer: the firm's own seat is offered no composer on its own list either.
+    const buyer = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+    const page = await buyer.newPage();
     await page.goto(list);
     await page.getByRole("button", { name: "Enquire about VAT and corporate tax filing" }).click();
     const drawer = page.getByRole("dialog");
@@ -1234,6 +1264,7 @@ test.describe("board 1e-s — the services list, rows not a photo grid", () => {
     await expect(page.getByText("Not on the list? Describe what you need")).toBeVisible();
     await page.getByRole("button", { name: "Enquire anyway" }).click();
     await expect(page.getByRole("dialog").getByRole("combobox", { name: "Which service" })).toHaveValue("");
+    await buyer.close();
   });
 
   test("has no axe violations at the acceptance width", async ({ page }) => {

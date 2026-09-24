@@ -36,6 +36,7 @@ import { JsonLd } from "@/app/(public)/_json-ld";
 import { StorefrontHeader, storefrontCrumbs } from "../_storefront";
 import { composerOptions } from "../_services";
 import { ServiceEnquireDrawer } from "../ServiceEnquireDrawer";
+import { OwnListingNote, isOwnListing } from "../_own";
 import { CatalogueFilters } from "../products/CatalogueFilters";
 import { ServicesFilterPanel } from "./_rail";
 
@@ -147,21 +148,24 @@ export default async function StorefrontServicesPage({ params, searchParams }: P
   const askForContact = !actor;
   // Board `12g-s`: the drawer's heading is the services half of a paired string.
   const composerTitle = copies.services["section.enquiry.title"];
+  // A seat on the firm's own team is offered no composer. See `../_own.tsx`.
+  const own = isOwnListing(actor, business.id);
 
-  const catchAll = (label: string, className: string) => (
-    <ServiceEnquireDrawer
-      businessId={business.id}
-      businessName={business.displayName}
-      services={options}
-      service={null}
-      serviceName={null}
-      askForContact={askForContact}
-      responseLine={responseLine}
-      triggerLabel={label}
-      triggerClassName={className}
-      title={composerTitle}
-    />
-  );
+  const catchAll = (label: string, className: string) =>
+    own ? null : (
+      <ServiceEnquireDrawer
+        businessId={business.id}
+        businessName={business.displayName}
+        services={options}
+        service={null}
+        serviceName={null}
+        askForContact={askForContact}
+        responseLine={responseLine}
+        triggerLabel={label}
+        triggerClassName={className}
+        title={composerTitle}
+      />
+    );
 
   const pageHref = (page: number) => {
     const qs = servicesQueryString(query, { page });
@@ -287,17 +291,19 @@ export default async function StorefrontServicesPage({ params, searchParams }: P
                       businessSlug={business.slug}
                       enquiries={leader?.id === service.id ? leader.enquiries : null}
                       enquire={
-                        <ServiceEnquireDrawer
-                          businessId={business.id}
-                          businessName={business.displayName}
-                          services={options}
-                          service={service.slug}
-                          serviceName={service.name}
-                          askForContact={askForContact}
-                          responseLine={responseLine}
-                          title={composerTitle}
-                          triggerClassName={buttonClassName({ block: true })}
-                        />
+                        own ? null : (
+                          <ServiceEnquireDrawer
+                            businessId={business.id}
+                            businessName={business.displayName}
+                            services={options}
+                            service={service.slug}
+                            serviceName={service.name}
+                            askForContact={askForContact}
+                            responseLine={responseLine}
+                            title={composerTitle}
+                            triggerClassName={buttonClassName({ block: true })}
+                          />
+                        )
                       }
                     />
                   </li>
@@ -338,13 +344,19 @@ export default async function StorefrontServicesPage({ params, searchParams }: P
                catalogue can be exhaustive; a list of services cannot, and this
                is the page's release valve.
             */}
-            <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-card border border-line bg-card px-5 py-4">
-              <p className="text-body-sm text-body">{t("storefront_services.not_listed")}</p>
-              {catchAll(
-                t("storefront_services.enquire_anyway"),
-                "rounded-tag text-body-sm font-medium text-brand-ink underline-offset-4 hover:underline focus-visible:shadow-focus focus-visible:outline-none",
-              )}
-            </div>
+            {own ? (
+              <div className="mt-5">
+                <OwnListingNote />
+              </div>
+            ) : (
+              <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-card border border-line bg-card px-5 py-4">
+                <p className="text-body-sm text-body">{t("storefront_services.not_listed")}</p>
+                {catchAll(
+                  t("storefront_services.enquire_anyway"),
+                  "rounded-tag text-body-sm font-medium text-brand-ink underline-offset-4 hover:underline focus-visible:shadow-focus focus-visible:outline-none",
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
