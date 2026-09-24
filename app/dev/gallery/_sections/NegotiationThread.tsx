@@ -11,6 +11,7 @@ import {
   closedNegotiation,
   expiredNegotiation,
   noReplyNegotiation,
+  notPermittedNegotiation,
   partialNegotiation,
   thirdRevisionNegotiation,
 } from "./negotiation-fixture";
@@ -73,7 +74,7 @@ export function NegotiationThreadGallery() {
         <Specimen negotiation={acceptedHereNegotiation()} name="accepted here" />
       </States>
       <States label="account cannot accept quotes · staff role, no buyer role (build plan 9.4)" stack>
-        <Specimen negotiation={boardNegotiation()} name="not permitted" mayAccept={false} />
+        <Specimen negotiation={notPermittedNegotiation()} name="not permitted" mayAccept={false} />
       </States>
     </Section>
   );
