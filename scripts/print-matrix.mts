@@ -1,6 +1,6 @@
 // Prints the permission matrix as markdown, for diffing against design-system §07.
 // Generated on demand rather than committed, so it cannot drift from the code.
-import { CAPABILITIES, CAPABILITY_LIST } from "../lib/auth/capabilities.js";
+import { CAPABILITIES, CAPABILITY_LIST, type CapabilitySpec } from "../lib/auth/capabilities.js";
 import { ROLES } from "../lib/auth/roles.js";
 
 const SHORT: Record<string, string> = {
@@ -14,15 +14,17 @@ const SHORT: Record<string, string> = {
   staff_ops_lead: "ops",
 };
 
-const head = ["capability", ...ROLES.map((r) => SHORT[r]), "audit", "src"];
+// `prov` is the provisional identity: a buyer with no account, who holds no role
+// and is answered from `CapabilitySpec.provisional` instead.
+const head = ["capability", ...ROLES.map((r) => SHORT[r]), "prov", "audit", "src"];
 console.log(`| ${head.join(" | ")} |`);
 console.log(`|${head.map(() => "---").join("|")}|`);
 
 for (const capability of CAPABILITY_LIST) {
-  const spec = CAPABILITIES[capability];
+  const spec: CapabilitySpec = CAPABILITIES[capability];
   const cells = ROLES.map((r) => ((spec.roles as readonly string[]).includes(r) ? "×" : ""));
   console.log(
-    `| \`${capability}\` | ${cells.join(" | ")} | ${spec.audited ? "yes" : ""} | ${spec.source} |`,
+    `| \`${capability}\` | ${cells.join(" | ")} | ${spec.provisional ? "×" : ""} | ${spec.audited ? "yes" : ""} | ${spec.source} |`,
   );
 }
 

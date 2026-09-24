@@ -10,6 +10,8 @@ import {
 import "@/lib/audit/prisma-writer";
 import { assertReason, staffMutation } from "@/lib/audit";
 import { Prisma } from "@/lib/db/generated/client";
+import { actorFor } from "@/lib/auth/actor";
+import { assertCanWriteReview } from "@/lib/auth/guards";
 import type { Actor } from "@/lib/auth/roles";
 import {
   canRequestReview,
@@ -156,10 +158,32 @@ function isUniqueViolation(error: unknown): boolean {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
 }
 
+/**
+ * Build plan 9.4 — `review.create`, asked of the record before anything else
+ * on every path toward a new review: the post, the draft that becomes it, and
+ * the photographs signed for it. Throws `PermissionError`.
+ *
+ * `canReview` decides whether *this enquiry* earned a review; this decides
+ * whether *this person* may write one at all. They are different questions,
+ * and a staff seat with no buyer role fails only the second. A provisional
+ * identity passes by name, which is the point: most reviews are written from a
+ * claim-token link.
+ *
+ * Not asked of the fortnight's edit. That is the author's own words, already
+ * published under a check that held when they were posted, and board 10f gives
+ * them fourteen days with it; the gate for it is `isEditable`.
+ */
+async function writerOf(buyerId: string): Promise<void> {
+  assertCanWriteReview(await actorFor(buyerId));
+}
+
 export async function createReview(
   input: CreateReviewInput,
   storage: ReviewPhotoStorage = reviewPhotoStorage,
 ): Promise<CreateReviewResult> {
+  // Build plan 9.4 — see `writerOf` above. Throws `PermissionError`.
+  await writerOf(input.buyerId);
+
   const fields = fieldsOf(input);
   const refusal = fieldsRefusal(fields, input.ratings);
   if (refusal) return { ok: false, error: refusal };
@@ -331,6 +355,8 @@ export async function saveReviewDraft(input: {
   fields: ReviewFields;
   now?: Date;
 }): Promise<SaveDraftResult> {
+  await writerOf(input.buyerId);
+
   const now = input.now ?? new Date();
   const { fields } = input;
 
@@ -392,6 +418,10 @@ export type WritableSubject =
  * Who a photograph upload for this enquiry is about, and whether one may be
  * added at all: a new review inside the gate, or the buyer's own review inside
  * its fourteen days.
+ *
+ * Throws `PermissionError` where the upload is toward a new review and the
+ * person may not write one: a signed upload is a write into our storage, and
+ * it is the first one a review makes.
  */
 export async function writableSubject(
   buyerId: string,
@@ -416,6 +446,7 @@ export async function writableSubject(
     if (!isEditable(existing, now)) return { ok: false, error: "frozen" };
     return { ok: true, mode: "edit", businessId: existing.businessId, reviewId: existing.id };
   }
+  await writerOf(buyerId);
   const verdict = canReview(buyerId, await enquiryForReview(enquiryId), businessId, now);
   if (!verdict.ok) {
     return { ok: false, error: verdict.reason === "already_reviewed" ? "frozen" : verdict.reason };

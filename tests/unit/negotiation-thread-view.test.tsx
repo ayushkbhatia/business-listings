@@ -183,4 +183,23 @@ describe("the states the spec lists", () => {
     expect(view.thread.readOnly).toBe(true);
     expect(view.thread.notice?.action?.href).toBe("/rfq/new?resend=ENQ-8847&t=tok");
   });
+
+  it("an account that may not accept: no accept of any kind, the reason said, the thread still open", () => {
+    // Build plan 9.4: `acceptQuote` asks `quote.accept` before it reads the quote.
+    const refused = (negotiation: ReturnType<typeof boardNegotiation>) =>
+      buildNegotiationView(negotiation, { now: NEGOTIATION_NOW, token: "tok", acceptError: null, mayAccept: false });
+
+    const offer = refused(boardNegotiation());
+    expect(offer.thread.accept.kind).toBe("none");
+    expect(offer.thread.notice?.text).toBe(
+      "This account cannot accept quotes, so none is offered here. A quote is accepted from a buyer or a supplier account.",
+    );
+    // Writing to the supplier is not accepting; the composer stays.
+    expect(offer.thread.readOnly).toBe(false);
+
+    // Asking for a fresh revision is not accepting either.
+    const expired = refused(expiredNegotiation());
+    expect(expired.thread.accept.kind).toBe("none");
+    expect(expired.thread.leadingChips?.map((chip) => chip.label)).toEqual(["Ask for a new revision"]);
+  });
 });

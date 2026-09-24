@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { t } from "@/lib/i18n";
+import { PermissionError } from "@/lib/auth/errors";
 import { addSuppliers } from "@/lib/enquiry/add-recipients";
 import { resolveBuyerId, trackingTokenFor } from "@/app/(public)/enquiry/_buyer";
 
@@ -24,7 +25,12 @@ export async function sendToMoreSuppliers(input: {
     buyerId,
     refOrId: input.refOrId,
     chosenBusinessIds: input.chosenBusinessIds.slice(0, 8),
+  }).catch((error: unknown) => {
+    // Build plan 9.4: sending to more suppliers asks `enquiry.create`.
+    if (error instanceof PermissionError) return null;
+    throw error;
   });
+  if (result === null) return { ok: false, error: t("rfq.not_permitted") };
 
   if (!result.ok) {
     return {

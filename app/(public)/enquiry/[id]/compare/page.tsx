@@ -13,6 +13,8 @@ import { DirectoryFooter } from "@/app/(public)/_chrome";
 import { ViewerNav } from "@/app/(public)/_account-menu";
 import { markQuotesRead } from "@/lib/messaging/receipts";
 import { resolveBuyerId, trackingTokenFor } from "../../_buyer";
+import { actorFor } from "@/lib/auth/actor";
+import { mayAcceptQuote } from "@/lib/auth/guards";
 import { acceptQuoteAction } from "../../actions";
 import { acceptErrorMessage } from "../../_errors";
 import { getProposalComparison } from "@/lib/db/queries/proposal-comparison";
@@ -54,6 +56,14 @@ export default async function ComparePage({
   if (!buyerId) notFound();
 
   /*
+     Build plan 9.4: `acceptQuote` asks `quote.accept` of the record before it
+     reads the quote, so a person it refuses is not offered the button. Asked
+     the same way the service asks it — `actorFor`, not the session — so the two
+     cannot disagree about a claim-token buyer, who has no session and holds it.
+  */
+  const mayAccept = mayAcceptQuote(await actorFor(buyerId));
+
+  /*
      Board `1n-s`: an enquiry for work is compared as proposals — each fee in its
      own unit, one labelled row of our arithmetic, and nothing ranked. It renders
      with no replies yet too: the brief and who it went to, not a 404.
@@ -74,6 +84,7 @@ export default async function ComparePage({
           }}
           error={acceptErrorMessage(one("error"))}
           acceptAction={acceptQuoteAction}
+          mayAccept={mayAccept}
         />
       </PublicShell>
     );
@@ -122,7 +133,8 @@ export default async function ComparePage({
       <p className="font-mono text-eyebrow uppercase text-faint">{t("enquiry.ref", { ref: enquiry.ref })}</p>
       <h1 className="mt-2 font-serif text-h1-serif text-ink">{t("compare.quotes_title")}</h1>
 
-      {quotes.length === 1 ? (
+      {/* "…before you accept" — not said to an account that is offered no accept. */}
+      {quotes.length === 1 && mayAccept ? (
         <p className="mt-2 text-body-sm text-muted">{t("compare.only_one")}</p>
       ) : null}
 
@@ -135,6 +147,12 @@ export default async function ComparePage({
       {closed && !error ? (
         <p className="mt-4 rounded-ctl border border-line bg-paper-sunk px-3 py-2 text-body-sm text-body">
           {t("compare.error_enquiry_closed")}
+        </p>
+      ) : null}
+
+      {!mayAccept && !accepted && !closed && !error ? (
+        <p className="mt-4 rounded-ctl border border-line bg-paper-sunk px-3 py-2 text-body-sm text-body">
+          {t("compare.error_not_permitted")}
         </p>
       ) : null}
 
@@ -250,6 +268,8 @@ export default async function ComparePage({
                 </td>
               ))}
             </tr>
+            {/* Build plan 9.4: no accept row for a person the service would refuse. */}
+            {mayAccept || accepted ? (
             <tr className="border-t border-line">
               <th scope="row" className="px-3 py-3 text-left font-normal">
                 <span className="sr-only">{t("compare.accept", { ref: "", total: "" })}</span>
@@ -305,16 +325,19 @@ export default async function ComparePage({
                 </td>
               ))}
             </tr>
+            ) : null}
           </tfoot>
         </table>
       </div>
 
-      {/* Said before the button is pressed, not after. */}
-      <Card padded>
-        <p className="max-w-[var(--measure-prose)] text-body-sm text-muted">
-          {t("compare.what_accepting_means")}
-        </p>
-      </Card>
+      {/* Said before the button is pressed, not after — and only where there is one. */}
+      {mayAccept ? (
+        <Card padded>
+          <p className="max-w-[var(--measure-prose)] text-body-sm text-muted">
+            {t("compare.what_accepting_means")}
+          </p>
+        </Card>
+      ) : null}
 
       <p className="mt-4">
         <Link

@@ -126,6 +126,17 @@ export interface Actor {
    * ./session.ts.
    */
   buyerCompanyId?: string;
+  /**
+   * Set for a provisional identity: a buyer who sent an enquiry without an
+   * account, known by the claim token their tracking link carries.
+   *
+   * It holds no role — `createProvisionalIdentity` gives it none until the
+   * mobile is verified — and `can()` answers it from `CapabilitySpec.provisional`
+   * instead, so what it may do is written on the matrix rather than decided by
+   * whoever meets one. `getActor` never sets it: signing in is what claims the
+   * identity. `actorFor` in ./actor.ts does, reading the record.
+   */
+  provisional?: true;
 }
 
 export function isStaff(actor: Actor): boolean {

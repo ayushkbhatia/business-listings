@@ -311,3 +311,13 @@ export function acceptedHereNegotiation(): Negotiation {
     record: { ...board.record, quotes: [R1, { ...R2, status: "accepted" }] },
   };
 }
+
+/**
+ * Build plan 9.4: the board's own thread, read by an account that may not accept
+ * — a staff role with no buyer one. Its own reference, like every other state,
+ * so the gallery never carries two rails named for one enquiry.
+ */
+export function notPermittedNegotiation(): Negotiation {
+  const board = boardNegotiation();
+  return { ...board, enquiry: { ...board.enquiry, ref: "ENQ-8849" } };
+}

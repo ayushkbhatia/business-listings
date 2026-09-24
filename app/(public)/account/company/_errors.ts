@@ -53,6 +53,8 @@ const MESSAGES: Record<string, () => string> = {
   revised: () => t("compare.error_revised"),
   supplier_closed: () => t("compare.error_supplier_closed"),
   enquiry_closed: () => t("compare.error_enquiry_closed"),
+  // Build plan 9.4: `quote.accept`, refused by the matrix before the rule is read.
+  not_permitted: () => t("compare.error_not_permitted"),
   not_yours: () => t("compare.error_not_found"),
   // Joining.
   expired: () => t("company.join.expired"),

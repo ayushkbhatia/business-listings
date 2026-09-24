@@ -204,6 +204,16 @@ export function notEligible(): ReviewWriteData {
   };
 }
 
+/** Build plan 9.4: a staff seat with no buyer role, on an enquiry the gate would pass. */
+export function notPermitted(): ReviewWriteData {
+  return {
+    kind: "refused",
+    reason: "not_permitted",
+    enquiry: { id: "enq-8811", ref: "ENQ-8811", headline: "Grooved couplings, sprinkler riser" },
+    others: { rows: [], more: 0 },
+  };
+}
+
 export function chooseSupplier(): ReviewWriteData {
   return {
     kind: "choose",

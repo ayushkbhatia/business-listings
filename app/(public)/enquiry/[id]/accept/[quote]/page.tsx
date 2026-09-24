@@ -18,6 +18,8 @@ import { ViewerNav } from "@/app/(public)/_account-menu";
 import { companyError } from "@/app/(public)/account/company/_errors";
 import { RequestItem } from "@/app/(public)/account/company/_requests";
 import { resolveBuyerId } from "../../../_buyer";
+import { actorFor } from "@/lib/auth/actor";
+import { mayAcceptQuote } from "@/lib/auth/guards";
 import { companyAcceptAction } from "../../../actions";
 import { SubmitDecision } from "./_submit";
 
@@ -101,6 +103,9 @@ export default async function AcceptPage({
   const closed = enquiry.closesAt.getTime() <= now.getTime();
   const expired = quote.expiresAt !== null && quote.expiresAt.getTime() < now.getTime();
   const acceptable = !enquiry.contactReleasedToBusinessId && !closed && !expired && (quote.status === "sent" || quote.status === "read");
+  // Build plan 9.4: `acceptQuote` and `requestApproval` both ask `quote.accept`
+  // first, so neither form is offered to a person they would refuse.
+  const mayAccept = mayAcceptQuote(await actorFor(buyerId));
   const compareHref = `/enquiry/${enquiry.id}/compare`;
 
   const error = one("error");
@@ -179,6 +184,13 @@ export default async function AcceptPage({
                   ? t("compare.error_expired")
                   : t("compare.error_not_open")}
           </Alert>
+        ) : !mayAccept ? (
+          // The alert above already carries this sentence when a post was refused for it.
+          error === "not_permitted" ? null : (
+            <Alert tone="neutral" live="off">
+              {t("compare.error_not_permitted")}
+            </Alert>
+          )
         ) : outlook.openRequest && outlook.openRequest.quoteId === quote.id ? (
           <Panel eyebrow={t("company.accept.open_eyebrow")}>
             <RequestItem

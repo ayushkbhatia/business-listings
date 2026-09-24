@@ -20,6 +20,7 @@ import {
   editReview,
   emptyReview,
   notEligible,
+  notPermitted,
   notYetOpen,
   reviewedEditable,
   reviewedFixed,
@@ -146,6 +147,9 @@ export function WriteReviewGallery() {
       </States>
       <States label="not eligible · no reply, no acceptance" stack>
         <Specimen data={notEligible()} name="refused" />
+      </States>
+      <States label="account cannot write reviews · staff role, no buyer role (build plan 9.4)" stack>
+        <Specimen data={notPermitted()} name="not-permitted" />
       </States>
       <States label="several suppliers replied · choose one" stack>
         <Specimen data={chooseSupplier()} name="choose" />

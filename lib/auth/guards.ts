@@ -150,9 +150,24 @@ export const mayBuyPlacement = (a: Actor) => can(a, "placement.purchase");
 
 
 
-// ── Buyer ───────────────────────────────────────────────────────────────────
+/*
+   ── Buyer ───────────────────────────────────────────────────────────────────
+
+   Build plan 9.4: these had no caller. Each `assert*` is now the first line of
+   its service, asked of the record through `actorFor` in ./actor.ts, so no
+   caller can skip it or hand in a role: `createEnquiry` and `addSuppliers`;
+   `acceptQuote` and the company approval that ends in it; and every path
+   toward a new review — the post, its draft and its photographs. Each also
+   holds for a provisional identity; see `CapabilitySpec.provisional`.
+*/
 export const assertCanCreateEnquiry = (a: Actor) => assertCan(a, "enquiry.create");
-export const mayCreateEnquiry = (a: Actor) => can(a, "enquiry.create");
+/**
+ * Null is a visitor with no session. They send as the provisional identity the
+ * send creates for them — board 7a `B9`, auth is deferred, not gating — so they
+ * are asked as one rather than refused for having no account.
+ */
+export const mayCreateEnquiry = (a: Actor | null) =>
+  can(a ?? { id: "visitor", roles: [], provisional: true }, "enquiry.create");
 
 export const assertCanAcceptQuote = (a: Actor) => assertCan(a, "quote.accept");
 export const mayAcceptQuote = (a: Actor) => can(a, "quote.accept");

@@ -69,13 +69,14 @@ const TYPICAL: AcceptedRecord = {
   report: { kind: "none" },
 };
 
-function Record({ record, now = NOW }: { record: AcceptedRecord; now?: Date }) {
+function Record({ record, now = NOW, reviewWritable = true }: { record: AcceptedRecord; now?: Date; reviewWritable?: boolean }) {
   return (
     <div className="w-full rounded-card border border-line bg-paper">
       <AcceptedRecordView
         record={record}
         now={now}
         links={LINKS}
+        reviewWritable={reviewWritable}
         breadcrumb={null}
         referenceForm={
           record.buyerReference ? (
@@ -137,6 +138,10 @@ export function AcceptedRecordGallery() {
             report: { kind: "open", filedAt: new Date("2026-08-24T10:00:00Z") },
           }}
         />
+      </States>
+
+      <States label="account cannot write reviews · staff role, no buyer role (build plan 9.4)" stack>
+        <Record record={TYPICAL} reviewWritable={false} />
       </States>
 
       <States label="review held · report resolved" stack>
