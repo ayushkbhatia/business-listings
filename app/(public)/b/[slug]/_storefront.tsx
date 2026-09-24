@@ -7,6 +7,7 @@ import { formatCount, formatDate, formatDuration, formatRating } from "@/lib/for
 import { MEDIA_BUCKET, publicUrl } from "@/lib/storage";
 import { cn } from "@/lib/cn";
 import { licenceExpired as hasLapsed } from "@/lib/verification";
+import { dubaiDayStart } from "@/lib/format/date";
 import { t } from "@/lib/i18n";
 import type { PublicBusiness } from "@/lib/db/queries";
 import { sellsWork, storefrontTabs, type StorefrontTabKey } from "@/lib/storefront/tabs";
@@ -134,7 +135,10 @@ export async function StorefrontHeader({
      query is `cache`d, so the overview asking for the same rows costs nothing.
   */
   const work = sellsWork(business.sellsKind);
-  const checked = work ? heroCredential(await storefrontCredentials(business.id)) : null;
+  /* A checked credential past its confirmed date is not named — `6a-s` B4. */
+  const checked = work
+    ? heroCredential(await storefrontCredentials(business.id), dubaiDayStart(now))
+    : null;
 
   /*
      The meta row, as clauses joined by a separator rather than separators

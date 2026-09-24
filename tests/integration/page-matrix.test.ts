@@ -210,6 +210,8 @@ describe("the verified share counts tier 2 and up, and nothing lower", () => {
 
     scope = {
       kind: "area",
+      // A trade with no kind set anywhere resolves to goods — branch addresses.
+      trade: "goods",
       emirate: "dubai",
       area: { id: area.id, slug: area.slug, name: area.name, lat: null, lng: null },
       category: toLandingCategory(
@@ -220,6 +222,8 @@ describe("the verified share counts tier 2 and up, and nothing lower", () => {
             slug: true,
             name: true,
             parentId: true,
+            pluralHuman: true,
+            servicesLandingOpenedAt: true,
             ...CATEGORY_RULES_SELECT,
             parent: { select: { slug: true, name: true } },
           },

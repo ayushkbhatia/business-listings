@@ -115,6 +115,7 @@ export function ClaimPrompt({
       </h2>
       <p className="mt-2 text-caption leading-relaxed text-body">
         {t("landing.claim_body", {
+          count: unclaimed,
           listings: formatCount(listings),
           unclaimed: formatCount(unclaimed),
         })}

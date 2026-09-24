@@ -76,8 +76,23 @@ export function overviewCredentials<T>(
  * so this is null on every live listing, and that is the correct render rather
  * than a gap.
  */
-export function heroCredential<T extends { verified: boolean }>(rows: readonly T[]): T | null {
-  return rows.find((row) => row.verified) ?? null;
+export function heroCredential<T extends { verified: boolean; expiresOn?: Date | null }>(
+  rows: readonly T[],
+  /**
+   * The start of the UAE day. A checked credential whose confirmed date has
+   * passed is not named here — board `6a-s` B4, the rule every badge of a
+   * checked credential follows (`currentCheckedCredential`). The table below
+   * the hero still lists it with its date, which is a true thing to print.
+   */
+  today?: Date,
+): T | null {
+  return (
+    rows.find(
+      (row) =>
+        row.verified &&
+        (today === undefined || !row.expiresOn || row.expiresOn.getTime() >= today.getTime()),
+    ) ?? null
+  );
 }
 
 /* ── Services ────────────────────────────────────────────────────────────── */

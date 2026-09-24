@@ -19,6 +19,7 @@ import {
   scopeCompleteness,
   type RankableService,
 } from "./service-signals";
+import { emiratesReached } from "@/lib/seo/landing/services-coverage";
 
 /**
  * The whole directory, ranked under a pair of vectors, with no query.
@@ -369,9 +370,18 @@ export interface Scope {
  * vector it is not a subset in the same order — coverage match is a yes or no
  * for *this* emirate — so each emirate listing is scored for itself.
  *
- * Membership stays the branch rule on both vectors. It is what the live landing
- * pages filter by (`businessWhere`), and a seller told they rank #3 in Sharjah on
- * a page that does not list them would be told a position nobody can see.
+ * Membership is the rule the live landing page for the scope is served on, so a
+ * seller is never told they rank #3 in Sharjah on a page that does not list them.
+ * On a goods scope that is the branch rule (`supplyWhere`). On a services scope
+ * it is coverage — board `6a-s` B1, which moved the landing page and this
+ * snapshot together, as `12c-s` and `1c-s` left owed: a firm is in the Sharjah
+ * listing when a live service of this trade reaches Sharjah through its
+ * effective coverage (or its default, with no service here), or it has a branch
+ * there. `emiratesReached` is the landing page's own function.
+ *
+ * A firm reaches a services trade through a live service filed under it, not
+ * only through its listed categories — the page lists the audit practice that
+ * publishes a VAT service, and so does its snapshot.
  */
 export function scopesOf(candidates: readonly Candidate[], context: RankingContext): Scope[] {
   const descendants = descendantsIndex(context.kinds);
@@ -379,7 +389,11 @@ export function scopesOf(candidates: readonly Candidate[], context: RankingConte
 
   const byCategory = new Map<string, Candidate[]>();
   for (const candidate of candidates) {
-    for (const categoryId of candidate.categoryIds) {
+    const categoryIds = new Set(candidate.categoryIds);
+    for (const service of candidate.row.services) {
+      if (resolveTradeKind(context.kinds, service.categoryId) === "services") categoryIds.add(service.categoryId);
+    }
+    for (const categoryId of categoryIds) {
       const bucket = byCategory.get(categoryId);
       if (bucket) bucket.push(candidate);
       else byCategory.set(categoryId, [candidate]);
@@ -393,15 +407,40 @@ export function scopesOf(candidates: readonly Candidate[], context: RankingConte
     const vector = ordered[0]?.vector ?? "goods";
     scopes.push({ categoryId, emirate: null, vector, ordered });
 
-    const emirates = new Set(members.flatMap((member) => member.emirates));
+    /*
+       The membership rule follows the trade, not the vector. Until an ops lead
+       publishes a services vector, a services trade still ranks on the goods
+       one — and its landing pages still list by coverage, so its emirate
+       listings here must too.
+    */
+    const tree = new Set(descendants(categoryId));
+    const coverage = resolveTradeKind(context.kinds, categoryId) === "services";
+    const reached = new Map(
+      members.map((member) => [
+        member.id,
+        coverage
+          ? emiratesReached(
+              {
+                primaryCategoryId: member.row.primaryCategoryId,
+                categoryIds: member.row.categories.map((link) => link.categoryId),
+                services: member.row.services,
+                coverageDefault: member.row.coverageDefault,
+                branches: member.row.locations,
+              },
+              tree,
+            )
+          : member.emirates,
+      ]),
+    );
+    const emirates = new Set(members.flatMap((member) => reached.get(member.id) ?? []));
     for (const emirate of emirates) {
       const inEmirate =
         vector === "services"
           ? members
-              .filter((member) => member.emirates.includes(emirate))
+              .filter((member) => (reached.get(member.id) ?? []).includes(emirate))
               .map((member) => placeIn(member, categoryId, emirate, ctx))
               .sort(byScore)
-          : ordered.filter((placed) => placed.candidate.emirates.includes(emirate));
+          : ordered.filter((placed) => (reached.get(placed.candidate.id) ?? []).includes(emirate));
       if (inEmirate.length === 0) continue;
       scopes.push({ categoryId, emirate, vector, ordered: inEmirate });
     }

@@ -14,6 +14,16 @@ import type { BlendedTab } from "./query";
  * amount could arrive in.
  */
 
+/**
+ * One checked credential, as a badge prints it — board `1c-s` B7 and `6a-s`
+ * D-REG: the credential's name and the number the register confirmed.
+ */
+export interface CheckedCredentialView {
+  kind: string;
+  /** The registry number, where one was checked — `FTA agent 20034512`. */
+  identifier: string | null;
+}
+
 /** What every row states about the firm behind it. */
 export interface ResultFirmFacts {
   businessSlug: string;
@@ -27,8 +37,11 @@ export interface ResultFirmFacts {
   replyMs: number | null;
   verificationTier: number;
   verifiedAt: string | null;
-  /** Register-checked credential kinds only — `1c-s` B7. */
-  checkedCredentials: readonly string[];
+  /**
+   * Register-checked credentials only, and not lapsed — `1c-s` B7, `6a-s` B4.
+   * Never a claim: a claim is on the storefront's table, in its own words.
+   */
+  checkedCredentials: readonly CheckedCredentialView[];
 }
 
 export interface ServiceResultView extends ResultFirmFacts {
@@ -101,6 +114,51 @@ export interface ProductResultView {
 }
 
 export type BlendedResultView = ServiceResultView | SupplierResultView | ProductResultView;
+
+/**
+ * Board `6a-s` — one firm on a services landing page.
+ *
+ * The supplier row's facts (`ResultFirmFacts`: the tier badge, the checked
+ * credentials with their numbers, the reply time) plus the three things a
+ * landing page says that a search row does not:
+ *
+ *  - **how the firm reaches the place** — an office there, cover from
+ *    elsewhere, or both. The board's premise, stated per row: *"the firms below
+ *    are not all physically in the district — they cover it."*
+ *  - **the chips the services vocabulary sets** — fee basis, delivered where,
+ *    and the sector or free-zone scope — off the firm's lead service in this
+ *    trade (`B5`). No amount: a service has a basis, not a number.
+ *  - **the services it offers in this trade**, which is what put it here.
+ *
+ * `place` on the facts is null here: the office line carries the firm's place,
+ * once, beside what it covers.
+ */
+export interface CoverageFirmView extends ResultFirmFacts {
+  id: string;
+  /** The firm's trade code — `LogoTile`'s honest stand-in where there is no logo. */
+  categoryCode: string;
+  /** The firm's own description, where it wrote one. */
+  summary: string | null;
+  /** Fee basis, delivered where, sector or free-zone scope — the filled ones, worded. */
+  chips: readonly string[];
+  /** Live services in this trade, the ones reaching the place first. */
+  services: readonly { name: string; href: string }[];
+  /** How many more live services in this trade the row does not name. */
+  moreServices: number;
+  /** "Deira, Dubai" — the first published branch, or null for a firm with none. */
+  office: string | null;
+  /** Coverage reaches the page's place — not only an office sitting in it. */
+  covers: boolean;
+  coverageHref: string;
+  claimed: boolean;
+  /** Sells work — decides *Fee on enquiry*, as on the supplier row. */
+  sellsWork: boolean;
+  /** Null for an unclaimed listing: nobody is behind it to answer. */
+  enquireHref: string | null;
+}
+
+/** How many of a firm's services in the trade a landing row names. */
+export const COVERAGE_SERVICES_NAMED = 2;
 
 /** How many service names a supplier row prints before "+ N more". */
 export const BUSINESS_SERVICES_NAMED = 2;

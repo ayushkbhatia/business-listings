@@ -23,7 +23,10 @@ import {
    the old rule while the area pages under them published on the new one: a URL
    in the sitemap that the route 404s.
 */
-import { CATEGORY_RULES_SELECT, thresholdsFor } from "@/lib/taxonomy/service";
+import { CATEGORY_RULES_SELECT, loadTradeKinds, thresholdsFor } from "@/lib/taxonomy/service";
+import { resolveTradeKind } from "@/lib/taxonomy/trade-kind";
+import { coverageGrid, loadCoverageFirms, placeKey } from "@/lib/seo/landing/services-supply";
+import type { Emirate } from "@/lib/db/generated/enums";
 import {
   landingState,
   refreshFreshness,
@@ -161,7 +164,7 @@ interface SupplyRow {
 const DAY_MS = 86_400_000;
 
 export async function emirateMatrix(now = new Date()): Promise<MatrixRow[]> {
-  const [sectors, rows, pages, demand] = await Promise.all([
+  const [sectors, rows, pages, demand, kinds, children] = await Promise.all([
     prisma.category.findMany({
       where: { parentId: null },
       select: {
@@ -169,6 +172,7 @@ export async function emirateMatrix(now = new Date()): Promise<MatrixRow[]> {
         slug: true,
         name: true,
         code: true,
+        servicesLandingOpenedAt: true,
         ...CATEGORY_RULES_SELECT,
       },
     }),
@@ -227,7 +231,37 @@ export async function emirateMatrix(now = new Date()): Promise<MatrixRow[]> {
       where: { areaId: null },
       select: { categoryId: true, emirate: true, monthlySearches: true, capturedAt: true },
     }),
+    loadTradeKinds(),
+    prisma.category.findMany({
+      where: { parentId: { not: null } },
+      select: { id: true, parentId: true },
+    }),
   ]);
+
+  /*
+     Board `6a-s` B1 — a sector sold by the job is counted by coverage.
+
+     Three of the thirteen sectors resolve to `services` (facilities
+     management, legal and audit, logistics), and a firm in one of them works
+     in an emirate without a branch there. Their cells are counted by
+     `coverageGrid`, the function the page itself is gated on, from one load of
+     their firms: the matrix's one-round-trip rule bent by exactly one read.
+  */
+  const servicesSectors = sectors.filter((sector) => resolveTradeKind(kinds, sector.id) === "services");
+  const treeOf = (sectorId: string) => [
+    sectorId,
+    ...children.filter((child) => child.parentId === sectorId).map((child) => child.id),
+  ];
+  const servicesTrades = servicesSectors.map((sector) => ({ categoryId: sector.id, categoryIds: treeOf(sector.id) }));
+  const servicesGrid =
+    servicesTrades.length > 0
+      ? coverageGrid(
+          await loadCoverageFirms(servicesTrades.flatMap((trade) => trade.categoryIds)),
+          servicesTrades,
+          MATRIX_EMIRATES.map((emirate) => ({ emirate: emirate as Emirate, areaId: null })),
+          now,
+        )
+      : new Map();
 
   const pageFor = new Map(
     pages.map((page) => [`${page.categoryId}:${page.emirate}`, page]),
@@ -248,9 +282,16 @@ export async function emirateMatrix(now = new Date()): Promise<MatrixRow[]> {
     .map((sector) => {
       const perEmirate = bySector.get(sector.id) ?? new Map();
       const thresholds = thresholdsFor(sector);
+      const services = resolveTradeKind(kinds, sector.id) === "services";
+      const templateOpen = !services || sector.servicesLandingOpenedAt !== null;
 
       const cells = MATRIX_EMIRATES.map((emirate) => {
-        const found = perEmirate.get(emirate) ?? { listings: 0, verified: 0 };
+        const cell = services
+          ? servicesGrid.get(`${sector.id}:${placeKey({ emirate: emirate as Emirate, areaId: null })}`)
+          : undefined;
+        const found = services
+          ? { listings: cell?.listings ?? 0, verified: cell?.verified ?? 0 }
+          : (perEmirate.get(emirate) ?? { listings: 0, verified: 0 });
         const page = pageFor.get(`${sector.id}:${emirate}`);
         const searches = demandFor.get(`${sector.id}:${emirate}`)?.monthlySearches;
         const input = {
@@ -282,10 +323,13 @@ export async function emirateMatrix(now = new Date()): Promise<MatrixRow[]> {
              If these two ever disagree the sitemap contains a URL that 404s.
           */
           live:
+            templateOpen &&
             page?.publishedAt != null &&
             page.heldAt == null &&
-            (hold.publishable ||
-              (withinGrace && hold.failures.every((f) => f.reason === "listings"))),
+            // `isSupply`, as `landingState` has it: the window covers the
+            // verified share as well as the count. "listings" alone kept a page
+            // the route serves out of the sitemap.
+            (hold.publishable || (withinGrace && hold.failures.every(isSupply))),
         };
       });
 
@@ -319,12 +363,93 @@ export async function emirateMatrix(now = new Date()): Promise<MatrixRow[]> {
 export async function liveEmiratePages(
   now = new Date(),
 ): Promise<{ emirate: string; categorySlug: string }[]> {
-  const matrix = await emirateMatrix(now);
-  return matrix.flatMap((row) =>
-    row.cells
-      .filter((cell) => cell.live)
-      .map((cell) => ({ emirate: cell.emirate, categorySlug: row.slug })),
+  const [sectors, trades] = await Promise.all([emirateMatrix(now), servicesTradeRows(now)]);
+  return [...sectors, ...trades].flatMap((row) =>
+    row.cells.filter((cell) => cell.live).map((cell) => ({ emirate: cell.emirate, categorySlug: row.slug })),
   );
+}
+
+/** A services trade's row in the index matrix, drawn beneath its sector's. */
+export interface TradeMatrixRow extends MatrixRow {
+  /**
+   * The top of its tree, not its parent. The taxonomy is two deep today and the
+   * table has a row per sector; a trade filed a level further down still has
+   * to find a row to sit under, or it is the orphan this function exists to
+   * prevent.
+   */
+  sectorId: string;
+}
+
+/**
+ * Board `6a-s` D-EMI — the emirate class below sector level, which exists only
+ * for a trade sold by the job (*VAT consultants in Dubai*), as rows for the
+ * index matrix.
+ *
+ * Board 6c's matrix is sectors by emirates, and `/categories` is the crawlable
+ * spine that links every emirate page. A services trade's emirate page would
+ * otherwise be linked only from its own area pages' breadcrumbs — and where it
+ * is the only page in its trade, which `6a-s` Q1 expects to be common, from
+ * nothing at all. So a trade with a live emirate page gets a row of its own
+ * under its sector, with the same seven cells, and `liveEmiratePages` reads
+ * these rows as well as the sectors': the anchors on the index and the URLs in
+ * the sitemap stay one set by construction.
+ *
+ * Only trades with a cell live somewhere have a row. A row with nothing live
+ * links nowhere, and the index does not list trades by the job for their own
+ * sake — the sector blocks above it already do that.
+ *
+ * Every cell is asked the question the route asks — `landingState` through
+ * `emirateCategoryState` — so a count here is the page's count and a link is a
+ * page that serves. These trades are few: a row needs a published page, and a
+ * page needs somebody to have written its copy.
+ */
+export async function servicesTradeRows(now = new Date()): Promise<TradeMatrixRow[]> {
+  const published = await prisma.emiratePage.findMany({
+    where: { publishedAt: { not: null }, category: { parentId: { not: null } } },
+    select: {
+      category: { select: { id: true, parentId: true, slug: true, name: true, code: true, publishThreshold: true } },
+    },
+    distinct: ["categoryId"],
+    orderBy: { categoryId: "asc" },
+  });
+  if (published.length === 0) return [];
+
+  const parents = new Map(
+    (await prisma.category.findMany({ select: { id: true, parentId: true } })).map((row) => [row.id, row.parentId]),
+  );
+  const sectorOf = (id: string) => {
+    let at = id;
+    // Bounded by the tree's size, so a cycle stops rather than spins.
+    for (let step = 0; step <= parents.size; step += 1) {
+      const parent = parents.get(at);
+      if (!parent) return at;
+      at = parent;
+    }
+    return at;
+  };
+
+  const rows: TradeMatrixRow[] = [];
+  for (const { category } of published) {
+    const cells: MatrixCell[] = [];
+    for (const emirate of MATRIX_EMIRATES) {
+      // Null for a goods subcategory, which has no emirate scope: no row.
+      const state = await emirateCategoryState(emirate, category.id, now);
+      if (!state) break;
+      cells.push({ emirate, listings: state.listings, need: state.need, live: state.live });
+    }
+    if (cells.length !== MATRIX_EMIRATES.length || !cells.some((cell) => cell.live)) continue;
+    rows.push({
+      id: category.id,
+      sectorId: sectorOf(category.id),
+      slug: category.slug,
+      name: category.name,
+      code: category.code,
+      listings: cells.reduce((total, cell) => total + cell.listings, 0),
+      publishThreshold: category.publishThreshold,
+      cells,
+    });
+  }
+  return rows.sort((a, b) => b.listings - a.listings || a.name.localeCompare(b.name));
 }
 
 /** The one place the URL shape is written down. */
@@ -340,7 +465,7 @@ export function emiratePagePath(emirate: string, categorySlug: string): string {
 // a state change somebody should be able to look up in six months.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type EmiratePageRefusal = "not_found" | "below_floors" | "not_published" | "held";
+export type EmiratePageRefusal = "not_found" | "below_floors" | "not_published" | "held" | "template_closed";
 
 export type EmiratePageResult<T = unknown> =
   | ({ ok: true } & T)
@@ -458,6 +583,20 @@ export async function publishEmiratePage(
       ok: false,
       error: "held",
       message: `Held by a person on ${state.heldAt.toISOString().slice(0, 10)}: ${state.heldReason ?? ""}`.trim(),
+    };
+  }
+
+  /*
+     Board `6a-s` — the services template is rolled out one trade at a time,
+     and a trade it has not been opened for cannot have a live page. Checked
+     before the floors: a page that clears every one of them still would not
+     be served, and "publishes at 60" would be the wrong reason to give.
+  */
+  if (!state.templateOpen) {
+    return {
+      ok: false,
+      error: "template_closed",
+      message: `The services landing template is not open for ${state.scope.category.name} yet. Open it on the trade's page in /admin/categories, with a reason, and this page can be published.`,
     };
   }
 
@@ -629,7 +768,63 @@ export async function emiratePageRows(now = new Date()): Promise<EmiratePageRow[
     }
   }
 
+  /*
+     Board `6a-s` D-EMI: a services trade's emirate pages, below sector level.
+     Listed where there is supply to write for or a page already exists —
+     crossing all 169 services trades with the seven emirates would put a
+     thousand empty rows on a screen whose job is the few that matter.
+  */
+  for (const pair of await servicesSubcategoryPairs(now)) {
+    const state = await emirateCategoryState(pair.emirate, pair.categoryId, now);
+    if (!state) continue;
+    rows.push({
+      ...state,
+      categoryName: pair.categoryName,
+      categorySlug: pair.categorySlug,
+      path: emiratePagePath(pair.emirate, pair.categorySlug),
+    });
+  }
+
   // Closest to publishing first: that is the order somebody working the list
   // wants, rather than alphabetical.
   return rows.sort((a, b) => b.listings - a.listings);
+}
+
+/** The (emirate, services subcategory) pairs worth a row: supply, or a page. */
+async function servicesSubcategoryPairs(
+  now: Date,
+): Promise<{ emirate: string; categoryId: string; categoryName: string; categorySlug: string }[]> {
+  const [kinds, subcategories, pages] = await Promise.all([
+    loadTradeKinds(),
+    prisma.category.findMany({
+      where: { parentId: { not: null } },
+      select: { id: true, name: true, slug: true },
+      orderBy: { id: "asc" },
+    }),
+    prisma.emiratePage.findMany({
+      where: { category: { parentId: { not: null } } },
+      select: { emirate: true, categoryId: true },
+    }),
+  ]);
+  const services = subcategories.filter((category) => resolveTradeKind(kinds, category.id) === "services");
+  if (services.length === 0) return [];
+
+  const trades = services.map((category) => ({ categoryId: category.id, categoryIds: [category.id] }));
+  const grid = coverageGrid(
+    await loadCoverageFirms(trades.map((trade) => trade.categoryId)),
+    trades,
+    MATRIX_EMIRATES.map((emirate) => ({ emirate: emirate as Emirate, areaId: null })),
+    now,
+  );
+  const authored = new Set(pages.map((page) => `${page.categoryId}:${page.emirate}`));
+
+  const out: { emirate: string; categoryId: string; categoryName: string; categorySlug: string }[] = [];
+  for (const category of services) {
+    for (const emirate of MATRIX_EMIRATES) {
+      const supplied = grid.has(`${category.id}:${placeKey({ emirate: emirate as Emirate, areaId: null })}`);
+      if (!supplied && !authored.has(`${category.id}:${emirate}`)) continue;
+      out.push({ emirate, categoryId: category.id, categoryName: category.name, categorySlug: category.slug });
+    }
+  }
+  return out;
 }

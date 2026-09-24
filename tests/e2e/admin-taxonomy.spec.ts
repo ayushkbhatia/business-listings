@@ -255,3 +255,124 @@ test.describe.serial("board 4d — one category's life on the screen", () => {
     await expect(page.getByText(`No category name, address or synonym matches “${second}”.`)).toBeVisible();
   });
 });
+
+test.describe.serial("board 6a-s — a services trade's landing-page wording", () => {
+  /*
+     On a subcategory this file adds under the services sector and removes at
+     the end. The seeded VAT trade is the one the public landing spec reads, and
+     a panel test that opened or closed its template would take four live pages
+     down under it.
+  */
+  const id = stamp();
+  const name = `E2E services wording ${id}`;
+  const PANEL = "Services landing pages";
+
+  async function openCategory(page: Page) {
+    await openTree(page);
+    await tree(page).getByRole("searchbox", { name: "Search the tree" }).fill(name);
+    await tree(page).getByRole("link", { name: new RegExp(`^${name}`) }).click();
+    await expect(page.getByRole("region", { name })).toBeVisible();
+    return page.getByRole("region", { name: PANEL });
+  }
+
+  test("draws the panel for a trade sold by the job, and not for one sold by the item", async ({ page }) => {
+    await openTree(page);
+    await page.getByRole("button", { name: "Add category" }).click();
+    const dialog = page.getByRole("dialog", { name: "Add a category" });
+    await dialog.getByRole("combobox", { name: "Sector" }).selectOption({ label: "Legal, audit & business setup" });
+    await dialog.getByRole("textbox", { name: "Display name" }).fill(name);
+    await dialog.getByRole("textbox", { name: "Two-letter code" }).fill("EW");
+    await dialog.getByRole("textbox", { name: "Reason" }).fill("End-to-end test category.");
+    await dialog.getByRole("button", { name: "Add subcategory" }).click();
+    await expect(page.getByRole("region", { name })).toBeVisible();
+
+    const panel = page.getByRole("region", { name: PANEL });
+    await expect(panel).toBeVisible();
+    // A new trade starts closed: no page in it can be live until someone opens it.
+    await expect(panel.getByRole("switch", { name: "Services template" })).toHaveAttribute("aria-checked", "false");
+    await expect(panel.getByText("Closed — no landing page in this trade can be live")).toBeVisible();
+
+    // The editor with the panel drawn, at the viewport the acceptance job uses.
+    await page.setViewportSize({ width: 1280, height: 720 });
+    const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
+    expect(results.violations.map((violation) => violation.id)).toEqual([]);
+
+    await tree(page).getByRole("searchbox", { name: "Search the tree" }).fill("HVAC & ventilation");
+    await tree(page).getByRole("link", { name: /^HVAC & ventilation/ }).first().click();
+    await expect(page.getByRole("region", { name: "HVAC & ventilation" })).toBeVisible();
+    await expect(page.getByRole("region", { name: PANEL })).toHaveCount(0);
+  });
+
+  test("saves the noun, the credential and a question with one reason, and says what is missing first", async ({
+    page,
+  }) => {
+    const panel = await openCategory(page);
+
+    await panel.getByRole("textbox", { name: "What the pages call the firms" }).fill("E2E  advisers");
+    // The H1 example reads the noun as the page will print it.
+    await expect(panel.getByText("The H1 opens with it: “E2E advisers in Business Bay, Dubai”.", { exact: false })).toBeVisible();
+
+    // Adding a row is not a mistake, so it raises no error by itself.
+    await panel.getByRole("button", { name: "Add a question" }).click();
+    await expect(panel.getByRole("alert")).toHaveCount(0);
+
+    // Half a row is. Save says so, under the field, instead of sitting greyed out.
+    await panel.getByRole("textbox", { name: "Question 1" }).fill("Which free zones do you register companies in?");
+    await panel.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(panel.getByText("Every question needs its reason, and every reason its question.")).toBeVisible();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+
+    await panel
+      .getByRole("textbox", { name: "Why it earns its place" })
+      .fill("A firm that registers in one zone only will steer you to it.");
+    await panel.getByRole("combobox", { name: "Credential the pages count" }).selectOption({ label: "FTA registered tax agent" });
+    await panel.getByRole("button", { name: "Save", exact: true }).click();
+
+    const dialog = page.getByRole("dialog", { name: `Save the landing-page wording for ${name}` });
+    await dialog.getByRole("textbox", { name: "Reason" }).fill("Wording for the end-to-end trade.");
+    await dialog.getByRole("button", { name: "Save wording" }).click();
+    await expect(panel.getByText("Saved. Every landing page in this trade now reads it.")).toBeVisible();
+    // Nothing left unsaved: the record holds what the fields now say.
+    await expect(panel.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+
+    await page.reload();
+    const reloaded = page.getByRole("region", { name: PANEL });
+    await expect(reloaded.getByRole("textbox", { name: "What the pages call the firms" })).toHaveValue("E2E advisers");
+    await expect(reloaded.getByRole("textbox", { name: "Question 1" })).toHaveValue(
+      "Which free zones do you register companies in?",
+    );
+    await expect(reloaded.getByRole("combobox", { name: "Credential the pages count" })).toHaveValue("fta_tax_agent");
+  });
+
+  test("opens the template with a reason, and closes it again", async ({ page }) => {
+    const panel = await openCategory(page);
+    const toggle = panel.getByRole("switch", { name: "Services template" });
+
+    await toggle.click();
+    const open = page.getByRole("dialog", { name: `Open the services template for ${name}?` });
+    await open.getByRole("textbox", { name: "Reason" }).fill("Checking the switch end to end.");
+    await open.getByRole("button", { name: "Open the template" }).click();
+    await expect(panel.getByText(`The services template is open for ${name}.`)).toBeVisible();
+    await expect(toggle).toHaveAttribute("aria-checked", "true");
+    await expect(panel.getByText(/^Open since /)).toBeVisible();
+
+    await toggle.click();
+    const close = page.getByRole("dialog", { name: `Close the services template for ${name}?` });
+    // Nothing is published in a trade this file made a minute ago, and the
+    // dialog says that rather than "0 published pages".
+    await expect(close.getByText(/^No page in this trade is published/)).toBeVisible();
+    await close.getByRole("textbox", { name: "Reason" }).fill("Checked; closing it again.");
+    await close.getByRole("button", { name: "Close the template" }).click();
+    await expect(panel.getByText(`The services template is closed for ${name}.`)).toBeVisible();
+    await expect(toggle).toHaveAttribute("aria-checked", "false");
+  });
+
+  test("removes the trade it added", async ({ page }) => {
+    await openCategory(page);
+    await page.getByRole("region", { name }).getByRole("button", { name: "Remove category" }).click();
+    const dialog = page.getByRole("dialog", { name: `Remove ${name}` });
+    await dialog.getByRole("textbox", { name: "Reason" }).fill("End-to-end test finished.");
+    await dialog.getByRole("button", { name: "Remove category" }).click();
+    await expect(page.getByRole("region", { name: "Legal, audit & business setup" })).toBeVisible();
+  });
+});
