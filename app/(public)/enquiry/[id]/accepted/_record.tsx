@@ -10,7 +10,14 @@ import { windowExpired } from "@/lib/enquiry/accepted-record";
 import { formatAED, formatDate, formatPhone } from "@/lib/format";
 import { contractCard } from "@/lib/enquiry/accepted-proposal-words";
 import { t } from "@/lib/i18n";
-import { leadTime, recordSummaryParts, totalLabel, windowLine } from "@/lib/enquiry/accepted-record-words";
+import {
+  leadTime,
+  recordSummaryParts,
+  reviewRefusalWords,
+  totalLabel,
+  windowLine,
+  type ReviewRefusal,
+} from "@/lib/enquiry/accepted-record-words";
 import {
   isAcceptedProposal,
   paymentLine,
@@ -63,7 +70,7 @@ export function AcceptedRecordView({
   record,
   now,
   links,
-  reviewWritable = true,
+  reviewRefusal = null,
   breadcrumb,
   referenceForm,
   reportForm,
@@ -72,11 +79,12 @@ export function AcceptedRecordView({
   now: Date;
   links: AcceptedRecordLinks;
   /**
-   * Build plan 9.4: whether this person holds `review.create`, which
-   * `createReview` asks first. False takes the write button away and says why;
-   * a review already posted can still be read.
+   * Why this reader may not write the review, or null where they may: build
+   * plan 9.4's `review.create`, which `createReview` asks first, or the supplier
+   * being the reader's own business, which `canReview` refuses. Either takes the
+   * write button away and says why; a review already posted can still be read.
    */
-  reviewWritable?: boolean;
+  reviewRefusal?: ReviewRefusal | null;
   /**
    * The page's own chrome, passed in. A breadcrumb is a named `nav` landmark,
    * and the gallery renders this view in several states on one page — where a
@@ -396,13 +404,13 @@ export function AcceptedRecordView({
               {/* §States: once the term has started, coming back is the page's use. */}
               {contractLeads ? contract : null}
               <ProposalCommitmentsCard record={accepted} />
-              <ProposalReviewCard record={accepted} now={now} reviewHref={links.review} writable={reviewWritable} />
+              <ProposalReviewCard record={accepted} now={now} reviewHref={links.review} refusal={reviewRefusal} />
               {contractLeads ? null : contract}
             </>
           ) : (
             <>
               <CommitmentsCard record={record} />
-              <ReviewCard record={record} now={now} reviewHref={links.review} writable={reviewWritable} />
+              <ReviewCard record={record} now={now} reviewHref={links.review} refusal={reviewRefusal} />
             </>
           )}
           <ProblemCard record={record} reportForm={reportForm} />
@@ -515,12 +523,12 @@ function ReviewCard({
   record,
   now,
   reviewHref,
-  writable,
+  refusal,
 }: {
   record: AcceptedRecord;
   now: Date;
   reviewHref: string;
-  writable: boolean;
+  refusal: ReviewRefusal | null;
 }) {
   const { review, supplier } = record;
   // Board 10f: a review is open for REVIEW_WINDOW_DAYS from acceptance. After it
@@ -536,9 +544,9 @@ function ReviewCard({
         <p className="mt-2 text-body-sm text-body">
           {t("accepted.review.closed", { when: formatDate(window.closesOn), days: REVIEW_WINDOW_DAYS })}
         </p>
-      ) : review.kind === "none" && !writable ? (
-        // Build plan 9.4: no button to a form `createReview` would refuse.
-        <p className="mt-2 text-body-sm text-body">{t("reviewwrite.error.not_permitted")}</p>
+      ) : review.kind === "none" && refusal ? (
+        // No button to a form `createReview` would refuse.
+        <p className="mt-2 text-body-sm text-body">{reviewRefusalWords(refusal, supplier.displayName)}</p>
       ) : review.kind === "none" ? (
         <>
           <p className="mt-2 text-body-sm text-body">{t("accepted.review.body")}</p>

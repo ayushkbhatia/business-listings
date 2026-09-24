@@ -34,6 +34,7 @@ import { ContactActions, ContactReveal, RevealNote } from "./ContactReveal";
 import { storefrontContact } from "@/lib/contact/storefront";
 import { ServiceEnquiryForm } from "./ServiceEnquiryForm";
 import { ServiceEnquireDrawer } from "./ServiceEnquireDrawer";
+import { OwnListingNote } from "./_own";
 
 /**
  * Board `1d-s` — the storefront with the catalogue taken out of it.
@@ -69,11 +70,14 @@ type Actor = { id: string } | null;
 export async function ServicesStorefrontPage({
   business,
   actor,
+  own,
   saved,
   requestedService,
 }: {
   business: PublicBusiness;
   actor: Actor;
+  /** The viewer's seat is on this firm's own team: no composer, and no link into one. See `./_own.tsx`. */
+  own: boolean;
   saved: boolean;
   requestedService: string | null;
 }) {
@@ -109,7 +113,7 @@ export async function ServicesStorefrontPage({
       layout="row"
       masked={contact.masked}
       whatsAppHref={contact.whatsAppHref}
-      enquire={toComposer(t("storefront.request_quote"))}
+      enquire={own ? null : toComposer(t("storefront.request_quote"))}
       saveAction={
         <ShortlistButton
           businessId={business.id}
@@ -176,19 +180,23 @@ export async function ServicesStorefrontPage({
             */
             className="order-1 min-w-0 scroll-mt-20 lg:order-none lg:col-start-2 lg:row-start-1"
           >
-            <Card>
-              <h2 className="text-h3 text-brand-ink">{composerTitle}</h2>
-              <div className="mt-2">
-                <ServiceEnquiryForm
-                  businessId={business.id}
-                  businessName={business.displayName}
-                  services={composerOptions(data.services)}
-                  initialService={composerService(data.services, requestedService)}
-                  askForContact={!actor}
-                  responseLine={responseLine}
-                />
-              </div>
-            </Card>
+            {own ? (
+              <OwnListingNote />
+            ) : (
+              <Card>
+                <h2 className="text-h3 text-brand-ink">{composerTitle}</h2>
+                <div className="mt-2">
+                  <ServiceEnquiryForm
+                    businessId={business.id}
+                    businessName={business.displayName}
+                    services={composerOptions(data.services)}
+                    initialService={composerService(data.services, requestedService)}
+                    askForContact={!actor}
+                    responseLine={responseLine}
+                  />
+                </div>
+              </Card>
+            )}
           </div>
 
           <div className="order-2 flex min-w-0 flex-col gap-10 lg:order-none lg:col-start-1 lg:row-span-2 lg:row-start-1">
@@ -225,7 +233,14 @@ export async function ServicesStorefrontPage({
               </section>
             )}
 
-            <ServicesSection business={business} data={data} mode="anchor" signedIn={Boolean(actor)} composerTitle={composerTitle} />
+            <ServicesSection
+              business={business}
+              data={data}
+              mode="anchor"
+              own={own}
+              signedIn={Boolean(actor)}
+              composerTitle={composerTitle}
+            />
 
             <CredentialsSection business={business} data={data} />
 
@@ -293,7 +308,7 @@ export async function ServicesStorefrontPage({
           layout="bar"
           masked={contact.masked}
           whatsAppHref={contact.whatsAppHref}
-          enquire={toComposer(t("listing.enquire"), true)}
+          enquire={own ? null : toComposer(t("listing.enquire"), true)}
         />
         </ContactReveal>
       </div>
@@ -312,12 +327,15 @@ export function ServicesSection({
   business,
   data,
   mode,
+  own = false,
   signedIn,
   composerTitle,
 }: {
   business: PublicBusiness;
   data: ServicesStorefront;
   mode: "anchor" | "drawer";
+  /** The viewer's seat is on this firm's own team: rows carry no enquiry control. See `./_own.tsx`. */
+  own?: boolean;
   signedIn: boolean;
   /** The services half of `section.enquiry.title`, from `pairedCopies()`. */
   composerTitle: string;
@@ -361,22 +379,24 @@ export function ServicesSection({
               <ServiceSummaryCard
                 service={summaryOf(service)}
                 businessSlug={business.slug}
-                {...(mode === "drawer"
-                  ? {
-                      enquire: (
-                        <ServiceEnquireDrawer
-                          businessId={business.id}
-                          businessName={business.displayName}
-                          services={options}
-                          service={service.slug}
-                          serviceName={service.name}
-                          askForContact={!signedIn}
-                          responseLine={replyLine(business.responseTimeMedianMs)}
-                          title={composerTitle}
-                        />
-                      ),
-                    }
-                  : {})}
+                {...(own
+                  ? { enquire: null }
+                  : mode === "drawer"
+                    ? {
+                        enquire: (
+                          <ServiceEnquireDrawer
+                            businessId={business.id}
+                            businessName={business.displayName}
+                            services={options}
+                            service={service.slug}
+                            serviceName={service.name}
+                            askForContact={!signedIn}
+                            responseLine={replyLine(business.responseTimeMedianMs)}
+                            title={composerTitle}
+                          />
+                        ),
+                      }
+                    : {})}
               />
             </li>
           ))}

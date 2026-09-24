@@ -3333,6 +3333,10 @@ export const en = {
   "storefront.answered_unmeasured": "New to the directory — no reply time measured yet",
   /* Both halves of this have to be true, and both are. */
   "storefront.composer_privacy": "No account needed · your number stays hidden until they reply",
+  // In the composer's place, for a seat on the business's own team: no business enquires to itself.
+  "storefront.own.title": "This is your listing",
+  "storefront.own.body": "Buyers send their enquiries from here, and each one reaches your leads inbox. No business can send one to itself, so the form is not shown to your team.",
+  "storefront.own.leads": "Open leads",
 
   /* Board 1f — branches & hours. */
   "branches.title": "{name} branches — {emirates}",
@@ -4303,6 +4307,7 @@ export const en = {
   "rfq.contact_required": "Add a UAE mobile so the quotes can reach you. It looks like 050 641 2288.",
   // Build plan 9.4: §07 gives "Send an enquiry" to buyer and supplier accounts, and a staff role does not carry it.
   "rfq.not_permitted": "This account cannot send enquiries. An enquiry is sent from a buyer or a supplier account.",
+  "rfq.own_business": "Your account is on this supplier's team, and no business can send an enquiry to itself.",
   "rfq.not_permitted.h1": "This account cannot send enquiries",
   "rfq.not_permitted.body": "An enquiry is sent from a buyer or a supplier account, and this account is neither, so the composer is not offered here. Sign in with a buyer account to ask suppliers for quotes.",
 
@@ -4889,6 +4894,7 @@ export const en = {
   "accepted.review.read": "Read your review",
   "accepted.review.held": "Your review of {supplier} is held for moderation and is not public yet.",
   "accepted.review.removed": "Your review of {supplier} was removed by moderation.",
+  "accepted.review.own_business": "Your account is on the {supplier} team, and no supplier can review itself, so there is no review to write here.",
   "accepted.problem.eyebrow": "If something goes wrong",
   "accepted.problem.body": "We never held the money, so there is none for us to return. What we can do is investigate the supplier, act on the listing and the badge, and keep the thread as evidence. Persistent problems cost them their verification.",
   "accepted.problem.outcomes": "Goes to our trust team with the thread. Outcomes: supplier corrects it, content removed, or no action, with a reason either way.",
@@ -5884,6 +5890,7 @@ export const en = {
   "reviewwrite.error.contact_details": "Take out the {kinds}. A review cannot carry contact details.",
   "reviewwrite.error.photos_invalid": "One of the photos could not be checked. Remove it and add it again.",
   "reviewwrite.error.not_permitted": "This account cannot write reviews. A review is written from a buyer or a supplier account.",
+  "reviewwrite.error.own_business": "Your account is on this supplier's team, and no supplier can review itself.",
 
   "reviewwrite.rules.title": "Who can review",
   "reviewwrite.rules.holds": "Yes:",
@@ -5891,6 +5898,7 @@ export const en = {
   "reviewwrite.rule.gate": "An accepted quote, or a confirmed enquiry a supplier replied to on the platform",
   "reviewwrite.rule.one": "One review per enquiry, editable for {days} days",
   "reviewwrite.rule.traceable": "No review without a traceable enquiry — this is the whole reason the ratings mean anything",
+  "reviewwrite.rule.own": "Anyone on the supplier's own team — no supplier reviews itself",
   "reviewwrite.rule.seller": "Sellers cannot delete. They get one public reply.",
 
   "reviewwrite.preview.title": "How it will appear",
@@ -5925,6 +5933,7 @@ export const en = {
   "reviewwrite.other.opens": "Opens {date}",
   "reviewwrite.other.reviewed": "Reviewed {date}",
   "reviewwrite.other.closed": "Closed {date}",
+  "reviewwrite.other.own_business": "Your own business",
   "reviewwrite.other.no_reply": "No supplier replied",
   "reviewwrite.other.not_eligible": "Not eligible",
 
@@ -5937,6 +5946,9 @@ export const en = {
   "reviewwrite.refused.not_permitted.h1": "This account cannot write reviews",
   "reviewwrite.refused.not_permitted.title": "Reviews come from buyer and supplier accounts",
   "reviewwrite.refused.not_permitted.body": "This account is neither, so the review form for {ref} is not offered.",
+  "reviewwrite.refused.own_business.h1": "This account cannot review {supplier}",
+  "reviewwrite.refused.own_business.title": "Your account is on the {supplier} team",
+  "reviewwrite.refused.own_business.body": "No supplier can review itself, from any seat on its team. Reviews of {supplier} come from buyers outside it, so the form for {ref} is not offered.",
   "reviewwrite.choose.title": "Which supplier are you reviewing?",
   "reviewwrite.choose.body": { one: "{count} supplier replied to {ref}. An enquiry carries one review, about one of them.", other: "{count} suppliers replied to {ref}. An enquiry carries one review, about one of them." },
   "reviewwrite.choose.pick": "Review this supplier",

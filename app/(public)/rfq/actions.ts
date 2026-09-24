@@ -4,13 +4,12 @@ import { redirect } from "next/navigation";
 import { getActor } from "@/lib/auth/session";
 import { PermissionError } from "@/lib/auth/errors";
 import { readAttribution } from "@/lib/campaign/cookie";
-import { createEnquiry, findFanoutCandidates, descendantsOf } from "@/lib/enquiry/service";
-import { selectRecipients } from "@/lib/enquiry/fanout";
+import { createEnquiry } from "@/lib/enquiry/service";
 import { resendSourceIdFor } from "@/lib/enquiry/resend";
 import { prisma } from "@/lib/db/client";
-import { formatDuration } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import type { RecipientPreview } from "@/components/domain";
+import { previewRecipientsFor, type RecipientPreviewInput } from "./preview";
 
 /**
  * Sending an enquiry.
@@ -84,7 +83,9 @@ export async function sendEnquiry(input: SendEnquiryInput): Promise<SendEnquiryR
           ? t("rfq.recipients_none")
           : result.error === "no_buyer"
             ? t("rfq.contact_required")
-            : t("rfq.lines_required"),
+            : result.error === "own_business"
+              ? t("rfq.own_business")
+              : t("rfq.lines_required"),
     };
   }
 
@@ -96,56 +97,13 @@ export async function sendEnquiry(input: SendEnquiryInput): Promise<SendEnquiryR
 }
 
 /**
- * Who the enquiry would go to, for the wizard's third step.
- *
- * The same matcher the send uses, so the preview and the delivery cannot
- * disagree — including about a seller at their monthly cap, who is absent from
- * both rather than shown and then skipped.
+ * Who the enquiry would go to, for the wizard's third step — see
+ * `previewRecipientsFor`. The session is read here, because only a request has
+ * one: the viewer's own business is never previewed as a recipient.
  */
-export async function previewRecipients(input: {
-  categoryId: string;
-  emirate: string | null;
-  lineCount: number;
-  fanoutTo: number;
-  pinnedBusinessIds?: string[];
-}): Promise<RecipientPreview[]> {
-  const request = {
-    categoryId: input.categoryId,
-    // The preview has to widen the same way the send does, or the composer
-    // shows five suppliers and the enquiry reaches a different five.
-    categoryIds: await descendantsOf(input.categoryId),
-    emirate: input.emirate,
-    lineCount: Math.max(1, input.lineCount),
-    want: input.fanoutTo,
-    ...(input.pinnedBusinessIds ? { pinned: input.pinnedBusinessIds } : {}),
-  };
-
-  const candidates = await findFanoutCandidates(request);
-  const { recipients } = selectRecipients(candidates, request);
-  if (recipients.length === 0) return [];
-
-  const areas = await prisma.business.findMany({
-    where: { id: { in: recipients.map((r) => r.businessId) } },
-    select: {
-      id: true,
-      locations: { where: { published: true }, select: { area: { select: { name: true } } }, take: 1 },
-    },
-  });
-  const areaById = new Map(areas.map((a) => [a.id, a.locations[0]?.area?.name ?? null]));
-  const pinned = new Set(input.pinnedBusinessIds ?? []);
-
-  return recipients.map((r) => ({
-    businessId: r.businessId,
-    displayName: r.displayName,
-    areaName: areaById.get(r.businessId) ?? null,
-    verificationTier: r.verificationTier,
-    // Measured, never claimed. Unmeasured says so rather than guessing.
-    responseLabel:
-      r.responseTimeMedianMs === null
-        ? t("response.unmeasured")
-        : t("response.median", { duration: formatDuration(r.responseTimeMedianMs) }),
-    ...(pinned.has(r.businessId) ? { pinned: true } : {}),
-  }));
+export async function previewRecipients(input: RecipientPreviewInput): Promise<RecipientPreview[]> {
+  const actor = await getActor();
+  return previewRecipientsFor(input, { excludeBusinessId: actor?.businessId ?? null });
 }
 
 /**

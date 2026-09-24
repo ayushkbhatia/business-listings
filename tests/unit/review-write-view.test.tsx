@@ -31,6 +31,7 @@ import {
   anonymousReview,
   notEligible,
   notPermitted,
+  ownBusiness,
   reviewedHeld,
   reviewedReplied,
   windowClosed,
@@ -241,6 +242,22 @@ describe("the other states", () => {
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(t("reviewwrite.refused.not_permitted.h1"));
     expect(screen.getByText(t("reviewwrite.other.not_permitted"))).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Back to ENQ-8811" })).toHaveAttribute("href", "/enquiry/ENQ-8811?t=tok");
+    await expectNoAxeViolations(container);
+  });
+
+  it("the buyer's own business: names it, says the rule, never a form — and the rail says it too", async () => {
+    // `canReview` refuses it: no supplier reviews itself, from any seat on its team.
+    const { container } = renderPage(ownBusiness());
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(screen.queryByRole("radio")).toBeNull();
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+      t("reviewwrite.refused.own_business.h1", { supplier: "Al Waha Industrial Supplies" }),
+    );
+    expect(screen.getByText(t("reviewwrite.refused.own_business.title", { supplier: "Al Waha Industrial Supplies" }))).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Back to ENQ-8820" })).toHaveAttribute("href", "/enquiry/ENQ-8820?t=tok");
+    expect(screen.getByText(t("reviewwrite.other.own_business"))).toBeInTheDocument();
+    // The rule is on the rail of every state, not only this one.
+    expect(screen.getByText(t("reviewwrite.rule.own"))).toBeInTheDocument();
     await expectNoAxeViolations(container);
   });
 

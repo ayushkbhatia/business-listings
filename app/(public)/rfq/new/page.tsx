@@ -130,7 +130,13 @@ export default async function RfqNewPage({
         select: { id: true, primaryCategoryId: true },
       })
     : [];
-  const pinnedIds = pinnedBusinesses.map((b) => b.id);
+  /*
+     Never the viewer's own business. No business sends an enquiry to itself —
+     `createEnquiry` refuses one that names it — so a `?to=` of their own listing
+     still says which trade they meant, and pins nobody.
+  */
+  const own = actor?.businessId ?? null;
+  const pinnedIds = pinnedBusinesses.filter((b) => b.id !== own).map((b) => b.id);
 
   /*
      The category, in order of how much it is actually known:
@@ -176,10 +182,12 @@ export default async function RfqNewPage({
      One named firm only. The comparison tray's `?to=a,b,c` is a goods mechanic
      with a checkbox per supplier; a brief names one firm or lets us pick.
   */
-  const firm =
+  const named =
     pinnedSlugs.length === 1 || one("supplier")
       ? await pinnedFirm(pinnedSlugs[0] ?? one("supplier")!)
       : null;
+  // Their own firm is not a firm to brief: the brief goes to the trade instead.
+  const firm = named && named.id !== own ? named : null;
   const service =
     firm && one("service")
       ? await prisma.service.findFirst({
@@ -194,7 +202,8 @@ export default async function RfqNewPage({
       (await briefWanted({
         categoryId: trade.id,
         kindParam: one("kind") ?? null,
-        pinnedSellsKind: firm?.sellsKind ?? null,
+        // What the link named decides the composer, even where it names nobody to send to.
+        pinnedSellsKind: named?.sellsKind ?? null,
       })))
   ) {
     return (
@@ -302,7 +311,7 @@ export default async function RfqNewPage({
      A seeded product pins its own seller. The buyer came from that page, so
      unticking them should be a decision rather than a default.
   */
-  const seededSellerIds = [...new Set(seededProducts.map((p) => p.business.id))];
+  const seededSellerIds = [...new Set(seededProducts.map((p) => p.business.id))].filter((id) => id !== own);
   const pinned = [...new Set([...pinnedIds, ...seededSellerIds])].slice(0, 8);
 
   /*

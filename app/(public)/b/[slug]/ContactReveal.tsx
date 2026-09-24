@@ -242,7 +242,10 @@ export interface ContactActionsProps {
   masked: string | null;
   /** `https://wa.me/…`, or null where the seller published no WhatsApp. */
   whatsAppHref: string | null;
-  /** The composer's trigger, rendered by the server page. */
+  /**
+   * The composer's trigger, rendered by the server page. Null for a seat on this
+   * business's own team, which is offered no composer — see `./_own.tsx`.
+   */
   enquire: React.ReactNode;
   /** The save control. Row layout only. */
   saveAction?: React.ReactNode;
@@ -321,11 +324,13 @@ export function ContactActions({ masked, whatsAppHref, enquire, saveAction, layo
     );
 
   if (layout === "bar") {
+    // Nothing to put in it — no channel, and no composer for the business's own team — is no bar.
+    if (!whatsapp && !landline && !enquire) return null;
     return (
       <div data-action-bar="" className="fixed inset-x-0 bottom-0 z-40 flex gap-2 border-t border-line bg-card p-2 md:hidden">
         {whatsapp && <div className="flex-1">{whatsapp}</div>}
         {landline && <div className="flex-1">{landline}</div>}
-        <div className="flex-1">{enquire}</div>
+        {enquire && <div className="flex-1">{enquire}</div>}
       </div>
     );
   }

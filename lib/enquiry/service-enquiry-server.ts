@@ -85,7 +85,8 @@ export type SendServiceEnquiryResult =
       claimToken: string | null;
     }
   | { ok: false; refusals: ServiceEnquiryRefusal[] }
-  | { ok: false; error: "not_found" | "no_recipients" | "no_buyer" };
+  /** `own_business`: the firm is the one the sender's own seat is on — see `createEnquiry`. */
+  | { ok: false; error: "not_found" | "no_recipients" | "no_buyer" | "own_business" };
 
 export async function sendServiceEnquiry(
   input: SendServiceEnquiryInput,

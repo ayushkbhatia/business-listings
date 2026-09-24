@@ -59,3 +59,17 @@ export function leadTime(days: number | null): string {
   if (days === 0) return t("accepted.lead.ex_stock");
   return t("accepted.lead.days", { count: days });
 }
+
+/**
+ * Why the review card offers no button, where the reason is the reader rather
+ * than the calendar. Build plan 9.4's matrix refuses the person
+ * (`not_permitted`); `canReview` refuses the subject when it is the business the
+ * reader's own seat is on (`own_business`) — no supplier reviews itself.
+ */
+export type ReviewRefusal = "not_permitted" | "own_business";
+
+export function reviewRefusalWords(refusal: ReviewRefusal, supplierName: string): string {
+  return refusal === "own_business"
+    ? t("accepted.review.own_business", { supplier: supplierName })
+    : t("reviewwrite.error.not_permitted");
+}

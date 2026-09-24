@@ -355,6 +355,15 @@ export type Dimension = (typeof DIMENSIONS)[number];
 export interface EnquiryForReview {
   id: string;
   buyerId: string;
+  /**
+   * The business the buyer's own account sits on — `User.businessId` — or null.
+   *
+   * Read with the enquiry, and it is the reviewer's: `canReview` answers nobody
+   * but `buyerId`, so once it is asking about a subject this is the team the
+   * person writing is on. Required rather than optional like the facts below,
+   * because a fixture that leaves it out is a gate that forgot the rule.
+   */
+  buyerBusinessId: string | null;
   /** Set on acceptance. The strongest rung, and the default subject. */
   contactReleasedToBusinessId: string | null;
   contactReleasedAt: Date | null;
@@ -398,7 +407,27 @@ export type EligibilityVerdict =
    * Board 10f: the window has passed. The form is absent, not disabled, and
    * the page states the day it closed and what it ran from.
    */
-  | { ok: false; reason: "window_closed"; businessId: string; window: ReviewWindow };
+  | { ok: false; reason: "window_closed"; businessId: string; window: ReviewWindow }
+  /**
+   * The only supplier this buyer could review here is the one their own account
+   * sits on. Carries it, so the page can name it by its display name.
+   */
+  | { ok: false; reason: "own_business"; businessId: string };
+
+/**
+ * The suppliers that replied to this enquiry and that its buyer may review: all
+ * of them but the buyer's own business.
+ *
+ * One list for the gate, the page that asks which supplier, and the count the
+ * other-enquiries rail prints — a choice offered on one of them and refused by
+ * another is the page offering a form the service refuses.
+ */
+export function reviewableReplies(
+  enquiry: Pick<EnquiryForReview, "repliedBusinessIds" | "buyerBusinessId">,
+): readonly string[] {
+  const own = enquiry.buyerBusinessId;
+  return own ? enquiry.repliedBusinessIds.filter((id) => id !== own) : enquiry.repliedBusinessIds;
+}
 
 /**
  * May this buyer review this enquiry, and about which supplier?
@@ -418,6 +447,18 @@ export type EligibilityVerdict =
  * its own. So where a fan-out drew replies from several sellers the caller has
  * to name the one being reviewed; naming none is only unambiguous when a quote
  * was accepted, or when exactly one supplier replied.
+ *
+ * **No supplier reviews itself**, from any seat on its team. A seller's account
+ * holds `buyer` too, so its owner could enquire to their own storefront, reply
+ * from the leads inbox — which stamps `firstReplyAt`, the enquiry rung — and
+ * then rate the reply. The accepted records told buyers this could not happen,
+ * and nothing held it. `review.create` cannot see it: that is a question about
+ * the person, and this one is about the subject, like whose enquiry it is.
+ *
+ * So the buyer's own business is taken out before a subject is chosen, not
+ * refused after: an enquiry their team replied to beside one other supplier has
+ * one supplier to review, not two to choose between. Refused as `own_business`
+ * when it was named, or was the only supplier left to review.
  */
 export function canReview(
   buyerId: string,
@@ -430,8 +471,11 @@ export function canReview(
   if (!enquiry || enquiry.buyerId !== buyerId) return { ok: false, reason: "not_your_enquiry" };
   if (enquiry.alreadyReviewed) return { ok: false, reason: "already_reviewed" };
 
-  const accepted = enquiry.contactReleasedToBusinessId;
-  const replied = enquiry.repliedBusinessIds;
+  // Their own business is out of the running before anyone is chosen.
+  const own = enquiry.buyerBusinessId;
+  if (own && businessId === own) return { ok: false, reason: "own_business", businessId: own };
+  const accepted = own && enquiry.contactReleasedToBusinessId === own ? null : enquiry.contactReleasedToBusinessId;
+  const replied = reviewableReplies(enquiry);
   /*
      Board `7c-s` `B10`: *there is nothing to review on day one* of a 24-month
      engagement. The accepted supplier waits for its first cycle, and does not
@@ -465,8 +509,12 @@ export function canReview(
   // Nobody named a supplier. An accepted quote answers it on its own.
   if (accepted) return notYet ?? open(accepted, "accepted_quote");
   if (replied.length === 1) return open(replied[0]!, "verified_enquiry");
-  if (replied.length === 0) return { ok: false, reason: "no_confirmed_enquiry" };
-  return { ok: false, reason: "ambiguous_subject" };
+  if (replied.length > 1) return { ok: false, reason: "ambiguous_subject" };
+  // Nobody left. Where their own team was who engaged, that is the answer rather than "nobody replied".
+  if (own && (enquiry.contactReleasedToBusinessId === own || enquiry.repliedBusinessIds.includes(own))) {
+    return { ok: false, reason: "own_business", businessId: own };
+  }
+  return { ok: false, reason: "no_confirmed_enquiry" };
 }
 
 /**

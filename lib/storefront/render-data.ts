@@ -108,6 +108,9 @@ export interface SectionProps {
    * A node rather than a handler, because the sections are server-rendered and
    * the composer is a client island — a function cannot cross that boundary,
    * which four boards in this repo have each proved once.
+   *
+   * Null for none, where undefined falls back to `enquireHref`: a seat on the
+   * business's own team is offered no composer (`app/(public)/b/[slug]/_own.tsx`).
    */
   enquireSlot?: React.ReactNode;
 }

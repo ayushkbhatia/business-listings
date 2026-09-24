@@ -15,11 +15,9 @@ import {
 } from "@/lib/db/queries";
 import { formatCount, formatRating } from "@/lib/format";
 import { t } from "@/lib/i18n";
-import { canReview } from "@/lib/reviews/eligibility";
-import { enquiryForReview } from "@/lib/reviews/service";
+import { writeReviewLinkFor } from "@/lib/reviews/write-server";
 import { getActor } from "@/lib/auth/session";
 import { mayWriteReview } from "@/lib/auth/guards";
-import { prisma } from "@/lib/db/client";
 import { absoluteUrl } from "@/lib/site";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { JsonLd } from "@/app/(public)/_json-ld";
@@ -142,9 +140,12 @@ export default async function ReviewsPage({ params, searchParams }: Params) {
      enquiry, so a seat it refuses — a staff role with no buyer one — gets no
      button, the same absence an ineligible visitor gets. A signed-in session is
      never provisional, so the session actor answers what the record would.
+
+     Then the gate, which is also what takes the button off a supplier's own
+     reviews page for everyone on its team: no supplier reviews itself.
   */
   const writeReviewHref =
-    actor && mayWriteReview(actor) ? await eligibleEnquiry(actor.id, business.id) : null;
+    actor && mayWriteReview(actor) ? await writeReviewLinkFor(actor.id, business.id) : null;
 
   const shown = board.reviews.length;
   const remaining = Math.max(0, board.total - shown);
@@ -329,49 +330,6 @@ export default async function ReviewsPage({ params, searchParams }: Params) {
       </div>
     </PublicShell>
   );
-}
-
-/**
- * The link *Write a review* opens, for a buyer who may write one about this
- * business — or null, and the button is absent.
- *
- * Deliberately narrow: signed in, their own enquiry, this supplier, and the
- * gate still open on it. `canReview` is asked rather than reimplemented, so the
- * button and the page it opens cannot disagree about who is eligible.
- *
- * Board 10f: the page it opens resolves its own subject, and on a fan-out that
- * several suppliers replied to it cannot tell which one the buyer means. This
- * page already knows — it is the supplier's own — so it says so with `&about=`,
- * which nothing produced before (build plan 3.5). The reference rather than the
- * id, because that is what the buyer reads on the page it opens.
- */
-async function eligibleEnquiry(buyerId: string | null, businessId: string): Promise<string | null> {
-  if (!buyerId) return null;
-
-  const candidates = await prisma.enquiry.findMany({
-    where: {
-      buyerId,
-      review: null,
-      OR: [
-        { contactReleasedToBusinessId: businessId },
-        { recipients: { some: { businessId, firstReplyAt: { not: null } } } },
-      ],
-    },
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-    take: 5,
-    select: { id: true, ref: true },
-  });
-
-  const now = new Date();
-  for (const candidate of candidates) {
-    const gate = await enquiryForReview(candidate.id);
-    // The window counts too: a link to a form that has closed is the disabled
-    // button this page promises never to show.
-    if (canReview(buyerId, gate, businessId, now).ok) {
-      return `/review/new?${new URLSearchParams({ enq: candidate.ref, about: businessId }).toString()}`;
-    }
-  }
-  return null;
 }
 
 /**

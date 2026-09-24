@@ -432,7 +432,9 @@ export const CAPABILITIES = {
      answer, written where the rest of the matrix is.
 
      Each is also about one enquiry, and must be the actor's own. That is not a
-     role question: `acceptQuote` and `canReview` check it against the row.
+     role question: `acceptQuote` and `canReview` check it against the row. Nor
+     is which business it may be about: `createEnquiry` and `canReview` refuse
+     the one the actor's own seat is on, read from `User.businessId`.
   */
   "enquiry.create": {
     roles: ENQUIRY_SENDERS,
@@ -453,7 +455,7 @@ export const CAPABILITIES = {
     provisional: true,
     audited: false,
     source: "inferred",
-    why: "Not a row in §07. Board 10f's gate — a confirmed enquiry or an accepted quote, one review per enquiry, inside its window — is what makes a rating worth reading, and `canReview` decides it from the row. This decides who may be let near the gate at all: whoever may send the enquiry, and the provisional identity, which reaches the form through its claim token. It was buyer-only, and asking would have refused most of the buyers the gate exists for. A supplier that bought from another is that supplier's customer; a competitor posing as one is the `no_traceable_enquiry` dispute ground, not a role.",
+    why: "Not a row in §07. Board 10f's gate — a confirmed enquiry or an accepted quote, one review per enquiry, inside its window — is what makes a rating worth reading, and `canReview` decides it from the row. This decides who may be let near the gate at all: whoever may send the enquiry, and the provisional identity, which reaches the form through its claim token. It was buyer-only, and asking would have refused most of the buyers the gate exists for. A supplier that bought from another is that supplier's customer; a competitor posing as one is the `no_traceable_enquiry` dispute ground, not a role; and no supplier reviews itself, which `canReview` refuses from the reviewer's own `businessId` — a subject rule, like whose enquiry it is.",
   },
 } as const satisfies Record<string, CapabilitySpec>;
 

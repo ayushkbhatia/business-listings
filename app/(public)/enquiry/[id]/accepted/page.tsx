@@ -9,6 +9,9 @@ import { ViewerNav } from "@/app/(public)/_account-menu";
 import { resolveBuyerId, trackingTokenFor } from "../../_buyer";
 import { actorFor } from "@/lib/auth/actor";
 import { mayWriteReview } from "@/lib/auth/guards";
+import type { ReviewRefusal } from "@/lib/enquiry/accepted-record-words";
+import { canReview } from "@/lib/reviews/eligibility";
+import { enquiryForReview } from "@/lib/reviews/service";
 import { AcceptedRecordView } from "./_record";
 import { ReferenceForm } from "./ReferenceForm";
 import { ReportForm } from "./ReportForm";
@@ -89,13 +92,26 @@ export default async function AcceptedPage({
 
   const base = `/enquiry/${record.enquiryId}`;
 
+  /*
+     Build plan 9.4 asks `review.create` of the person, of the record, as
+     `createReview` does. Then the gate, about this supplier: it refuses the
+     business this account's own seat is on, and asking it rather than comparing
+     ids here keeps the card and the form it links to on one rule.
+  */
+  const now = new Date();
+  const verdict = canReview(buyerId, await enquiryForReview(record.enquiryId), record.supplier.id, now);
+  const reviewRefusal: ReviewRefusal | null = !mayWriteReview(await actorFor(buyerId))
+    ? "not_permitted"
+    : !verdict.ok && verdict.reason === "own_business"
+      ? "own_business"
+      : null;
+
   return (
     <PublicShell nav={<ViewerNav />} footer={<DirectoryFooter />}>
       <AcceptedRecordView
         record={record}
-        now={new Date()}
-        // Build plan 9.4: asked the way `createReview` asks it, of the record.
-        reviewWritable={mayWriteReview(await actorFor(buyerId))}
+        now={now}
+        reviewRefusal={reviewRefusal}
         breadcrumb={
           <Breadcrumb
             label={t("accepted.breadcrumb")}

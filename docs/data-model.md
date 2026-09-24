@@ -424,6 +424,13 @@ without. So the two provenance rungs (`accepted_quote`, `verified_enquiry`) are 
 ladder, and a third "no enquiry on record" state is unreachable rather than merely unbuilt.
 Board 11c `Q1` asked this as a blocking question; the schema had already answered it.
 
+Nor can a review be about the reviewer's own business. `canReview` reads the buyer's
+`User.businessId` with the enquiry and never takes it as a subject, and `createEnquiry` keeps the
+sender's own business off the recipients in the first place — an enquiry to yourself, answered from
+your own leads inbox, was the one way to earn a rung without a second party. Enquiries and reviews
+written before 24 Sep 2026 are not rewritten: the gate refuses a new review on them, and a review
+already posted comes down only as any other does, through `removeReview`.
+
 **A dispute is not a `SupplierReport`.** A report is filed *against* a business, by a buyer or
 by the platform, carries a `subjectField` and the value it objects to for the flag, and
 resolves to one of three outcomes. A dispute is filed *by* the business, about a review, on one

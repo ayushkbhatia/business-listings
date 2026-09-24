@@ -46,8 +46,10 @@ export interface ProductCardProps {
   /**
    * Where the enquiry affordance goes, carrying this product as a line. Absent
    * leaves it disabled — the state handoff 1 shipped and the gallery shows.
+   * Null draws none: a seat on the seller's own team, which is offered no
+   * composer (`app/(public)/b/[slug]/_own.tsx`) and no promise of one either.
    */
-  enquireHref?: string;
+  enquireHref?: string | null;
   /**
    * The watch control for an out-of-stock line, rendered by the caller.
    *
@@ -203,7 +205,7 @@ export function ProductCard({
               {t("product.notify")}
             </Button>
           )
-        ) : enquireHref ? (
+        ) : enquireHref === null ? null : enquireHref ? (
           // See the note on the same anchor in ListingCard: one uncached,
           // noindex, force-dynamic URL per supplier, linked from every card.
           <a

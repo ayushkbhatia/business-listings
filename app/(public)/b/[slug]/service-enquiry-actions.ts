@@ -70,7 +70,9 @@ export async function submitServiceEnquiry(
         ? t("rfq.contact_required")
         : result.error === "no_recipients"
           ? t("storefront_services.composer.undelivered")
-          : t("storefront_services.composer.gone"),
+          : result.error === "own_business"
+            ? t("rfq.own_business")
+            : t("storefront_services.composer.gone"),
   };
 }
 

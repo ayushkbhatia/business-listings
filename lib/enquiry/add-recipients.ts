@@ -20,7 +20,8 @@ import { additionalWanted, enquiryTrade } from "./tracking";
  * **The same matcher as the first send, never a looser one.** The trade the
  * enquiry was for, its emirate and its lines go back through
  * `findFanoutCandidates` and `selectRecipients` with every current recipient
- * excluded. Whoever that returns is offered; if it returns nobody, nobody is
+ * excluded, and the buyer's own business, which the first send never reaches
+ * either. Whoever that returns is offered; if it returns nobody, nobody is
  * added and the page says so. Padding to reach two is the one thing the
  * fan-out has refused since board 1h.
  *
@@ -68,6 +69,8 @@ async function loadEnquiry(buyerId: string, refOrId: string) {
       emirate: true,
       closesAt: true,
       contactReleasedToBusinessId: true,
+      // The team the buyer sits on, which is never a recipient — see `createEnquiry`.
+      buyer: { select: { businessId: true } },
       serviceBrief: { select: { enquiryId: true } },
       lines: {
         select: { qty: true, targetUnitPriceAed: true, product: { select: { categoryId: true } } },
@@ -126,7 +129,13 @@ async function matchAdditional(enquiry: LoadedEnquiry, now: Date) {
     want: wanted,
   };
   const candidates = await findFanoutCandidates(
-    { ...request, excludeBusinessIds: enquiry.recipients.map((r) => r.businessId) },
+    {
+      ...request,
+      excludeBusinessIds: [
+        ...enquiry.recipients.map((r) => r.businessId),
+        ...(enquiry.buyer.businessId ? [enquiry.buyer.businessId] : []),
+      ],
+    },
     now,
   );
   return { wanted, selection: selectRecipients(candidates, request) };

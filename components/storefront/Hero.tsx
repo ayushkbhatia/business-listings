@@ -45,18 +45,23 @@ export function Hero({ data, enquireHref, enquireSlot }: SectionProps) {
             {data.business.description}
           </p>
         )}
-        <div className="mt-5">
-          {/*
-               Composes in place. Board 1h criterion 3: a storefront must not
-               link to the fan-out — the buyer has already chosen a supplier,
-               and sending them to a picker undoes that.
-            */}
+        {/*
+             Composes in place. Board 1h criterion 3: a storefront must not
+             link to the fan-out — the buyer has already chosen a supplier,
+             and sending them to a picker undoes that.
+
+             None at all for the business's own team: no business enquires to
+             itself, and the fallback link would be an enquiry verb over nothing.
+          */}
+        {enquireSlot !== null && (
+          <div className="mt-5">
             {enquireSlot ?? (
               <a className={buttonClassName({ variant: "primary" })} href={enquireHref}>
                 {data.copy["section.hero.enquire"]}
               </a>
             )}
-        </div>
+          </div>
+        )}
       </div>
     </section>
   );

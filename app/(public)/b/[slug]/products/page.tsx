@@ -23,6 +23,7 @@ import { CatalogueRail, CatalogueToolbar } from "./_rail";
 import { NotifyButton } from "./NotifyButton";
 import { watchProductAction } from "./actions";
 import { EnquireButton } from "../EnquireDrawer";
+import { isOwnListing } from "../_own";
 import { CatalogueFilters } from "./CatalogueFilters";
 import { JsonLd } from "@/app/(public)/_json-ld";
 import { MEDIA_BUCKET, publicUrl } from "@/lib/storage";
@@ -127,6 +128,8 @@ export default async function CataloguePage({ params, searchParams }: Params) {
     getActor(),
   ]);
   const fields = template?.fields ?? [];
+  // A seat on this seller's own team is offered no composer. See `../_own.tsx`.
+  const own = isOwnListing(actor, business.id);
 
   /*
      Criterion 9: a seller with no catalogue has no Products tab at all, and
@@ -282,17 +285,19 @@ export default async function CataloguePage({ params, searchParams }: Params) {
                sends one enquiry to one seller, which is a different mechanic
                from the fan-out however similar the button looks.
             */}
-            <EnquireButton
-              businessId={business.id}
-              businessSlug={business.slug}
-              displayName={business.displayName}
-              categoryId={business.primaryCategoryId}
-              emirates={EMIRATES}
-              signedIn={Boolean(actor)}
-              triggerLabel={t("catalogue.price_list")}
-              initialRequirementSeed={t("catalogue.price_list")}
-              recipient={storefrontRecipient}
-            />
+            {own ? null : (
+              <EnquireButton
+                businessId={business.id}
+                businessSlug={business.slug}
+                displayName={business.displayName}
+                categoryId={business.primaryCategoryId}
+                emirates={EMIRATES}
+                signedIn={Boolean(actor)}
+                triggerLabel={t("catalogue.price_list")}
+                initialRequirementSeed={t("catalogue.price_list")}
+                recipient={storefrontRecipient}
+              />
+            )}
           </div>
 
           <div className="mt-5 grid gap-[var(--gutter)] lg:grid-cols-[13.5rem_minmax(0,1fr)]">
@@ -361,21 +366,24 @@ export default async function CataloguePage({ params, searchParams }: Params) {
                     >
                       {t("results.clear_all")}
                     </Link>
-                    <EnquireButton
-                      businessId={business.id}
-                      businessSlug={business.slug}
-                      displayName={business.displayName}
-                      categoryId={business.primaryCategoryId}
-                      emirates={EMIRATES}
-                      signedIn={Boolean(actor)}
-                      triggerLabel={t("product.enquire")}
-                      recipient={storefrontRecipient}
-                    />
+                    {own ? null : (
+                      <EnquireButton
+                        businessId={business.id}
+                        businessSlug={business.slug}
+                        displayName={business.displayName}
+                        categoryId={business.primaryCategoryId}
+                        emirates={EMIRATES}
+                        signedIn={Boolean(actor)}
+                        triggerLabel={t("product.enquire")}
+                        recipient={storefrontRecipient}
+                      />
+                    )}
                   </div>
                 </div>
               ) : (
                 <>
                   <ProductTray
+                    enquirable={!own}
                     businessId={business.id}
                     businessSlug={business.slug}
                     displayName={business.displayName}

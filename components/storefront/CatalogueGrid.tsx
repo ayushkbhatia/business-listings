@@ -12,8 +12,14 @@ import type { SectionProps } from "@/lib/storefront/render-data";
 export function CatalogueGrid({
   data,
   enquireHref,
+  enquirable = true,
   compare,
 }: SectionProps & {
+  /**
+   * False for a seat on the seller's own team: the cards carry no enquiry
+   * control (`app/(public)/b/[slug]/_own.tsx`). The grid stays.
+   */
+  enquirable?: boolean;
   /**
    * Board `10d` — each product's comparison tick, keyed by product id and
    * rendered by the page. The tick posts to an app route and reads the buyer's
@@ -42,7 +48,7 @@ export function CatalogueGrid({
           {data.products.map((product) => (
             <ProductCard
               key={product.id}
-              enquireHref={enquireHref}
+              enquireHref={enquirable ? enquireHref : null}
               compareAction={compare?.[product.id]}
               product={{
                 slug: product.slug,

@@ -34,10 +34,13 @@ function Identity({
   masked,
   revealed = false,
   whatsapp = true,
+  own = false,
 }: {
   masked: string | null;
   revealed?: boolean;
   whatsapp?: boolean;
+  /** A seat on the listing's own team: no composer trigger (`app/(public)/b/[slug]/_own.tsx`). */
+  own?: boolean;
 }) {
   return (
     <ContactReveal
@@ -59,7 +62,7 @@ function Identity({
             layout="row"
             masked={masked}
             whatsAppHref={whatsapp ? WHATSAPP_HREF : null}
-            enquire={<Button size="md">{t("storefront.request_quote")}</Button>}
+            enquire={own ? null : <Button size="md">{t("storefront.request_quote")}</Button>}
           />
         </div>
         <RevealNote />
@@ -108,6 +111,9 @@ export function ContactRevealGallery() {
       </States>
       <States label="no landline, no whatsapp" stack>
         <Identity masked={null} whatsapp={false} />
+      </States>
+      <States label="the listing's own team · no Request a quote — no business enquires to itself" stack>
+        <Identity masked={MASKED} own />
       </States>
       <States label="branches tab · masked, revealed">
         <ContactReveal

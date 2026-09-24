@@ -51,6 +51,8 @@ export type OtherEnquiryState =
   | { kind: "not_yet_open"; opensOn: Date; supplierName: string }
   | { kind: "reviewed"; on: Date; supplierName: string }
   | { kind: "closed"; closedOn: Date; supplierName: string }
+  /** The only supplier left to review is the one the buyer's own account sits on. */
+  | { kind: "own_business"; supplierName: string }
   | { kind: "no_reply" };
 
 export interface OtherEnquiry {
@@ -88,6 +90,17 @@ export type ReviewWriteData =
       /** `not_permitted` is build plan 9.4: the person, not the enquiry, is refused. */
       reason: "not_your_enquiry" | "no_confirmed_enquiry" | "not_permitted";
       enquiry: { id: string; ref: string; headline: string } | null;
+      others: OtherEnquiries;
+    }
+  | {
+      /**
+       * The subject is the business the buyer's own account sits on, and no
+       * supplier reviews itself. Its own kind rather than a `refused` reason,
+       * because the words name the supplier.
+       */
+      kind: "own_business";
+      enquiry: { id: string; ref: string; headline: string };
+      supplier: ReviewWriteSupplier;
       others: OtherEnquiries;
     }
   | {
@@ -318,6 +331,13 @@ function otherView(row: OtherEnquiry, token: string | null, now: Date): OtherEnq
         state: t("reviewwrite.other.closed", { date: formatDate(state.closedOn) }),
         tone: "muted",
       };
+    case "own_business":
+      return {
+        ...base,
+        meta: meta(state.supplierName),
+        state: t("reviewwrite.other.own_business"),
+        tone: "muted",
+      };
     case "no_reply":
       return {
         ...base,
@@ -334,6 +354,7 @@ export function reviewRules(): RailRule[] {
     { holds: true, text: t("reviewwrite.rule.gate") },
     { holds: true, text: t("reviewwrite.rule.one", { days: EDITABLE_DAYS }) },
     { holds: false, text: t("reviewwrite.rule.traceable") },
+    { holds: false, text: t("reviewwrite.rule.own") },
     { holds: false, text: t("reviewwrite.rule.seller") },
   ];
 }
@@ -426,6 +447,27 @@ export function buildReviewWrite(data: ReviewWriteData, options: BuildOptions): 
             : token
               ? []
               : [{ label: t("reviewwrite.crumb.enquiries"), href: "/account/enquiries" }],
+        },
+      };
+    }
+
+    case "own_business": {
+      const { enquiry, supplier } = data;
+      return {
+        // Like `not_permitted`, about the account — but about this one supplier, by name.
+        title: t("reviewwrite.refused.own_business.h1", { supplier: supplier.displayName }),
+        lede: null,
+        crumbs: crumbs(enquiry, t("reviewwrite.crumb.write")),
+        band: null,
+        job: null,
+        rules: reviewRules(),
+        steps: null,
+        others,
+        body: {
+          kind: "notice",
+          title: t("reviewwrite.refused.own_business.title", { supplier: supplier.displayName }),
+          body: t("reviewwrite.refused.own_business.body", { supplier: supplier.displayName, ref: enquiry.ref }),
+          links: [{ label: t("reviewwrite.back_to", { ref: enquiry.ref }), href: trackingHref(enquiry.ref, token) }],
         },
       };
     }

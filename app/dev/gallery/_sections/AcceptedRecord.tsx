@@ -1,6 +1,7 @@
 import { AcceptedRecordView } from "@/app/(public)/enquiry/[id]/accepted/_record";
 import { Button } from "@/components/primitives";
 import { recordLines, type AcceptedRecord } from "@/lib/enquiry/accepted-record";
+import type { ReviewRefusal } from "@/lib/enquiry/accepted-record-words";
 import { t } from "@/lib/i18n";
 import { Section, States } from "../_kit";
 
@@ -69,14 +70,22 @@ const TYPICAL: AcceptedRecord = {
   report: { kind: "none" },
 };
 
-function Record({ record, now = NOW, reviewWritable = true }: { record: AcceptedRecord; now?: Date; reviewWritable?: boolean }) {
+function Record({
+  record,
+  now = NOW,
+  reviewRefusal = null,
+}: {
+  record: AcceptedRecord;
+  now?: Date;
+  reviewRefusal?: ReviewRefusal | null;
+}) {
   return (
     <div className="w-full rounded-card border border-line bg-paper">
       <AcceptedRecordView
         record={record}
         now={now}
         links={LINKS}
-        reviewWritable={reviewWritable}
+        reviewRefusal={reviewRefusal}
         breadcrumb={null}
         referenceForm={
           record.buyerReference ? (
@@ -141,7 +150,11 @@ export function AcceptedRecordGallery() {
       </States>
 
       <States label="account cannot write reviews · staff role, no buyer role (build plan 9.4)" stack>
-        <Record record={TYPICAL} reviewWritable={false} />
+        <Record record={TYPICAL} reviewRefusal="not_permitted" />
+      </States>
+
+      <States label="accepted supplier is the reader's own business · no supplier reviews itself" stack>
+        <Record record={TYPICAL} reviewRefusal="own_business" />
       </States>
 
       <States label="review held · report resolved" stack>

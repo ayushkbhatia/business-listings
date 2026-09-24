@@ -2,6 +2,7 @@ import "server-only";
 import { resendSourceIdFor } from "./resend";
 import type { Emirate, EngagementType } from "@/lib/db/generated/client";
 import { prisma } from "@/lib/db/client";
+import { actorFor } from "@/lib/auth/actor";
 import type { Attribution } from "@/lib/campaign/attribution";
 import { DOCUMENT_BUCKET } from "@/lib/storage";
 import { effectiveCoverage } from "@/lib/locations/service-coverage";
@@ -80,6 +81,12 @@ export interface BriefMatchRequest {
   /** `emirate` once the buyer has widened an area that found nobody. */
   scope: "area" | "emirate";
   engagement: EngagementType | null;
+  /**
+   * The business the sender's own seat is on, where the sender is known. Never
+   * a candidate: no business sends a brief to itself (see `createEnquiry`), and
+   * out of the pool it takes no place under the cap and no name in the preview.
+   */
+  excludeBusinessId?: string | null;
 }
 
 /**
@@ -117,6 +124,7 @@ export async function findBriefCandidates(
 
   const businesses = await prisma.business.findMany({
     where: {
+      ...(request.excludeBusinessId ? { id: { not: request.excludeBusinessId } } : {}),
       suspendedAt: null,
       publishedAt: { not: null },
       // Somebody is behind it to write a proposal.
@@ -361,7 +369,8 @@ export type SendServiceBriefResult =
       claimToken: string | null;
     }
   | { ok: false; refusals: BriefRefusal[] }
-  | { ok: false; error: "not_found" | "no_recipients" | "no_buyer" };
+  /** `own_business`: the firm named is the one the sender's own seat is on — see `createEnquiry`. */
+  | { ok: false; error: "not_found" | "no_recipients" | "no_buyer" | "own_business" };
 
 export async function sendServiceBrief(
   input: SendServiceBriefInput,
@@ -422,6 +431,12 @@ export async function sendServiceBrief(
         })
       : null;
 
+  /*
+     The sender's own business is never a candidate. A signed-out sender is not
+     known until `createEnquiry` resolves their number, and it filters then; a
+     firm they named is refused there, not substituted.
+  */
+  const ownBusinessId = context.buyerId ? ((await actorFor(context.buyerId)).businessId ?? null) : null;
   const selection = firm
     ? await pinnedSelection(firm.id, now)
     : await matchBrief(
@@ -430,6 +445,7 @@ export async function sendServiceBrief(
           site: brief.site,
           scope: input.widen ? "emirate" : "area",
           engagement: brief.engagement,
+          excludeBusinessId: ownBusinessId,
         },
         now,
       );

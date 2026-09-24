@@ -12,6 +12,7 @@ import {
   ServiceEnquiryComposer,
   type ServiceEnquiryOption,
 } from "@/components/domain/ServiceEnquiryComposer";
+import { OwnListingNote } from "@/app/(public)/b/[slug]/_own";
 
 /**
  * Board `1d-s` — the storefront of a firm that sells work, in every state its
@@ -126,6 +127,20 @@ export function ServicesStorefrontGallery() {
             <ServiceSummaryCard
               businessSlug={SLUG}
               service={{ slug: "bookkeeping", name: "Monthly bookkeeping", chips: [], deliverable: null }}
+            />
+          </div>
+        </States>
+        <States label="the firm's own team · no enquiry control — no business enquires to itself">
+          <div className="grid w-full gap-4 md:grid-cols-2">
+            <ServiceSummaryCard
+              businessSlug={SLUG}
+              enquire={null}
+              service={{
+                slug: "statutory-audit",
+                name: "Statutory audit",
+                chips: ["Annual", "3–4 weeks", "Fixed fee"],
+                deliverable: "Signed report and management letter, IFRS or IFRS for SMEs.",
+              }}
             />
           </div>
         </States>
@@ -319,6 +334,11 @@ export function ServicesStorefrontGallery() {
               responseLine="Typically replies in about 2 h during business hours."
               busy
             />
+          </div>
+        </States>
+        <States label="the firm's own team · no composer — no business enquires to itself" stack>
+          <div className="w-full max-w-md">
+            <OwnListingNote />
           </div>
         </States>
       </Section>
