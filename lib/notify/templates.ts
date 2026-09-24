@@ -4,6 +4,7 @@ import "@/lib/audit/prisma-writer";
 import { staffMutation } from "@/lib/audit/staff-mutation";
 import { assertCan } from "@/lib/auth/can";
 import type { Actor } from "@/lib/auth/roles";
+import { NotificationEvent as EVENTS_THIS_BUILD_READS } from "@/lib/db/generated/enums";
 import type { NotificationChannel, NotificationEvent } from "@/lib/db/generated/enums";
 import { absoluteUrl, siteUrl } from "@/lib/site";
 import { CHANNELS, draftProblems, type DraftInput, type TemplateRefusal } from "./draft";
@@ -139,10 +140,20 @@ const key = (event: string, channel: string) => `${event}.${channel}`;
  */
 export async function templateBoard(now: Date = new Date()): Promise<TemplateBoard> {
   const since = new Date(now.getTime() - WINDOW_DAYS * DAY);
+  /*
+     Only the events this build's client can read. A board that adds an event
+     applies its enum value and its templates before the merge that sends them
+     (`docs/deployments.md` § Ordering), and the deployed client cannot
+     deserialize a row carrying a value its schema lacks — Prisma refuses the
+     whole read (*Value 'quote_declined' not found in enum*), and this board
+     500s until the new code is live. Scoped in the query, rows the running
+     code cannot send stay off the board until the deploy that can.
+  */
+  const known = { in: Object.values(EVENTS_THIS_BUILD_READS) };
 
   const [rows, grouped, orphaned] = await Promise.all([
     prisma.notificationTemplate.findMany({
-      where: { locale: LOCALE },
+      where: { locale: LOCALE, event: known },
       select: { id: true, event: true, channel: true, kind: true, version: true, status: true },
       orderBy: [{ event: "asc" }, { channel: "asc" }, { kind: "asc" }, { version: "desc" }, { id: "asc" }],
     }),
@@ -153,7 +164,7 @@ export async function templateBoard(now: Date = new Date()): Promise<TemplateBoa
     }),
     prisma.notificationDelivery.groupBy({
       by: ["event", "channel"],
-      where: { createdAt: { gte: since }, test: false, templateId: null },
+      where: { createdAt: { gte: since }, test: false, templateId: null, event: known },
       _count: { _all: true },
     }),
   ]);

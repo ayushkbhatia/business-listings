@@ -373,6 +373,19 @@ is `7b`, and it is a tenancy question, not a screen.
   `decided` instead of writing a window onto the record. One seed fixture (ENQ-8846's revision 1)
   and two test helpers wrote the release before the quotes, an order acceptance never produces.
   Migration `20261026090000_quote_fence_7c`.
+  **Board `1n` rebuilt against its own handoff, 24 Sep 2026.** The comparison is priced line by
+  line, keyed on `QuoteLine.enquiryLineId` rather than on descriptions, and a cell counts only at
+  the quantity the buyer asked for. Every line's winner is marked with a word as well as a
+  colour, among the quotes still open. The same Accept sits on every quoted row and opens a sheet
+  naming what accepting releases. The cheapest-per-line card is computed from those marks. It is
+  a figure to negotiate with, because accepting stays one supplier per enquiry (D-SPLIT, the
+  user's call on 24 Sep; splitting an enquiry is a board of its own). A company buyer's row says
+  whether accepting goes for approval, and to whom, from one batched read of `7b`'s rule. The
+  accept now declines the other quotes out loud (`quote_declined`, from `acceptQuote` itself, so
+  the thread and an approval send it too). Also new: *Message all*, posted into each supplier's
+  own thread and never a group; a nudge for a supplier who opened the enquiry and went quiet; a
+  24-hour closing reminder on the sweep; and a CSV export shared with `10d`. Migrations
+  `20261112090000_compare_quotes_events_1n` and `20261112090500_compare_quotes_templates_1n`.
 - [x] **3.5 `10f`** — the storefront computes eligibility for *this* business then links
   `/review/new?enq=` with no `&about=`. `?about=` has zero producers repo-wide.
   *Done 15 Sep 2026:* the storefront's *Write a review* links `?enq=<ref>&about=<business>` and
@@ -738,7 +751,7 @@ the only large piece and the only one selling something it does not deliver.
 | `7b` | Buyer company account | scaffold | medium | A tenant table with no writer: `User.buyerCompanyId` is null for every non-seeded user. | 3.7 |
 | `10e` | Buyer enquiry inbox | built | 14 Sep 2026 | Derived chips and verbs, nudge-all, re-send, saved-search alerts, account menu with sign-out. | 3.2 |
 | `10h` | Negotiation thread | built | — | Built with board `10h`'s handoff (3.3). | 3.3 |
-| `1n` | Compare quotes | partial | small | The tracking page's own Compare button builds a reference the route cannot resolve. | 1.2 / 3.4 |
+| `1n` | Compare quotes | **built** | 24 Sep 2026 | Priced per line on `enquiryLineId`; every winner marked; Accept on every row behind a sheet; the cheapest split is computed and not acceptable (one supplier per enquiry); losers told; message all, nudge, closing reminder, CSV. | 1.2 / 3.4 |
 | `7c` | Accepted quote record | **built** | small | Fenced, and rebuilt against its board-level handoff, 14 Sep 2026. Services variant owed (`7c-s`, see `docs/services-build-plan.md` §6). | 3.4 |
 | `10f` | Write a review — gated | built | small | Board built 15 Sep 2026: window, drafts, photos, edit history, the three label sets made one. Q2–Q5 open. | 3.5 |
 | `13a` → `1d-v` | Contact reveal, in place | built | 15 Sep 2026 | A state of `1d`: masked landline, three-field dialog, `contact_lead` + session-idempotent `contact_reveal`, seller and staff lead lists. Q5 (consent basis, retention) open. | 3.6 |

@@ -152,7 +152,8 @@ export function QuoteComparisonView({
         ) : null}
       </header>
 
-      <div className="space-y-3">
+      {/* Spaced from the sort only when something is said: an empty stack takes no room. */}
+      <div className="space-y-3 [&:not(:empty)]:mb-4">
         {error ? (
           <Alert tone="bad" live="assertive" fix={t("compare_quotes.error_fix")}>
             {error}
@@ -505,7 +506,7 @@ function SellerCell({ row, dim }: { row: QuotedRow | WaitingRow | NoQuoteRow; di
         ))}
       </span>
       {row.kind === "quoted" && row.superseded ? (
-        <span className="mt-1 block text-caption text-warn-ink">
+        <span className={`mt-1 block text-caption ${dim ? "text-body" : "text-warn-ink"}`}>
           {t("compare_quotes.superseded", { revision: row.quote.againstRevision })}
         </span>
       ) : null}
@@ -544,14 +545,14 @@ function QuotedTableRow({
         </td>
       ))}
       <td className={CELL}>
-        <LeadCell days={row.leadTimeDays} neededBy={data.enquiry.neededBy} now={now} />
+        <LeadCell days={row.leadTimeDays} neededBy={data.enquiry.neededBy} now={now} dim={dim} />
       </td>
       <td className={`${CELL} text-right`}>
         <span className={`block whitespace-nowrap text-body tabular-nums ${dim ? "text-body" : "font-medium text-ink"}`}>
           {money(row.totalFils, style)}
         </span>
         {!row.complete ? (
-          <span className="mt-0.5 block text-caption text-warn-ink">
+          <span className={`mt-0.5 block text-caption ${dim ? "text-body" : "text-warn-ink"}`}>
             {t("compare_quotes.total.partial", { quoted: row.quotedLines, total: row.totalLines })}
           </span>
         ) : null}
@@ -601,7 +602,7 @@ function PriceCell({ cell, line, style, dim }: { cell: Cell; line: RequestedLine
       {cell.winner ? <span className="sr-only">{t("compare_quotes.cell.lowest")}</span> : null}
       {detail ? <span className="mt-0.5 block text-caption tabular-nums text-body">{detail}</span> : null}
       {!cell.comparable && line.qty !== null ? (
-        <span className="mt-0.5 block text-caption text-warn-ink">
+        <span className={`mt-0.5 block text-caption ${dim ? "text-body" : "text-warn-ink"}`}>
           {cell.qty === null
             ? t("compare_quotes.cell.no_qty", { asked: formatCount(line.qty) })
             : t("compare_quotes.cell.other_qty", { qty: formatCount(cell.qty), asked: formatCount(line.qty) })}
@@ -614,15 +615,18 @@ function PriceCell({ cell, line, style, dim }: { cell: Cell; line: RequestedLine
 /**
  * Flag 6 — the boundary is the buyer's own date. With a needed-by date the
  * colour says whether it lands in time, and a word beside it says the same;
- * with none there is no boundary, and no colour pretends to one.
+ * with none there is no boundary, and no colour pretends to one. A dimmed row
+ * is out of play, so it keeps the words and loses the colour — as its prices
+ * do, and because warn on the dimmed ground is under the contrast floor.
  */
-function LeadCell({ days, neededBy, now }: { days: number | null; neededBy: Date | null; now: Date }) {
+function LeadCell({ days, neededBy, now, dim }: { days: number | null; neededBy: Date | null; now: Date; dim: boolean }) {
   if (days === null) return <span className="text-body-sm text-muted">{t("compare_quotes.lead.not_stated")}</span>;
   const tone = leadTone(days, neededBy, now);
   const label = days === 0 ? t("compare_quotes.lead.ex_stock") : t("compare_quotes.lead.days", { count: days });
+  const colour = dim ? "text-body" : tone === "ok" ? "text-ok-ink" : tone === "late" ? "text-warn-ink" : "text-ink";
   return (
     <span className="block">
-      <span className={`text-body-sm ${tone === "ok" ? "text-ok-ink" : tone === "late" ? "text-warn-ink" : "text-ink"}`}>
+      <span className={`text-body-sm ${colour}`}>
         {label}
       </span>
       {neededBy && tone !== "none" ? (

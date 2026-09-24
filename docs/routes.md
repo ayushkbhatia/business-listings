@@ -21,6 +21,7 @@ and it is the one that argues back.
 /search?tab=products                    Legacy — resolves to ?kind=products  [10c]
 /compare?p=…                            Products side by side — one trade, ≤4 [10d] built 10d
                                         — no ?p=: the bl_cmp tray; ?diff=1 hides matching rows
+/compare/export?p=…                     The same set as a CSV (route handler)  [10d · 1n] built 1n · noindex
 /b/:slug                                Storefront overview                   [1d]
 /b/:slug (sells work)                   Storefront, catalogue taken out     [1d-s] built h1ds
 /b/:slug (contact revealed)             The landline asked for, in place     [1d-v] built 15 Sep — was 13a, never routed
@@ -40,8 +41,13 @@ and it is the one that argues back.
 /rfq/new?from=:ref                      Send a sent enquiry to more suppliers [1i]  built h1i
 /rfq/new?resend=:ref                    Re-send an expired enquiry            [10e] built 10e
 /enquiry/:id                            Enquiry sent + tracking               [1i]  built h2s3
-/enquiry/:id/compare                    Compare quotes                        [1n]  built h2s3
+/enquiry/:id/compare?sort=total|lead    Compare quotes, priced line by line   [1n]  built h2s3, rebuilt 1n
                                         — an enquiry for work: proposals    [1n-s] built 14 Sep (not /account/rfq/:id)
+                                        — no buyer: sign in, then back here (7a B9), not a 404
+/enquiry/:id/compare/export             The comparison as a CSV (route handler) [1n] built 1n · noindex
+/account/rfq/:id                        Redirect → /enquiry/:id/compare       [1n]  next.config.ts, temporary
+/account/enquiries/:id/compare          Redirect → /enquiry/:id/compare       [1n]  next.config.ts, temporary
+/account/enquiries/:id/accepted         Redirect → /enquiry/:id/accepted      [1n]  next.config.ts, temporary
 /enquiry/:id/accepted                   Accepted quote record · accepted proposal [7c · 7c-s] built h7c, 7c-s
 /enquiry/:id/accepted/pdf               Accepted quote or proposal as a PDF (route handler) [7c · 7c-s] built h7c, 7c-s
 /enquiry/:id/thread/:seller             Negotiation thread                   [10h]  built h2s4
@@ -322,6 +328,38 @@ route. Four things are recorded above and here:
   second one on the plan screen over a different set of businesses; that panel is
   a count and a link. There are still no controls on it: `12i` audits the notices
   and `12j` sanctions a send, and neither is exported.
+
+### Board `1n` note — one enquiry, one namespace, and the handoff's addresses redirect
+
+The `1n` handoff (24 Sep) drew the comparison at `/account/rfq/:id` and linked
+the accepted record from `/account/enquiries/:id/accepted`. Neither was built.
+The tracking page, the thread, `7b`'s accept screen and the accepted record all
+live under `/enquiry/:id`. An enquiry with some of its screens there and some
+under `/account` would be one record at two addresses, and a buyer could bookmark
+it either way. So the comparison stays where `1n-s` put it, and `next.config.ts`
+redirects what the handoff named:
+
+- **`/account/rfq/RFQ-8864` goes to `/enquiry/ENQ-8864/compare`.** The board
+  printed `RFQ-` references, and the platform issues `ENQ-`. The redirect
+  rewrites the prefix, digits only, up to twelve of them. Any other `:id` is
+  passed through unchanged and resolves or 404s like a typed address.
+- **Temporary (307), not permanent.** No external link to the handoff's paths
+  exists yet. A 308 would be cached by every browser that followed one, for a
+  namespace nothing promised.
+- **Sign-in, not a 404, for a visitor with no session and no claim token.** The
+  comparison is the page a quote email links to. A buyer who signed out
+  in between should land on sign-in and come back here (`7a` B9). The redirect
+  says nothing about whether the enquiry exists: an unknown reference and
+  somebody else's enquiry are still the same 404 once someone is signed in. The
+  sibling pages (tracking, thread, accepted) keep their documented 404.
+- **Two CSV exports, one exporter.** `lib/export/comparison-csv.ts` writes both:
+  the goods comparison at `/enquiry/:id/compare/export` and `10d`'s product
+  comparison at `/compare/export`. Each carries a caveat row first (excl. VAT,
+  prices private to the buyer / no prices exist), a BOM so Excel reads Arabic
+  and `×`, and `Cache-Control: private, no-store` with `X-Robots-Tag: noindex`.
+  Neither is a Server Action: a download is a GET a link can make.
+- **`?sort=total|lead`** is the only state in the address. Arrival order is the
+  default and carries no parameter.
 
 ### Board `10d` note — the comparison compares products, and the tray is a cookie
 
