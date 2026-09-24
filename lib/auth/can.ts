@@ -1,4 +1,4 @@
-import { CAPABILITIES, type Capability } from "./capabilities";
+import { CAPABILITIES, type Capability, type CapabilitySpec } from "./capabilities";
 import { PermissionError } from "./errors";
 import type { Actor } from "./roles";
 
@@ -7,7 +7,10 @@ import type { Actor } from "./roles";
  * nothing in a component compares a role string.
  */
 export function can(actor: Actor, capability: Capability): boolean {
-  const spec = CAPABILITIES[capability];
+  const spec: CapabilitySpec = CAPABILITIES[capability];
+  // A number somebody typed holds what the matrix names for it, and no role
+  // it may carry changes that — claiming the identity is what grants a role.
+  if (actor.provisional) return spec.provisional === true;
   return actor.roles.some((role) => (spec.roles as readonly string[]).includes(role));
 }
 

@@ -187,4 +187,15 @@ describe("the comparison", () => {
     const { container } = view();
     await expectNoAxeViolations(container);
   });
+
+  it("offers no accept to an account the service would refuse, keeps the question, and says why", async () => {
+    // Build plan 9.4: `acceptQuote` asks `quote.accept` before it reads the quote.
+    const { container } = render(
+      <ProposalComparisonView comparison={COMPARISON} now={NOW} token="tok" figures={{ areaSqFt: null, visitsPerYear: null }} error={null} acceptAction={noop} mayAccept={false} />,
+    );
+    expect(screen.queryAllByRole("button", { name: /Accept/ })).toHaveLength(0);
+    expect(screen.getAllByRole("link", { name: /^Ask .* a question$/ })).toHaveLength(3);
+    expect(screen.getByText(t("compare.error_not_permitted"))).toBeInTheDocument();
+    await expectNoAxeViolations(container);
+  });
 });

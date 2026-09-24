@@ -1,5 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
+import { actorFor } from "@/lib/auth/actor";
+import { assertCanCreateEnquiry } from "@/lib/auth/guards";
 import { routeLead } from "@/lib/leads/router";
 import { sendAutoReplies } from "@/lib/messaging/auto-reply";
 import { onEnquiryDelivered } from "@/lib/notify/events";
@@ -164,6 +166,10 @@ export async function addSuppliers(
   input: { buyerId: string; refOrId: string; chosenBusinessIds: readonly string[] },
   now: Date = new Date(),
 ): Promise<AddResult> {
+  // Build plan 9.4: sending to two more suppliers is sending the enquiry, and
+  // asks `enquiry.create` the way the first send does. Throws `PermissionError`.
+  assertCanCreateEnquiry(await actorFor(input.buyerId));
+
   if (input.chosenBusinessIds.length === 0) return { ok: false, reason: "none_chosen" };
 
   const enquiry = await loadEnquiry(input.buyerId, input.refOrId);

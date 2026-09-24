@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { acceptQuote } from "@/lib/enquiry/service";
 import { requestApproval } from "@/lib/buyer-company/approvals";
 import { signInHref } from "@/lib/auth/next-path";
+import { PermissionError } from "@/lib/auth/errors";
 import { resolveBuyerId } from "./_buyer";
 
 /**
@@ -29,6 +30,15 @@ function returnPath(enquiryId: string, from: FormDataEntryValue | null): string 
   return `${base}/compare`;
 }
 
+/**
+ * Build plan 9.4: `quote.accept`, refused by the service, as the code the
+ * screens already read refusals by. Anything else is still thrown.
+ */
+function refusedByMatrix(error: unknown): { ok: false; error: "not_permitted" } {
+  if (error instanceof PermissionError) return { ok: false, error: "not_permitted" };
+  throw error;
+}
+
 const COMPANY_REFUSALS: ReadonlySet<string> = new Set([
   "approval_required",
   "po_required",
@@ -48,7 +58,7 @@ export async function acceptQuoteAction(formData: FormData): Promise<void> {
   // page — board 7a `B9`, a sign-in round trip returns to what was in progress.
   if (!buyerId) redirect(signInHref(back));
 
-  const result = await acceptQuote(buyerId, quoteId);
+  const result = await acceptQuote(buyerId, quoteId).catch(refusedByMatrix);
   const carry = typeof token === "string" && token ? `?t=${token}` : "";
 
   /*
@@ -95,8 +105,8 @@ export async function companyAcceptAction(formData: FormData): Promise<void> {
   const buyerId = await resolveBuyerId(null);
   if (!buyerId) redirect(signInHref(here));
 
-  const request = () => requestApproval(buyerId, quoteId, { poNumber, costCode, note });
-  const accept = () => acceptQuote(buyerId, quoteId, new Date(), { poNumber, costCode });
+  const request = () => requestApproval(buyerId, quoteId, { poNumber, costCode, note }).catch(refusedByMatrix);
+  const accept = () => acceptQuote(buyerId, quoteId, new Date(), { poNumber, costCode }).catch(refusedByMatrix);
 
   let outcome: "accepted" | "requested" | { error: string };
   if (intent === "request") {

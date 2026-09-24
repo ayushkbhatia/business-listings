@@ -160,14 +160,24 @@ function View({
   comparison,
   id,
   figures = NO_FIGURES,
+  mayAccept = true,
 }: {
   comparison: ProposalComparison;
   id: string;
   figures?: { areaSqFt: number | null; visitsPerYear: number | null };
+  mayAccept?: boolean;
 }) {
   return (
     <div className="w-full min-w-0">
-      <ProposalComparisonView comparison={comparison} now={NOW} token={null} figures={figures} error={null} idPrefix={id} />
+      <ProposalComparisonView
+        comparison={comparison}
+        now={NOW}
+        token={null}
+        figures={figures}
+        error={null}
+        idPrefix={id}
+        mayAccept={mayAccept}
+      />
     </div>
   );
 }
@@ -243,6 +253,10 @@ export function ProposalComparisonGallery() {
 
       <States label="no replies yet" stack>
         <View id="g1ns-none" comparison={{ ...TYPICAL, columns: [], firstProposalInMs: null }} />
+      </States>
+
+      <States label="account cannot accept · staff role, no buyer role (build plan 9.4)" stack>
+        <View id="g1ns-not-permitted" comparison={TYPICAL} mayAccept={false} />
       </States>
     </Section>
   );

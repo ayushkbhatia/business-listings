@@ -37,10 +37,21 @@ import type { NegotiationLayoutProps, RailRowView } from "./_view";
  */
 export function buildNegotiationView(
   negotiation: Negotiation,
-  context: { now: Date; token: string | null; acceptError: string | null },
+  context: {
+    now: Date;
+    token: string | null;
+    acceptError: string | null;
+    /**
+     * Build plan 9.4: whether this person holds `quote.accept`, which the
+     * service asks before it reads the quote. False offers no accept and says
+     * why; omitted is true, which is every buyer the gallery draws.
+     */
+    mayAccept?: boolean;
+  },
 ): { layout: Omit<NegotiationLayoutProps, "children">; thread: BuyerNegotiationProps } {
   const { enquiry, supplier, record, rail } = negotiation;
   const { now, token } = context;
+  const mayAccept = context.mayAccept ?? true;
   const withToken = (path: string) =>
     token ? `${path}${path.includes("?") ? "&" : "?"}t=${encodeURIComponent(token)}` : path;
   const base = `/enquiry/${encodeURIComponent(enquiry.ref)}`;
@@ -209,6 +220,12 @@ export function buildNegotiationView(
   } else if (offer.kind === "accepted_here") {
     accept = { kind: "record", href: withToken(`${base}/accepted`), label: t("negotiation.accept.view_record") };
   }
+  /*
+     Build plan 9.4: a person the service would refuse is offered no accept of
+     any kind, and the notice below says why. The record of one already made
+     stays — reading it is not accepting — and so does asking for a revision.
+  */
+  if (!mayAccept && accept.kind !== "record") accept = { kind: "none" };
 
   const notice: BuyerNegotiationProps["notice"] =
     offer.kind === "accepted_here"
@@ -250,7 +267,9 @@ export function buildNegotiationView(
                 }
               : record.messages.every((message) => !message.fromSeller) && quotes.length === 0
                 ? { tone: "neutral", text: t("negotiation.notice.no_reply", { supplier: supplier.displayName }) }
-                : null;
+                : !mayAccept && (offer.kind === "offer" || offer.kind === "expired") && !context.acceptError
+                  ? { tone: "neutral", text: t("compare.error_not_permitted") }
+                  : null;
 
   return {
     layout: {

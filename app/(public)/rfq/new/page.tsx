@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { PublicShell } from "@/components/structure";
 import { prisma } from "@/lib/db/client";
 import { getActor } from "@/lib/auth/session";
+import { mayCreateEnquiry } from "@/lib/auth/guards";
 import { signInHref } from "@/lib/auth/next-path";
 import { resendSource, type ResendRefusal } from "@/lib/enquiry/resend";
 import { t } from "@/lib/i18n";
@@ -76,6 +77,16 @@ export default async function RfqNewPage({
   */
   const revise = one("revise");
   if (revise) return <RevisePage refOrId={revise} token={one("t") ?? null} />;
+
+  /*
+     Build plan 9.4. Every arrival below ends in a send — a new enquiry, a
+     re-send, two more suppliers — and the service asks `enquiry.create` before
+     any of them. A signed-in seat the matrix does not let send, a staff role
+     with no buyer or supplier one, is told so here rather than handed a
+     composer whose send is refused. A visitor with no session sends as a
+     provisional identity, which may; see `mayCreateEnquiry`.
+  */
+  if (!mayCreateEnquiry(actor)) return <SendRefused />;
 
   /*
      Board 1i's *Add two more suppliers*, which linked here and landed on a blank
@@ -367,6 +378,18 @@ function ResendRefused({ refusal }: { refusal: ResendRefusal }) {
             {label}
           </Link>
         </p>
+      </div>
+    </PublicShell>
+  );
+}
+
+/** Build plan 9.4: the composer, not offered to a seat that cannot send. */
+function SendRefused() {
+  return (
+    <PublicShell nav={<ViewerNav />}>
+      <div className="mx-auto w-full max-w-3xl px-5 py-10">
+        <h1 className="font-serif text-h1-serif text-ink">{t("rfq.not_permitted.h1")}</h1>
+        <p className="mt-4 max-w-[var(--measure-prose)] text-body text-body">{t("rfq.not_permitted.body")}</p>
       </div>
     </PublicShell>
   );

@@ -71,8 +71,11 @@ beforeAll(async () => {
 
   const company = await prisma.buyerCompany.create({ data: { name: "Marina Facilities LLC (10f test)" } });
   companyId = company.id;
+  // `buyer`, the role every claimed account holds. This was `[]` — an account
+  // sign-up cannot produce — until build plan 9.4 put `review.create` in front
+  // of every write here and the fixture stopped passing for the wrong reason.
   const buyer = await prisma.user.create({
-    data: { id: randomUUID(), fullName: "Priya Menon (10f test)", roles: [] },
+    data: { id: randomUUID(), fullName: "Priya Menon (10f test)", roles: ["buyer"] },
     select: { id: true },
   });
   buyerId = buyer.id;
