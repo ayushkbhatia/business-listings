@@ -287,6 +287,31 @@ test.describe("B7 and B8 — two link axes, and only live pages on either", () =
     expect((await request.get(DEIRA, { maxRedirects: 0 })).status()).toBe(404);
   });
 
+  test("every link a row carries answers — storefront, coverage, service, brief", async ({ page, request }) => {
+    /*
+       Build phase 4: the routes this page hands a buyer to are other boards'
+       (1d-s, 1f-s, 1g-s, 1h-s), and a row that links to one that is not there
+       is a dead end dressed as a result. The first page, and the last, where
+       the unclaimed import sits.
+    */
+    const listed = await everyFirm(page, BB);
+    expect(listed.at(-1)).toBe(QUAYSIDE);
+    const hrefs = new Set<string>();
+    for (const url of [BB, page.url()]) {
+      await page.goto(url);
+      for (const href of await page
+        .locator("[data-landing-firm] a")
+        .evaluateAll((links) => links.map((link) => link.getAttribute("href") ?? ""))) {
+        hrefs.add(href);
+      }
+    }
+    expect(hrefs.size).toBeGreaterThan(20);
+    for (const href of hrefs) {
+      const response = await request.get(href, { maxRedirects: 0 });
+      expect(response.status(), href).toBe(200);
+    }
+  });
+
   test("the sitemap carries the four published pages and not the fifth", async ({ request }) => {
     const xml = await (await request.get("/sitemap.xml")).text();
     for (const route of [BB, DOWNTOWN, BB_AUDIT, DUBAI]) expect(xml, route).toContain(route);
