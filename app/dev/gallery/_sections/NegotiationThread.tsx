@@ -16,15 +16,26 @@ import {
 } from "./negotiation-fixture";
 
 /**
- * Board `10h` — the negotiation thread, in the eight states its spec documents.
+ * Board `10h` — the negotiation thread, in the eight states its spec documents,
+ * and the account build plan 9.4 refuses an accept to.
  *
  * Every specimen is rows run through `buildNegotiationView`, the page's own path,
  * with one fixed clock: r2 is twelve minutes old on every visit. Nothing here
  * writes — the composer and the accept are drawn with `live` off, so a press in
  * the gallery sends nothing and accepts nothing.
  */
-function Specimen({ negotiation, name, acceptError = null }: { negotiation: Negotiation; name: string; acceptError?: string | null }) {
-  const view = buildNegotiationView(negotiation, { now: NEGOTIATION_NOW, token: null, acceptError });
+function Specimen({
+  negotiation,
+  name,
+  acceptError = null,
+  mayAccept = true,
+}: {
+  negotiation: Negotiation;
+  name: string;
+  acceptError?: string | null;
+  mayAccept?: boolean;
+}) {
+  const view = buildNegotiationView(negotiation, { now: NEGOTIATION_NOW, token: null, acceptError, mayAccept });
   return (
     <div className="w-full">
       <NegotiationLayout {...view.layout} headingAs="h3" frame="specimen">
@@ -60,6 +71,9 @@ export function NegotiationThreadGallery() {
       </States>
       <States label="accepted here" stack>
         <Specimen negotiation={acceptedHereNegotiation()} name="accepted here" />
+      </States>
+      <States label="account cannot accept quotes · staff role, no buyer role (build plan 9.4)" stack>
+        <Specimen negotiation={boardNegotiation()} name="not permitted" mayAccept={false} />
       </States>
     </Section>
   );

@@ -40,9 +40,39 @@ export interface CapabilitySpec {
    * check, and `lib/auth/subject.ts` exports the function that completes it.
    */
   subject?: "own_visit" | "own_branch" | "other_business";
+  /**
+   * Held by a provisional identity as well as by the roles above.
+   *
+   * A provisional identity is the buyer who sent an enquiry without an account
+   * — most buyers, at first. `createProvisionalIdentity` gives it no role, on
+   * purpose: until the mobile is verified it is a number somebody typed, and
+   * claiming it is what grants `buyer`. So no role list can reach it, and a
+   * capability that must answer "yes" to the buyer the funnel is built for says
+   * so here, by name, rather than at every call site that meets one.
+   *
+   * Three rows carry it, and a unit test holds the count: it is the whole of
+   * what a phone number and a claim token may do.
+   */
+  provisional?: true;
 }
 
 const OPS_LEAD_ONLY = ["staff_ops_lead"] as const satisfies readonly Role[];
+
+/**
+ * Every role that may send an enquiry, and so carry one to its end.
+ *
+ * §07's first row gives "Send an enquiry / RFQ" to buyer and seller alike. The
+ * enquiry a seat may send is one it must be able to finish — accept a quote
+ * on, review the supplier after — so the three buyer rows share this list
+ * rather than each keeping its own, which is how they came to disagree.
+ */
+const ENQUIRY_SENDERS = [
+  "buyer",
+  "seller_owner",
+  "seller_manager",
+  "seller_sales",
+  "seller_finance",
+] as const satisfies readonly Role[];
 
 export const CAPABILITIES = {
   // ── Trust. The one row nothing may soften. ────────────────────────────────
@@ -381,24 +411,38 @@ export const CAPABILITIES = {
     why: "Board 7d, \"Set lead routing rules\": owner and manager. Split out of team.manage, which was owner-only and therefore withheld this from the seat that runs the day.",
   },
 
-  // ── Buyer ─────────────────────────────────────────────────────────────────
+  /*
+     ── Buyer ─────────────────────────────────────────────────────────────────
+
+     The conversion event, the terminal state and the trust signal. Each had a
+     guard and no caller until build plan 9.4, so the matrix printed three rows
+     nothing asked about — and asking would have refused the buyer the product
+     is built for, who has no account and so no role. `provisional` is that
+     answer, written where the rest of the matrix is.
+
+     Each is also about one enquiry, and must be the actor's own. That is not a
+     role question: `acceptQuote` and `canReview` check it against the row.
+  */
   "enquiry.create": {
-    roles: ["buyer", "seller_owner", "seller_manager", "seller_sales", "seller_finance"],
+    roles: ENQUIRY_SENDERS,
+    provisional: true,
     audited: false,
     source: "stated",
-    why: "§07 cross-surface, \"Send an enquiry / RFQ\": buyer ✓ and seller ✓. A supplier buying from another supplier is ordinary trade, and this row was inferred as buyer-only.",
+    why: "§07 cross-surface, \"Send an enquiry / RFQ\": buyer ✓ and seller ✓. A supplier buying from another supplier is ordinary trade, and this row was inferred as buyer-only. A buyer includes the one with no account — board 7a `B9`, auth is deferred, not gating — so a provisional identity holds it too. Staff roles do not: a moderator or an ops lead sends an enquiry only through a buyer role they also hold.",
   },
   "quote.accept": {
-    roles: ["buyer"],
+    roles: ENQUIRY_SENDERS,
+    provisional: true,
     audited: false,
-    source: "stated",
-    why: "The terminal state. Accepting releases contact to one business and declines the rest; nothing else is created.",
+    source: "inferred",
+    why: "Not a row in §07. The terminal state: accepting releases the buyer's contact to one business and declines the rest, and nothing else is created. Held by every role that may send the enquiry it closes, because an enquiry a seat may send and never accept is one that cannot end; it was buyer-only, which left a supplier's own seat able to ask and unable to finish. Held by a provisional identity, which reaches the comparison and the thread through its claim token and owns most enquiries — buyer-only would have refused it the one act the product exists for.",
   },
   "review.create": {
-    roles: ["buyer"],
+    roles: ENQUIRY_SENDERS,
+    provisional: true,
     audited: false,
-    source: "stated",
-    why: "Review requires a confirmed enquiry or an accepted quote, one per enquiry.",
+    source: "inferred",
+    why: "Not a row in §07. Board 10f's gate — a confirmed enquiry or an accepted quote, one review per enquiry, inside its window — is what makes a rating worth reading, and `canReview` decides it from the row. This decides who may be let near the gate at all: whoever may send the enquiry, and the provisional identity, which reaches the form through its claim token. It was buyer-only, and asking would have refused most of the buyers the gate exists for. A supplier that bought from another is that supplier's customer; a competitor posing as one is the `no_traceable_enquiry` dispute ground, not a role.",
   },
 } as const satisfies Record<string, CapabilitySpec>;
 
@@ -416,6 +460,9 @@ export const AUDITED_CAPABILITIES = CAPABILITY_LIST.filter((c) => CAPABILITIES[c
  * matching function from `lib/auth/subject.ts` as well as `can`.
  */
 export const SUBJECT_DEPENDENT = CAPABILITY_LIST.filter((c) => "subject" in CAPABILITIES[c]);
+
+/** Everything a provisional identity may do. See `CapabilitySpec.provisional`. */
+export const PROVISIONAL_CAPABILITIES = CAPABILITY_LIST.filter((c) => "provisional" in CAPABILITIES[c]);
 
 export function isCapability(value: string): value is Capability {
   return Object.hasOwn(CAPABILITIES, value);

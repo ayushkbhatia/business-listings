@@ -30,11 +30,13 @@ import {
   emptyReview,
   anonymousReview,
   notEligible,
+  notPermitted,
   reviewedHeld,
   reviewedReplied,
   windowClosed,
 } from "@/app/dev/gallery/_sections/review-write-fixture";
 import { buildReviewWrite, type ReviewWriteData } from "@/lib/reviews/write-view";
+import { t } from "@/lib/i18n";
 
 /**
  * Board 10f as rendered, from the board's own facts through the route's builder.
@@ -230,6 +232,16 @@ describe("the other states", () => {
     renderPage(notEligible());
     expect(screen.queryByRole("textbox")).toBeNull();
     expect(screen.getByRole("link", { name: "Back to ENQ-8744" }).getAttribute("href")).toBe("/enquiry/ENQ-8744?t=tok");
+  });
+
+  it("an account that may not review: says so of the account, lists nothing as open, never a form", async () => {
+    // Build plan 9.4: `createReview` asks `review.create` of the person before the enquiry.
+    const { container } = renderPage(notPermitted());
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(t("reviewwrite.refused.not_permitted.h1"));
+    expect(screen.getByText(t("reviewwrite.other.not_permitted"))).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Back to ENQ-8811" })).toHaveAttribute("href", "/enquiry/ENQ-8811?t=tok");
+    await expectNoAxeViolations(container);
   });
 
   it("a fan-out: asks which supplier, and links each with its subject", () => {

@@ -52,6 +52,7 @@ export function ProposalComparisonView({
   figures,
   error,
   acceptAction,
+  mayAccept = true,
   idPrefix = "compare",
 }: {
   comparison: ProposalComparison;
@@ -63,6 +64,11 @@ export function ProposalComparisonView({
   idPrefix?: string;
   /** The accept server action — passed in so the gallery can render the page without one. */
   acceptAction?: (formData: FormData) => Promise<void>;
+  /**
+   * Build plan 9.4: whether this person holds `quote.accept`, which the service
+   * asks before anything else. False takes the accept controls away and says why.
+   */
+  mayAccept?: boolean;
 }) {
   const carry = token ? `?t=${token}` : "";
   const accepted = comparison.acceptedBusinessId !== null;
@@ -91,6 +97,13 @@ export function ProposalComparisonView({
         </p>
       ) : null}
 
+      {/* Said only where an accept would otherwise be offered: closed or accepted says so per cell. */}
+      {!mayAccept && !accepted && !error && replied > 0 && comparison.closesAt.getTime() > now.getTime() ? (
+        <p className="mt-6 rounded-ctl border border-line bg-paper-sunk px-3 py-2 text-body-sm text-body">
+          {t("compare.error_not_permitted")}
+        </p>
+      ) : null}
+
       {replied === 0 ? (
         <NoRepliesYet comparison={comparison} />
       ) : (
@@ -105,6 +118,7 @@ export function ProposalComparisonView({
             token={token}
             figures={figures}
             acceptAction={acceptAction}
+            mayAccept={mayAccept}
             idPrefix={idPrefix}
           />
           <Footnote comparison={comparison} figures={figures} />
@@ -353,6 +367,7 @@ function ComparisonTable({
   token,
   figures,
   acceptAction,
+  mayAccept,
   idPrefix,
 }: {
   comparison: ProposalComparison;
@@ -360,6 +375,7 @@ function ComparisonTable({
   token: string | null;
   figures: ComparisonFigures;
   acceptAction: ((formData: FormData) => Promise<void>) | undefined;
+  mayAccept: boolean;
   idPrefix: string;
 }) {
   const { columns } = comparison;
@@ -498,6 +514,7 @@ function ComparisonTable({
                   now={now}
                   closesAt={comparison.closesAt}
                   acceptAction={acceptAction}
+                  mayAccept={mayAccept}
                   viaAcceptPage={comparison.buyerCompanyId !== null}
                 />
               </td>
@@ -637,6 +654,7 @@ function DecisionCell({
   now,
   closesAt,
   acceptAction,
+  mayAccept,
   viaAcceptPage = false,
 }: {
   column: ComparisonColumn;
@@ -647,6 +665,8 @@ function DecisionCell({
   now: Date;
   closesAt: Date;
   acceptAction: ((formData: FormData) => Promise<void>) | undefined;
+  /** Build plan 9.4: false leaves the question and takes the accept away. */
+  mayAccept: boolean;
   /** Board `7b`: a company enquiry is accepted on the accept screen, under the company's rule. */
   viaAcceptPage?: boolean;
 }) {
@@ -701,6 +721,10 @@ function DecisionCell({
       </div>
     );
   }
+
+  // Build plan 9.4: the service refuses this person before it reads the quote,
+  // so the cell offers what they can still do — ask — and the page says why.
+  if (!mayAccept) return <div className="text-center">{ask}</div>;
 
   const Wrapper = acceptAction ? "form" : "div";
   const label = primary ? t("compare_proposals.accept_primary") : t("compare_proposals.accept");

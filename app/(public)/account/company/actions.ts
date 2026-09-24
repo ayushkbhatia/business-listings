@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getActor } from "@/lib/auth/session";
+import { PermissionError } from "@/lib/auth/errors";
 import {
   addAddress,
   archiveAddress,
@@ -276,7 +277,11 @@ export async function leaveAction(): Promise<CompanyActionResult> {
 export async function approveAction(approvalId: string): Promise<CompanyActionResult> {
   const actorId = await who();
   if (!actorId) return signedOut();
-  const result = await approveRequest(actorId, approvalId);
+  const result = await approveRequest(actorId, approvalId).catch((error: unknown) => {
+    // Build plan 9.4: approving is accepting, and asks `quote.accept` of both of you.
+    if (error instanceof PermissionError) return { ok: false as const, error: "not_permitted" };
+    throw error;
+  });
   if (!result.ok) return { ok: false, error: companyError(result.error) };
   if (result.outcome === "approved") {
     revalidatePath(`/enquiry/${result.enquiryId}`);

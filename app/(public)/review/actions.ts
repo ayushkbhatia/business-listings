@@ -19,6 +19,7 @@ import { createReview, editReview, saveReviewDraft, writableSubject } from "@/li
 import { contactKindWords, listingReviewHref, reviewHref } from "@/lib/reviews/write-view";
 import { MAX_IMAGE_BYTES } from "@/lib/storage/buckets";
 import { resolveBuyerId } from "@/app/(public)/enquiry/_buyer";
+import { PermissionError } from "@/lib/auth/errors";
 
 /**
  * Board 10f — the five things the review form sends.
@@ -36,6 +37,15 @@ interface Target {
   /** The supplier the page resolved, where a fan-out drew several replies. Re-checked. */
   businessId: string | null;
   token: string | null;
+}
+
+/**
+ * Build plan 9.4: `review.create`, refused by the service before anything is
+ * read, as the code the form already words. Anything else is still thrown.
+ */
+function refusedByMatrix(error: unknown): { ok: false; error: "not_permitted" } {
+  if (error instanceof PermissionError) return { ok: false, error: "not_permitted" };
+  throw error;
 }
 
 /** Strings, not codes: the form shows them as they come. */
@@ -97,7 +107,7 @@ export async function saveReviewDraftAction(
     enquiryId: target.enquiryId,
     ...(target.businessId ? { businessId: target.businessId } : {}),
     fields,
-  });
+  }).catch(refusedByMatrix);
   if (!result.ok) return { ok: false, error: refusalWords(result.error, fields) };
   return { ok: true, savedAt: result.savedAt.toISOString() };
 }
@@ -116,7 +126,9 @@ export async function signReviewPhotoAction(
     return { ok: false, error: t("reviewwrite.photo.error.stored_size") };
   }
 
-  const subject = await writableSubject(buyerId, target.enquiryId, target.businessId ?? undefined);
+  const subject = await writableSubject(buyerId, target.enquiryId, target.businessId ?? undefined).catch(
+    refusedByMatrix,
+  );
   if (!subject.ok) return { ok: false, error: refusalWords(subject.error) };
 
   const path = reviewPhotoPath(subject.businessId, target.enquiryId, String(file.filename || "photo"));
@@ -146,7 +158,9 @@ export async function addReviewPhotoAction(
 ): Promise<{ ok: true; photo: ReviewPhotoRef; url: string } | ActionRefusal> {
   const buyerId = await resolveBuyerId(target.token);
   if (!buyerId) return { ok: false, error: t("reviewwrite.error.not_your_enquiry") };
-  const subject = await writableSubject(buyerId, target.enquiryId, target.businessId ?? undefined);
+  const subject = await writableSubject(buyerId, target.enquiryId, target.businessId ?? undefined).catch(
+    refusedByMatrix,
+  );
   if (!subject.ok) return { ok: false, error: refusalWords(subject.error) };
 
   if (!isReviewPhotoPath(subject.businessId, target.enquiryId, path)) {
@@ -208,7 +222,7 @@ export async function postReviewAction(target: Target, rawFields: unknown): Prom
     body: fields.body,
     showCompanyName: fields.showCompanyName,
     photos: fields.photos,
-  });
+  }).catch(refusedByMatrix);
   if (!result.ok) return { ok: false, error: refusalWords(result.error, fields) };
 
   redirect(await landing(result.businessId, result.reviewId, target.enquiryId, target.token, "posted"));
@@ -235,7 +249,7 @@ export async function editReviewAction(
     body: fields.body,
     showCompanyName: fields.showCompanyName,
     photos: fields.photos,
-  });
+  }).catch(refusedByMatrix);
   if (!result.ok) return { ok: false, error: refusalWords(result.error, fields) };
 
   redirect(await landing(result.businessId, target.reviewId, target.enquiryId, target.token, "saved"));

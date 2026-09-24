@@ -9,6 +9,8 @@ import { markThreadRead } from "@/lib/messaging/service";
 import { markSellerQuotesRead } from "@/lib/messaging/receipts";
 import { t } from "@/lib/i18n";
 import { resolveBuyerId, trackingTokenFor } from "../../../_buyer";
+import { actorFor } from "@/lib/auth/actor";
+import { mayAcceptQuote } from "@/lib/auth/guards";
 import { acceptErrorMessage } from "../../../_errors";
 import { buildNegotiationView } from "./_build";
 import { NegotiationLayout } from "./_view";
@@ -81,6 +83,8 @@ export default async function NegotiationThreadPage({ params, searchParams }: { 
     now,
     token,
     acceptError: acceptErrorMessage(one(query, "error") ?? undefined),
+    // Build plan 9.4: asked the way `acceptQuote` asks it, of the record.
+    mayAccept: mayAcceptQuote(await actorFor(buyerId)),
   });
 
   return (

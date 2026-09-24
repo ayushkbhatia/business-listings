@@ -85,7 +85,8 @@ export interface WrittenReview {
 export type ReviewWriteData =
   | {
       kind: "refused";
-      reason: "not_your_enquiry" | "no_confirmed_enquiry";
+      /** `not_permitted` is build plan 9.4: the person, not the enquiry, is refused. */
+      reason: "not_your_enquiry" | "no_confirmed_enquiry" | "not_permitted";
       enquiry: { id: string; ref: string; headline: string } | null;
       others: OtherEnquiries;
     }
@@ -385,7 +386,11 @@ export function buildReviewWrite(data: ReviewWriteData, options: BuildOptions): 
     // The inbox needs an account; a buyer on a claim token has no list to send them to.
     more: data.others.more > 0 ? t("reviewwrite.other.more", { count: data.others.more }) : null,
     moreHref: data.others.more > 0 && !token ? "/account/enquiries" : null,
-    empty: t("reviewwrite.other.empty"),
+    // Build plan 9.4: an account that may not review has no enquiry it may review.
+    empty:
+      data.kind === "refused" && data.reason === "not_permitted"
+        ? t("reviewwrite.other.not_permitted")
+        : t("reviewwrite.other.empty"),
   };
 
   const crumbs = (enquiry: { ref: string; headline: string } | null, last: string): Crumb[] => [
@@ -400,7 +405,11 @@ export function buildReviewWrite(data: ReviewWriteData, options: BuildOptions): 
     case "refused": {
       const ref = data.enquiry?.ref ?? "";
       return {
-        title: t("reviewwrite.refused.title"),
+        // The other refusals are about the enquiry; this one is about the account.
+        title:
+          data.reason === "not_permitted"
+            ? t("reviewwrite.refused.not_permitted.h1")
+            : t("reviewwrite.refused.title"),
         lede: null,
         crumbs: crumbs(data.enquiry, t("reviewwrite.crumb.write")),
         band: null,

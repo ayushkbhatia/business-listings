@@ -221,10 +221,13 @@ export function ProposalReviewCard({
   record,
   now,
   reviewHref,
+  writable = true,
 }: {
   record: ProposalRecordValue;
   now: Date;
   reviewHref: string;
+  /** Build plan 9.4: false for a person `createReview` would refuse. */
+  writable?: boolean;
 }) {
   const { review, supplier } = record;
   const timing = reviewTiming(record, now);
@@ -233,7 +236,10 @@ export function ProposalReviewCard({
     <Card padded>
       <h2 className={`${EYEBROW} text-faint`}>{timing.eyebrow}</h2>
       {review.kind === "none" ? (
-        timing.open ? (
+        timing.open && !writable ? (
+          // Build plan 9.4: no button to a form `createReview` would refuse.
+          <p className="mt-2 text-body-sm text-body">{t("reviewwrite.error.not_permitted")}</p>
+        ) : timing.open ? (
           <>
             <p className="mt-2 text-body-sm text-body">
               {t("accepted_proposal.review.body", { label: t("reviewpage.provenance.accepted_quote") })}

@@ -1,6 +1,7 @@
 "use server";
 
 import { getActor } from "@/lib/auth/session";
+import { PermissionError } from "@/lib/auth/errors";
 import { readAttribution } from "@/lib/campaign/cookie";
 import { prisma } from "@/lib/db/client";
 import { t } from "@/lib/i18n";
@@ -74,7 +75,9 @@ export async function submitServiceBrief(input: SendServiceBriefInput): Promise<
   const result = await sendServiceBrief(input, {
     buyerId: actor?.id ?? null,
     attribution: await readAttribution(),
-  });
+  }).catch(notPermitted);
+  // Build plan 9.4: `enquiry.create`, refused in the service. See `notPermitted`.
+  if (result === null) return { ok: false, error: t("rfq.not_permitted"), fields: {} };
 
   if (result.ok) {
     return {
@@ -100,6 +103,12 @@ export async function submitServiceBrief(input: SendServiceBriefInput): Promise<
           ? t("brief.undelivered")
           : t("brief.gone"),
   };
+}
+
+/** A refusal from the matrix, as a value; anything else is still thrown. */
+function notPermitted(error: unknown): null {
+  if (error instanceof PermissionError) return null;
+  throw error;
 }
 
 export async function confirmBriefAttachment(input: {
