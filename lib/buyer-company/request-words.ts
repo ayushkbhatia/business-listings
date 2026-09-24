@@ -16,7 +16,7 @@ import { reasonLine } from "./words";
 export interface RequestView {
   id: string;
   href: string;
-  /** *Al Waha — 3 lines, AED 15,624*. */
+  /** *Al Waha — 3 lines, AED 15,624 excl. VAT*. */
   summary: string;
   /** *RAISED BY P. MENON · PO-2026-0418*, in mono. */
   raised: string;
@@ -45,9 +45,16 @@ function initialled(name: string): string {
   return `${parts[0]![0]}. ${parts.slice(1).join(" ")}`;
 }
 
+/**
+ * The figure a request is about, with its basis said (`1n` `B6`).
+ *
+ * `1n`'s handoff found this card showing a quote's total unlabelled while the
+ * comparison beside it said *excl. VAT* — one quote, two screens, one basis
+ * stated. Both figures are the same ex-VAT total, and now both say so.
+ */
 export function amountWords(card: Pick<RequestCard, "valueAed" | "proposal">): string {
-  if (card.proposal) return card.valueAed === null ? feeOnBasis(card.proposal) : formatAED(card.valueAed);
-  return card.valueAed === null ? t("company.approval.no_total") : formatAED(card.valueAed);
+  if (card.valueAed === null) return card.proposal ? feeOnBasis(card.proposal) : t("company.approval.no_total");
+  return t("company.amount_ex_vat", { amount: formatAED(card.valueAed) });
 }
 
 export function summaryOf(card: RequestCard): string {

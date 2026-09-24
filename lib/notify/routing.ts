@@ -75,6 +75,17 @@ export const PLATFORM_FLOOR: Readonly<Partial<Record<NotificationEvent, readonly
      newsletters — so the promise is on the floor with the other two.
   */
   placement_slot_freed: ["email", "in_app"],
+  /*
+     Board `1n`, `B8` and `B10`. In-app only, and on the floor because each is
+     the answer to work the seller already has open — a quote they sent, an
+     enquiry they hold — rather than news. 7e §2.2's rule is that anything with
+     a deadline keeps in-app whatever else is switched off; these two arrived
+     after every stored matrix was written, so a matrix row alone would have
+     sent them to nobody until each seller re-saved the alerts screen. Email
+     and WhatsApp stay the seller's to choose there.
+  */
+  quote_declined: ["in_app"],
+  enquiry_nudged: ["in_app"],
 };
 
 /** The channels quiet hours actually silence. */
@@ -270,6 +281,12 @@ export const BUYER_DEFAULT: RoutingPreference = {
     approval_requested: ["email", "in_app"],
     approval_decided: ["email", "in_app"],
     off_platform_flagged: ["email", "in_app"],
+    /*
+       Board `1n`. Once, within the last day, and only while quotes are waiting:
+       after the close none of them can be accepted (`10e` B3). A thing to act on
+       today, so email and in-app, held by quiet hours like the rest.
+    */
+    enquiry_closing: ["email", "in_app"],
   },
   quiet: { enabled: true, fromHour: 21, toHour: 7, onSunday: true },
   highValueOverrideAed: null,

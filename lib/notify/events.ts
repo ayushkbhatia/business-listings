@@ -1371,9 +1371,10 @@ export async function onRamadanDatesMoved(input: {
 
 // ── Board `7b` — the buying company ─────────────────────────────────────────
 
-type CompanyEvent = "approval_requested" | "approval_decided" | "off_platform_flagged";
+/** Buyer-side events that write their own delivery rows through `BUYER_DEFAULT`. */
+type BuyerEvent = "approval_requested" | "approval_decided" | "off_platform_flagged" | "enquiry_closing";
 
-const COMPANY_RECIPIENT_SELECT = {
+const BUYER_RECIPIENT_SELECT = {
   id: true,
   phone: true,
   email: true,
@@ -1382,21 +1383,24 @@ const COMPANY_RECIPIENT_SELECT = {
 } as const;
 
 /**
- * One company notification to one member, through `BUYER_DEFAULT`, with the
+ * One buyer notification to one person, through `BUYER_DEFAULT`, with the
  * delivery row every other buyer emitter writes — including the payload a
  * deferred message needs to go out when quiet hours lift.
  *
- * No trade kind: a request for approval is about the buyer's own process, not
- * about goods or work, so its templates are `neutral`.
+ * `tradeKind` is recorded on the row when the message is about goods or work
+ * (`1n`'s closing notice). The company's own events have none: a request for
+ * approval is about the buyer's process, so its templates are `neutral`.
  */
-async function deliverCompanyEvent(
-  event: CompanyEvent,
+async function deliverBuyerEvent(
+  event: BuyerEvent,
   recipient: { id: string; phone: string | null; email: string | null; claimToken: string | null; isProvisional: boolean },
   params: Record<string, string | number>,
   enquiryId: string | null,
   templates: Map<string, LiveTemplate>,
-): Promise<void> {
+  tradeKind: "goods" | "services" | null = null,
+): Promise<number> {
   const senders = resolveNotificationSenders();
+  let written = 0;
   for (const decision of route(BUYER_DEFAULT, { event, now: new Date() })) {
     const template = templates.get(decision.channel) ?? null;
     if (!template) continue;
@@ -1413,6 +1417,7 @@ async function deliverCompanyEvent(
         status: outcome.status,
         recipientUserId: recipient.id,
         enquiryId,
+        tradeKind,
         reason: outcome.reason ?? null,
         scheduledFor: decision.action === "defer" ? decision.at : null,
         payload:
@@ -1428,7 +1433,9 @@ async function deliverCompanyEvent(
         sentAt: outcome.status === "sent" ? new Date() : null,
       },
     });
+    written += 1;
   }
+  return written;
 }
 
 /** A first name, for a colleague. A company's own people know each other by it. */
@@ -1436,9 +1443,11 @@ function firstNameFor(fullName: string | null | undefined, fallback: string): st
   return fullName?.trim().split(/\s+/)[0] || fallback;
 }
 
-/** `AED 15,624`, or the words for a quote with no single total. */
+/** `AED 15,624 excl. VAT`, or the words for a quote with no single total (`1n` `B6`). */
 function approvalAmount(valueFils: bigint | null): string {
-  return valueFils === null ? t("company.approval.no_total") : formatAED(filsToAed(valueFils));
+  return valueFils === null
+    ? t("company.approval.no_total")
+    : t("company.amount_ex_vat", { amount: formatAED(filsToAed(valueFils)) });
 }
 
 /**
@@ -1468,7 +1477,7 @@ export async function onApprovalRequested(input: { approvalId: string; answered?
     if (approverIds.length === 0) return;
     const recipients = await prisma.user.findMany({
       where: { id: { in: approverIds } },
-      select: COMPANY_RECIPIENT_SELECT,
+      select: BUYER_RECIPIENT_SELECT,
       orderBy: { id: "asc" },
     });
 
@@ -1483,7 +1492,7 @@ export async function onApprovalRequested(input: { approvalId: string; answered?
       approvalId: request.id,
     });
     for (const recipient of recipients) {
-      await deliverCompanyEvent(event, recipient, params, request.enquiryId, templates);
+      await deliverBuyerEvent(event, recipient, params, request.enquiryId, templates);
     }
   });
 }
@@ -1497,7 +1506,7 @@ export async function onApprovalDecided(input: { approvalId: string }): Promise<
         id: true,
         status: true,
         enquiryId: true,
-        raisedBy: { select: COMPANY_RECIPIENT_SELECT },
+        raisedBy: { select: BUYER_RECIPIENT_SELECT },
         decidedBy: { select: { fullName: true } },
         enquiry: { select: { ref: true } },
         quote: { select: { ref: true, business: { select: { displayName: true } } } },
@@ -1516,7 +1525,7 @@ export async function onApprovalDecided(input: { approvalId: string }): Promise<
       nextStep: t(request.status === "approved" ? "company.approval.next_approved" : "company.approval.next_queried"),
       approvalId: request.id,
     });
-    await deliverCompanyEvent(event, request.raisedBy, params, request.enquiryId, templates);
+    await deliverBuyerEvent(event, request.raisedBy, params, request.enquiryId, templates);
   });
 }
 
@@ -1544,7 +1553,7 @@ export async function onOffPlatformFlagged(input: { enquiryId: string; businessI
       prisma.business.findUnique({ where: { id: input.businessId }, select: { displayName: true } }),
       prisma.buyerCompanyMember.findMany({
         where: { companyId: company.id, deactivatedAt: null, role: "company_admin" },
-        select: { user: { select: COMPANY_RECIPIENT_SELECT } },
+        select: { user: { select: BUYER_RECIPIENT_SELECT } },
         orderBy: { id: "asc" },
       }),
     ]);
@@ -1554,7 +1563,180 @@ export async function onOffPlatformFlagged(input: { enquiryId: string; businessI
     const templates = await resolveLiveTemplates(event, null);
     const params = withParams(event, { ref: enquiry.ref, businessName: business.displayName });
     for (const admin of admins) {
-      await deliverCompanyEvent(event, admin.user, params, enquiry.id, templates);
+      await deliverBuyerEvent(event, admin.user, params, enquiry.id, templates);
     }
   });
+}
+
+// ── Board `1n` — comparing the quotes ───────────────────────────────────────
+
+/**
+ * Every supplier whose quote lost, told so once — board `1n` `B8`.
+ *
+ * The comparison promises the other quotes are *declined for you*, and until
+ * this they were declined by a status change nobody was told about: `3k` moved
+ * the row to Lost and that was all. `7c`'s own argument is that the losing
+ * suppliers learning where they stand is the single biggest reason sellers keep
+ * answering fan-outs.
+ *
+ * Called by `acceptQuote` after the transaction, which is the one path to an
+ * acceptance — from the comparison, the thread, or an approval. One message per
+ * supplier, naming their latest revision; a supplier who declined the enquiry
+ * themselves has already walked away and hears nothing more. Nothing about the
+ * winner travels: not the supplier, not the price (`permissions.md`).
+ */
+export async function onQuotesDeclined(input: { enquiryId: string; acceptedBusinessId: string }): Promise<void> {
+  await safely("quote_declined", async () => {
+    const enquiry = await prisma.enquiry.findUnique({
+      where: { id: input.enquiryId },
+      select: {
+        id: true,
+        ref: true,
+        requirement: true,
+        serviceBrief: { select: { enquiryId: true } },
+        quotes: {
+          where: { businessId: { not: input.acceptedBusinessId }, status: "lost" },
+          orderBy: [{ businessId: "asc" }, { revision: "desc" }],
+          select: { businessId: true, ref: true },
+        },
+        recipients: {
+          where: { businessId: { not: input.acceptedBusinessId } },
+          select: { businessId: true, assignedToId: true, declinedAt: true },
+        },
+      },
+    });
+    if (!enquiry) return;
+
+    const latest = new Map<string, string>();
+    for (const quote of enquiry.quotes) if (!latest.has(quote.businessId)) latest.set(quote.businessId, quote.ref);
+    const recipients = new Map(enquiry.recipients.map((row) => [row.businessId, row]));
+    const businessIds = [...latest.keys()].filter((id) => !recipients.get(id)?.declinedAt);
+    if (businessIds.length === 0) return;
+
+    const owners = await prisma.user.findMany({
+      where: { businessId: { in: businessIds }, roles: { has: "seller_owner" } },
+      select: { id: true, businessId: true },
+      orderBy: { id: "asc" },
+    });
+    const ownerOf = new Map<string, string>();
+    for (const owner of owners) if (owner.businessId && !ownerOf.has(owner.businessId)) ownerOf.set(owner.businessId, owner.id);
+
+    for (const businessId of businessIds) {
+      const owner = ownerOf.get(businessId);
+      if (!owner) continue;
+      await notify({
+        event: "quote_declined",
+        businessId,
+        enquiryId: enquiry.id,
+        tradeKind: enquiry.serviceBrief ? "services" : "goods",
+        recipientUserId: await recipientFor(businessId, recipients.get(businessId)?.assignedToId ?? null, owner),
+        params: withParams("quote_declined", {
+          ref: enquiry.ref,
+          quoteRef: latest.get(businessId)!,
+          summary: firstClause(enquiry.requirement),
+          enquiryId: enquiry.id,
+          shortLink: absoluteUrl(`/dashboard/leads/${enquiry.id}`),
+        }),
+      });
+    }
+  });
+}
+
+/**
+ * A buyer's nudge reaching the supplier it was meant for — board `1n` `B10`.
+ *
+ * `lib/enquiry/nudge.ts` has recorded the nudge since board 1i, and since `10e`
+ * the seller's lead rail has shown *Buyer nudged you* — but nothing carried it
+ * to a supplier who was not already looking at the rail, which is exactly the
+ * supplier a nudge is for. This is the carrier.
+ *
+ * It reads as a reminder about an enquiry the supplier already holds — its
+ * reference, its summary, its close — so it cannot be mistaken for a new one.
+ * Once per supplier per enquiry, because the column it follows is written once.
+ */
+export async function onSuppliersNudged(input: { enquiryId: string; businessIds: readonly string[] }): Promise<void> {
+  if (input.businessIds.length === 0) return;
+  await safely("enquiry_nudged", async () => {
+    const [enquiry, owners, recipients] = await Promise.all([
+      prisma.enquiry.findUnique({
+        where: { id: input.enquiryId },
+        select: { id: true, ref: true, requirement: true, closesAt: true, serviceBrief: { select: { enquiryId: true } } },
+      }),
+      prisma.user.findMany({
+        where: { businessId: { in: [...input.businessIds] }, roles: { has: "seller_owner" } },
+        select: { id: true, businessId: true },
+        orderBy: { id: "asc" },
+      }),
+      prisma.enquiryRecipient.findMany({
+        where: { enquiryId: input.enquiryId, businessId: { in: [...input.businessIds] } },
+        select: { businessId: true, assignedToId: true },
+      }),
+    ]);
+    if (!enquiry) return;
+    const assignee = new Map(recipients.map((row) => [row.businessId, row.assignedToId]));
+    const ownerOf = new Map<string, string>();
+    for (const owner of owners) if (owner.businessId && !ownerOf.has(owner.businessId)) ownerOf.set(owner.businessId, owner.id);
+
+    for (const businessId of input.businessIds) {
+      const owner = ownerOf.get(businessId);
+      if (!owner) continue;
+      await notify({
+        event: "enquiry_nudged",
+        businessId,
+        enquiryId: enquiry.id,
+        tradeKind: enquiry.serviceBrief ? "services" : "goods",
+        recipientUserId: await recipientFor(businessId, assignee.get(businessId) ?? null, owner),
+        params: withParams("enquiry_nudged", {
+          ref: enquiry.ref,
+          summary: firstClause(enquiry.requirement),
+          closesAt: formatDate(enquiry.closesAt),
+          enquiryId: enquiry.id,
+          shortLink: absoluteUrl(`/dashboard/leads/${enquiry.id}`),
+        }),
+      });
+    }
+  });
+}
+
+/**
+ * The buyer's quotes are about to stop being acceptable — board `1n`.
+ *
+ * `10e` B3 makes a closed enquiry terminal: nothing on it can be accepted, and
+ * the one way on is to re-send. A buyer holding four quotes who let the close
+ * pass has lost all four, which is the row `10e` says the inbox exists to
+ * prevent. So, once, inside the last day: how many are waiting, and when they
+ * stop. `lib/enquiry/closing-job.ts` decides when; this only sends.
+ *
+ * Returns whether a delivery row was written, which is the job's guard.
+ */
+export async function onEnquiryClosing(input: { enquiryId: string; quotes: number }): Promise<boolean> {
+  let written = false;
+  await safely("enquiry_closing", async () => {
+    const enquiry = await prisma.enquiry.findUnique({
+      where: { id: input.enquiryId },
+      select: {
+        id: true,
+        ref: true,
+        closesAt: true,
+        serviceBrief: { select: { enquiryId: true } },
+        buyer: { select: BUYER_RECIPIENT_SELECT },
+      },
+    });
+    if (!enquiry) return;
+    const tradeKind = enquiry.serviceBrief ? "services" : "goods";
+    const event = "enquiry_closing" as const;
+    const templates = await resolveLiveTemplates(event, tradeKind);
+    const params = withParams(event, {
+      ref: enquiry.ref,
+      quotes:
+        tradeKind === "services"
+          ? t("compare.closing.proposals", { count: input.quotes })
+          : t("compare.closing.quotes", { count: input.quotes }),
+      closesAt: formatDate(enquiry.closesAt),
+      enquiryId: enquiry.id,
+      shortLink: absoluteUrl(`/enquiry/${enquiry.id}/compare`),
+    });
+    written = (await deliverBuyerEvent(event, enquiry.buyer, params, enquiry.id, templates, tradeKind)) > 0;
+  });
+  return written;
 }

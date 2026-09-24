@@ -3,6 +3,7 @@ import { deliverQueued, flushDeferred } from "@/lib/notify/service";
 import { sweepAlerts } from "@/lib/alerts/service";
 import { sweepSavedSearches } from "@/lib/saved-search/service";
 import { sweepEscalations } from "@/lib/enquiry/escalation-job";
+import { sweepClosingEnquiries } from "@/lib/enquiry/closing-job";
 import { sweepFollowUps } from "@/lib/messaging/follow-up";
 import { authorizeJob, runSteps } from "@/lib/jobs/authorize";
 import { retryRegisterReads } from "@/lib/credentials/review";
@@ -80,6 +81,13 @@ export async function GET(request: NextRequest) {
        run whatever the queue looks like.
     */
     followUps: () => sweepFollowUps(),
+    /*
+       Board `1n`. A buyer whose quotes stop being acceptable within the day is
+       told once. Hourly because a close is to the hour; bounded by enquiries
+       closing in the next day, not by the directory. Quiet hours hold it like
+       any other buyer message.
+    */
+    closingEnquiries: () => sweepClosingEnquiries(),
     async deferredNotifications() {
       let flushed = 0;
       let passes = 0;

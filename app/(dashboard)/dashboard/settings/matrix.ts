@@ -35,6 +35,14 @@ export const EVENTS = [
   */
   "setup_nudge",
   "weekly_digest",
+  /*
+     Board `1n`. A buyer chose another supplier's quote, and a buyer nudged for
+     one. In-app is on the platform floor for both (`PLATFORM_FLOOR`); the rows
+     are here so email and WhatsApp can be chosen — and so saving this screen
+     does not drop them from the stored matrix.
+  */
+  "quote_declined",
+  "enquiry_nudged",
 ] as const;
 
 export const CHANNELS = ["whatsapp", "sms", "email", "in_app"] as const;
@@ -76,6 +84,8 @@ export const GOES_TO: Readonly<Record<AlertEvent, Recipient>> = {
   document_expiring: "owner_and_finance",
   setup_nudge: "owner",
   weekly_digest: "owner",
+  quote_declined: "assigned",
+  enquiry_nudged: "assigned",
 };
 
 /**

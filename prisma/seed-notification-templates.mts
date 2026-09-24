@@ -557,5 +557,168 @@ export const TEMPLATES: TemplateSeed[] = [
     actionPath: "/account/company",
     status: "live",
   },
+  /*
+     Board `1n` — the three messages around a buyer choosing between quotes.
+
+     `quote_declined` (`B8`) tells each supplier whose quote lost, once, and says
+     nothing about what beat it: no supplier, no price. Email and in-app — it is
+     an answer, not an interruption — with in-app on the platform floor.
+
+     `enquiry_nudged` (`B10`) is a reminder about an enquiry the supplier already
+     holds, worded so it cannot be read as a new one. WhatsApp too, because a
+     nudge is the one message on this board whose whole point is being seen;
+     like every WhatsApp template it waits on Meta before it can send.
+
+     `enquiry_closing` is the buyer's: their quotes stop being acceptable when the
+     enquiry closes (`10e` B3), and this is said once, inside the last day.
+
+     Each has a services twin: a brief is answered with proposals, by firms.
+  */
+  {
+    event: "quote_declined",
+    channel: "email",
+    kind: "goods",
+    subject: "Your quote {quoteRef} was not accepted",
+    body:
+      "The buyer on enquiry {ref} — {summary} — accepted another supplier's quote. " +
+      "Yours stays in your pipeline, marked lost, and nothing more is needed from you.",
+    actionLabel: "See the enquiry",
+    actionPath: "/dashboard/leads/{enquiryId}",
+    status: "live",
+  },
+  {
+    event: "quote_declined",
+    channel: "in_app",
+    kind: "goods",
+    body: "The buyer on {ref} accepted another supplier's quote. {quoteRef} is marked lost.",
+    actionLabel: "See the enquiry",
+    actionPath: "/dashboard/leads/{enquiryId}",
+    status: "live",
+  },
+  {
+    event: "quote_declined",
+    channel: "email",
+    kind: "services",
+    subject: "Your proposal {quoteRef} was not accepted",
+    body:
+      "The buyer on brief {ref} — {summary} — accepted another firm's proposal. " +
+      "Yours stays in your pipeline, marked lost, and nothing more is needed from you.",
+    actionLabel: "See the brief",
+    actionPath: "/dashboard/leads/{enquiryId}",
+    status: "live",
+  },
+  {
+    event: "quote_declined",
+    channel: "in_app",
+    kind: "services",
+    body: "The buyer on {ref} accepted another firm's proposal. {quoteRef} is marked lost.",
+    actionLabel: "See the brief",
+    actionPath: "/dashboard/leads/{enquiryId}",
+    status: "live",
+  },
+  {
+    event: "enquiry_nudged",
+    channel: "whatsapp",
+    kind: "goods",
+    body: "A reminder from the buyer on {ref}: they are waiting for your quote on {summary}. The enquiry closes {closesAt}.",
+    actionLabel: "Open the enquiry",
+    actionPath: "/dashboard/leads/{enquiryId}",
+    metaTemplateName: "enquiry_nudged_v1",
+    status: "pending_meta",
+  },
+  {
+    event: "enquiry_nudged",
+    channel: "email",
+    kind: "goods",
+    subject: "The buyer on {ref} is waiting for your quote",
+    body:
+      "A reminder, sent once by the buyer: they are waiting for your quote on {ref} — {summary}. " +
+      "The enquiry closes {closesAt}, and no quote can be sent after that.",
+    actionLabel: "Open the enquiry",
+    actionPath: "/dashboard/leads/{enquiryId}",
+    status: "live",
+  },
+  {
+    event: "enquiry_nudged",
+    channel: "in_app",
+    kind: "goods",
+    body: "The buyer on {ref} nudged you: they are waiting for your quote. It closes {closesAt}.",
+    actionLabel: "Open the enquiry",
+    actionPath: "/dashboard/leads/{enquiryId}",
+    status: "live",
+  },
+  {
+    event: "enquiry_nudged",
+    channel: "whatsapp",
+    kind: "services",
+    body: "A reminder from the buyer on brief {ref}: they are waiting for your proposal on {summary}. The brief closes {closesAt}.",
+    actionLabel: "Open the brief",
+    actionPath: "/dashboard/leads/{enquiryId}",
+    metaTemplateName: "enquiry_nudged_services_v1",
+    status: "pending_meta",
+  },
+  {
+    event: "enquiry_nudged",
+    channel: "email",
+    kind: "services",
+    subject: "The buyer on {ref} is waiting for your proposal",
+    body:
+      "A reminder, sent once by the buyer: they are waiting for your proposal on {ref} — {summary}. " +
+      "The brief closes {closesAt}, and no proposal can be sent after that.",
+    actionLabel: "Open the brief",
+    actionPath: "/dashboard/leads/{enquiryId}",
+    status: "live",
+  },
+  {
+    event: "enquiry_nudged",
+    channel: "in_app",
+    kind: "services",
+    body: "The buyer on {ref} nudged you: they are waiting for your proposal. It closes {closesAt}.",
+    actionLabel: "Open the brief",
+    actionPath: "/dashboard/leads/{enquiryId}",
+    status: "live",
+  },
+  {
+    event: "enquiry_closing",
+    channel: "email",
+    kind: "goods",
+    subject: "{quotes} on {ref} can be accepted until {closesAt}",
+    body:
+      "You have {quotes} on enquiry {ref}. It closes {closesAt}, and after that none of them can be accepted — " +
+      "the enquiry would have to be sent again. Compare them and accept one, or ask a supplier a question first.",
+    actionLabel: "Compare the quotes",
+    actionPath: "/enquiry/{enquiryId}/compare",
+    status: "live",
+  },
+  {
+    event: "enquiry_closing",
+    channel: "in_app",
+    kind: "goods",
+    body: "{quotes} on {ref} can be accepted until {closesAt}. After that, none of them can.",
+    actionLabel: "Compare the quotes",
+    actionPath: "/enquiry/{enquiryId}/compare",
+    status: "live",
+  },
+  {
+    event: "enquiry_closing",
+    channel: "email",
+    kind: "services",
+    subject: "{quotes} on {ref} can be accepted until {closesAt}",
+    body:
+      "You have {quotes} on brief {ref}. It closes {closesAt}, and after that none of them can be accepted — " +
+      "the brief would have to be sent again. Compare them and accept one, or ask a firm a question first.",
+    actionLabel: "Compare the proposals",
+    actionPath: "/enquiry/{enquiryId}/compare",
+    status: "live",
+  },
+  {
+    event: "enquiry_closing",
+    channel: "in_app",
+    kind: "services",
+    body: "{quotes} on {ref} can be accepted until {closesAt}. After that, none of them can.",
+    actionLabel: "Compare the proposals",
+    actionPath: "/enquiry/{enquiryId}/compare",
+    status: "live",
+  },
 ];
 

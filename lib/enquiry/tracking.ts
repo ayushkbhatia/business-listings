@@ -20,6 +20,12 @@ export interface TrackedRecipient {
   openedAt: Date | null;
   buyerNudgedAt: Date | null;
   deliveredAt: Date;
+  /**
+   * The supplier's first reply of any kind — a quote or a message. Measured,
+   * never written by a seller. A supplier who has written has answered, and is
+   * not nudged.
+   */
+  repliedAt: Date | null;
   /** Null unless they have quoted. */
   quotedAt: Date | null;
   /** Lines they priced, and the enquiry's own line count. */
@@ -152,13 +158,25 @@ export const NUDGE_AFTER_MS = 24 * 60 * 60 * 1000;
  * Whether this row may be nudged.
  *
  * The 24-hour floor is deliberate: "a nudge sent an hour after delivery reads as
- * impatience, and the median first reply is under two hours anyway". Only from
- * `delivered` — a supplier who has opened the enquiry is already reading it, and
- * one who declined has answered.
+ * impatience, and the median first reply is under two hours anyway".
+ *
+ * **Any supplier who has not answered**, opened or not — board `1n` draws the
+ * nudge on a supplier who *opened the request two days ago* and has not quoted,
+ * and `10e` `B5` counts *the sellers who have not replied*. Board 1i's first
+ * reading, delivered only, took opening as reading and reading as answering;
+ * two days after opening, silence is the thing a nudge is for. A supplier who
+ * quoted, wrote in the thread or declined has answered, and is never nudged.
+ *
+ * One rule for the tracking page, the inbox, the comparison and the service.
  */
-export function canNudge(row: Pick<TrackedRecipient, "state" | "buyerNudgedAt" | "deliveredAt">, now: Date): boolean {
-  if (row.state !== "delivered") return false;
-  if (row.buyerNudgedAt) return false;
+export const NUDGEABLE_STATES = ["delivered", "opened"] as const satisfies readonly RecipientState[];
+
+export function canNudge(
+  row: Pick<TrackedRecipient, "state" | "buyerNudgedAt" | "deliveredAt" | "repliedAt">,
+  now: Date,
+): boolean {
+  if (!(NUDGEABLE_STATES as readonly string[]).includes(row.state)) return false;
+  if (row.repliedAt || row.buyerNudgedAt) return false;
   return now.getTime() - row.deliveredAt.getTime() >= NUDGE_AFTER_MS;
 }
 

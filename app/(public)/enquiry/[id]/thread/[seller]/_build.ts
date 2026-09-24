@@ -25,6 +25,7 @@ import {
 } from "@/lib/messaging/negotiation-words";
 import type { Negotiation } from "@/lib/messaging/negotiation-server";
 import { feeOnBasis } from "@/lib/quote/proposal-words";
+import { releaseSentences } from "@/lib/enquiry/release-words";
 import type { AcceptControl, BuyerNegotiationProps } from "./NegotiationClient";
 import type { NegotiationLayoutProps, RailRowView } from "./_view";
 
@@ -183,7 +184,9 @@ export function buildNegotiationView(
               })
             : t("negotiation.accept.fact_figure_proposal", { figure: figure(quote) }),
           validityWords(quote, now).label,
-          t("negotiation.accept.fact_contact", { supplier: supplier.displayName }),
+          // Board `1n` `B9`: what is released, named as the query layer releases it.
+          // A company enquiry never reaches this dialog — it accepts on `7b`'s screen.
+          ...releaseSentences({ companyName: null, hasDeliveryAddress: false }, supplier.displayName),
           ...(others.length > 0 ? [t("negotiation.accept.fact_declined", { names: formatList(others) })] : []),
           t("negotiation.accept.fact_no_payment", { supplier: supplier.displayName }),
           t("negotiation.accept.fact_record"),

@@ -28,6 +28,7 @@ import { AcceptedRecordGallery } from "./_sections/AcceptedRecord";
 import { AcceptedProposalGallery } from "./_sections/AcceptedProposal";
 import { ProposalReplyGallery } from "./_sections/ProposalReply";
 import { ProposalComparisonGallery } from "./_sections/ProposalComparison";
+import { QuoteComparisonGallery } from "./_sections/QuoteComparison";
 import { BuyerInboxGallery } from "./_sections/BuyerInbox";
 import { BlendedSearchGallery } from "./_sections/BlendedSearch";
 import { CompareGallery } from "./_sections/Compare";
@@ -201,6 +202,8 @@ const UNLISTED = [
   "dedupe",
   // Board `3j-s`: replying to a brief with a proposal.
   "proposal-reply",
+  // Board `1n`: quotes compared line by line — every winner marked, one supplier accepted.
+  "quote-comparison",
   // Board `1n-s`: proposals compared, nothing ranked.
   "proposal-comparison",
   // Board `4b`: the approval queue's rows and its bounded bulk bar.
@@ -322,6 +325,7 @@ export default function Gallery() {
       <ServiceBriefGallery />
       <AcceptedRecordGallery />
       <ProposalReplyGallery />
+      <QuoteComparisonGallery />
       <ProposalComparisonGallery />
       <AcceptedProposalGallery />
       <Overlays />

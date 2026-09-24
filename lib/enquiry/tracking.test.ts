@@ -33,6 +33,7 @@ function row(over: Partial<TrackedRecipient> = {}): TrackedRecipient {
     openedAt: null,
     buyerNudgedAt: null,
     deliveredAt: DELIVERED,
+    repliedAt: null,
     quotedAt: null,
     quotedLines: 0,
     totalLines: 3,
@@ -161,9 +162,11 @@ describe("nudge is one per recipient, and not straight away", () => {
     expect(canNudge(row({ buyerNudgedAt: NOW }), NOW)).toBe(false);
   });
 
-  it("is only for a supplier who has not opened it", () => {
-    // One who has opened it is already reading; one who declined has answered.
-    expect(canNudge(row({ state: "opened", openedAt: NOW }), NOW)).toBe(false);
+  it("is for a supplier who has not answered, whether or not they opened it", () => {
+    // Board 1n draws it on a supplier who opened the request two days ago.
+    expect(canNudge(row({ state: "opened", openedAt: NOW }), NOW)).toBe(true);
+    // One who wrote in the thread, quoted or declined has answered.
+    expect(canNudge(row({ state: "opened", openedAt: NOW, repliedAt: NOW }), NOW)).toBe(false);
     expect(canNudge(row({ state: "declined" }), NOW)).toBe(false);
     expect(canNudge(row({ state: "quoted", quotedAt: NOW }), NOW)).toBe(false);
   });

@@ -830,6 +830,70 @@ export async function acceptanceOutlook(
   };
 }
 
+/** What accepting one quote on the comparison will do, said on its row (`1n` B7). */
+export interface QuoteOutlook {
+  /** Accepting sends it to a colleague instead of accepting it. */
+  required: boolean;
+  approverNames: string[];
+}
+
+export type ComparisonOutlook =
+  | { kind: "personal" }
+  | { kind: "not_member"; companyName: string }
+  | {
+      kind: "company";
+      companyName: string;
+      requirePoNumber: boolean;
+      requireCostCode: boolean;
+      /** Per quote id. */
+      quotes: Map<string, QuoteOutlook>;
+    };
+
+/**
+ * Board `1n` `B7` — the company's rule, read once for every quote on the page.
+ *
+ * `acceptanceOutlook` answers the same question for one quote, and the accept
+ * screen still asks it there before anything is pressed. A comparison of five
+ * quotes asking it five times would read the policy, the team and its month five
+ * times over; this reads them once and asks `approvalNeed` per quote — the same
+ * pure rule the gate applies under the lock. It is a forecast for the label on
+ * each row, never a decision: the click is evaluated again.
+ */
+export async function comparisonOutlook(
+  buyerId: string,
+  enquiry: { buyerCompanyId: string | null },
+  quotes: readonly { id: string; valueFils: bigint | null; supplierVerified: boolean }[],
+  now: Date = new Date(),
+): Promise<ComparisonOutlook> {
+  if (!enquiry.buyerCompanyId) return { kind: "personal" };
+  const companyId = enquiry.buyerCompanyId;
+  const [policy, team, names] = await Promise.all([
+    readPolicy(prisma, companyId),
+    companySeats(prisma, companyId, now),
+    memberNames(prisma, companyId),
+  ]);
+  const raiser = team.seats.find((seat) => seat.userId === buyerId);
+  if (!raiser) return { kind: "not_member", companyName: policy.name };
+
+  const outlook = new Map<string, QuoteOutlook>();
+  for (const quote of quotes) {
+    const need = approvalNeed(policy, raiser, { valueFils: quote.valueFils, supplierVerified: quote.supplierVerified });
+    outlook.set(quote.id, {
+      required: need.required,
+      approverNames: need.required
+        ? eligibleApprovers(need.route, team.seats, buyerId, quote.valueFils).map((seat) => names.get(seat.userId) ?? "—")
+        : [],
+    });
+  }
+  return {
+    kind: "company",
+    companyName: policy.name,
+    requirePoNumber: policy.requirePoNumber,
+    requireCostCode: policy.requireCostCode,
+    quotes: outlook,
+  };
+}
+
 /** The open request on an enquiry, for the notice on the compare page and the thread. */
 export async function openRequestOn(
   buyerId: string,
