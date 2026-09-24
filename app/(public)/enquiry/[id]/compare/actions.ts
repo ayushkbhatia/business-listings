@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { formatList } from "@/lib/format";
+import { formatCount, formatList } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { MESSAGE_ALL_MAX } from "@/lib/messaging/limits";
 import { messageAllSuppliers } from "@/lib/messaging/message-all";
@@ -33,7 +33,7 @@ export async function messageAllAction(_previous: MessageAllState, formData: For
       case "empty":
         return { status: "error", message: t("compare_quotes.message_all.error.empty") };
       case "too_long":
-        return { status: "error", message: t("compare_quotes.message_all.error.too_long", { max: MESSAGE_ALL_MAX }) };
+        return { status: "error", message: t("compare_quotes.message_all.error.too_long", { max: formatCount(MESSAGE_ALL_MAX) }) };
       case "decided":
         return { status: "error", message: t("compare_quotes.message_all.error.decided") };
       case "closed":
