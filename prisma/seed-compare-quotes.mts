@@ -6,13 +6,19 @@ import { MARINA } from "./seed-buyer-company.mjs";
  * who opened it and went quiet.
  *
  * `ENQ-8864` is the board as drawn and corrected at export: *Chilled water riser
- * — valves, couplings, gaskets*, three lines sent to five suppliers. Emirates
- * Valve wins the valve, Northern Gulf the coupling and the gasket, and neither
+ * — valves, couplings, gaskets*, three lines sent to five suppliers. Delta
+ * Valve wins the valve, Northgate the coupling and the gasket, and neither
  * wins overall — the cheapest per line is **AED 13,560 across two suppliers**,
- * 1,320 under Al Waha's 14,880, which is the figure the drawn card got wrong.
- * Read-only in the acceptance suite. Gulf Cool opened it two days ago and has
+ * 1,320 under Rawabi's 14,880, which is the figure the drawn card got wrong.
+ * Read-only in the acceptance suite. Breeze opened it two days ago and has
  * not quoted, so its row offers the one nudge; a spec nudging it would spend
  * the fixture, so none does.
+ *
+ * The figures are the board's; the names are not. Four of the board's five
+ * belong to seeded businesses that other suites find by name (Al Waha, Northern
+ * Gulf, Technopump, Gulf Cool), and a second row with the same display name made
+ * board 4f's admin tests match two rows (CI, 24 Sep). Names no seeded business
+ * shares a word with, so no locator can reach the wrong one.
  *
  * `ENQ-8865` is the one the acceptance suite accepts on (memory: destructive
  * e2e tests eat fixtures). `ENQ-8866` is the board as its nav draws it —
@@ -42,11 +48,11 @@ export const COMPARE_COMPANY_ENQUIRY_ID = "seedenquirycompare0003";
 const BUYER_ID = "00000000-0000-4000-8000-00000000c1a0";
 
 const SUPPLIERS = [
-  { key: "alwaha", slug: "al-waha-industrial-supplies-fixture", name: "Al Waha Industrial Supplies", licence: "DED-886401", owner: "Faisal Al Waha" },
-  { key: "emirates", slug: "emirates-valve-fitting-co-fixture", name: "Emirates Valve & Fitting Co.", licence: "DED-886402", owner: "Sunil Pillai" },
-  { key: "northern", slug: "northern-gulf-trading-1n-fixture", name: "Northern Gulf Trading", licence: "DED-886403", owner: "Omar Haddad" },
-  { key: "technopump", slug: "technopump-trading-fixture", name: "Technopump Trading LLC", licence: "DED-886404", owner: "Arjun Mehta" },
-  { key: "gulfcool", slug: "gulf-cool-technical-services-fixture", name: "Gulf Cool Technical Services", licence: "DED-886405", owner: "Kareem Nasser" },
+  { key: "alwaha", slug: "rawabi-industrial-supplies-1n", name: "Rawabi Industrial Supplies", licence: "DED-886401", owner: "Faisal Rahman" },
+  { key: "emirates", slug: "delta-valve-fitting-co-1n", name: "Delta Valve & Fitting Co.", licence: "DED-886402", owner: "Sunil Pillai" },
+  { key: "northern", slug: "northgate-trading-1n", name: "Northgate Trading", licence: "DED-886403", owner: "Omar Khalil" },
+  { key: "technopump", slug: "flowline-pump-trading-1n", name: "Flowline Pump Trading LLC", licence: "DED-886404", owner: "Arjun Mehta" },
+  { key: "gulfcool", slug: "breeze-cooling-services-1n", name: "Breeze Cooling Services", licence: "DED-886405", owner: "Kareem Nasser" },
 ] as const;
 type Key = (typeof SUPPLIERS)[number]["key"];
 

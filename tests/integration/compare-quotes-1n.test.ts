@@ -86,7 +86,7 @@ async function removeFixtures() {
 beforeAll(async () => {
   await removeFixtures();
   categoryId = (await prisma.category.findFirstOrThrow({ where: { slug: "valves-and-fittings" }, select: { id: true } })).id;
-  const names = ["Al Waha Industrial Supplies", "Emirates Valve & Fitting Co.", "Northern Gulf Trading", "Technopump Trading LLC", "Gulf Cool Technical Services"];
+  const names = ["Rawabi Industrial Supplies", "Delta Valve & Fitting Co.", "Northgate Trading", "Flowline Pump Trading LLC", "Breeze Cooling Services"];
   for (const [index, name] of names.entries()) {
     const slug = `${PREFIX}-${index}-${randomUUID().slice(0, 6)}`;
     const business = await prisma.business.create({
@@ -207,9 +207,9 @@ describe("the read model is the buyer's", () => {
     expect(model.quoted).toBe(4);
     expect(model.sentTo).toBe(5);
     expect([...winnersOf(model).values()].map((id) => suppliers.find((s) => s.id === id)!.name)).toEqual([
-      "Emirates Valve & Fitting Co.",
-      "Northern Gulf Trading",
-      "Northern Gulf Trading",
+      "Delta Valve & Fitting Co.",
+      "Northgate Trading",
+      "Northgate Trading",
     ]);
     expect(filsToAed(model.cheapest!.totalFils)).toBe("13560.00");
     expect(model.cheapest!.deliveries).toBe(2);
@@ -242,8 +242,8 @@ describe("the read model is the buyer's", () => {
     const lines = csv.replace(/^﻿/, "").trim().split("\r\n");
     expect(lines[0]).toMatch(/excluding VAT/);
     expect(lines).toHaveLength(1 + 1 + 5 + 1 + 1);
-    expect(lines.find((l) => l.startsWith("Al Waha"))).toContain("14880.00");
-    expect(lines.at(-1)).toMatch(/^Lowest per line,,,,Emirates Valve & Fitting Co\.,Northern Gulf Trading,Northern Gulf Trading/);
+    expect(lines.find((l) => l.startsWith("Rawabi"))).toContain("14880.00");
+    expect(lines.at(-1)).toMatch(/^Lowest per line,,,,Delta Valve & Fitting Co\.,Northgate Trading,Northgate Trading/);
   });
 });
 
@@ -274,7 +274,7 @@ describe("accepting declines the others out loud (B8)", () => {
     // Nothing about the winner travels: not the supplier, not the price.
     expect(sentEmail).toHaveLength(3);
     for (const mail of sentEmail) {
-      expect(mail.body).not.toContain("Al Waha");
+      expect(mail.body).not.toContain("Rawabi");
       expect(mail.body).not.toMatch(/14,?880/);
     }
   });

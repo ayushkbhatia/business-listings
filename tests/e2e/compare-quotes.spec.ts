@@ -15,7 +15,7 @@ import { Client } from "pg";
  * on `7c`, a company buyer's rows saying *Send for approval* and naming who, the
  * export, the aliases that reach the page, and axe.
  *
- * `ENQ-8864` (prisma/seed-compare-quotes.mts) is read-only here: its Gulf Cool
+ * `ENQ-8864` (prisma/seed-compare-quotes.mts) is read-only here: its Breeze
  * row offers the one nudge and no spec spends it. `ENQ-8865` is accepted once,
  * by the chromium project only.
  */
@@ -55,28 +55,28 @@ test.describe("the board as drawn", () => {
 
   test("totals every row from its cells, and flags the one incomplete quote", async ({ page }) => {
     await page.goto(compare(BOARD));
-    await expect(row(page, "Al Waha Industrial Supplies")).toContainText("AED 14,880");
-    await expect(row(page, "Emirates Valve & Fitting Co.")).toContainText("AED 13,320");
-    await expect(row(page, "Emirates Valve & Fitting Co.")).toContainText("2 of 3 lines");
-    await expect(row(page, "Emirates Valve & Fitting Co.")).toContainText("Not quoted");
-    await expect(row(page, "Northern Gulf Trading")).toContainText("AED 16,960");
-    await expect(row(page, "Technopump Trading LLC")).toContainText("AED 16,760");
+    await expect(row(page, "Rawabi Industrial Supplies")).toContainText("AED 14,880");
+    await expect(row(page, "Delta Valve & Fitting Co.")).toContainText("AED 13,320");
+    await expect(row(page, "Delta Valve & Fitting Co.")).toContainText("2 of 3 lines");
+    await expect(row(page, "Delta Valve & Fitting Co.")).toContainText("Not quoted");
+    await expect(row(page, "Northgate Trading")).toContainText("AED 16,960");
+    await expect(row(page, "Flowline Pump Trading LLC")).toContainText("AED 16,760");
   });
 
   test("marks every line's winner, the gasket included, and the card agrees (B1–B3)", async ({ page }) => {
     await page.goto(compare(BOARD));
     await expect(page.getByText("Lowest for this line")).toHaveCount(3);
-    await expect(row(page, "Emirates Valve & Fitting Co.").getByText("Lowest for this line")).toHaveCount(1);
-    await expect(row(page, "Northern Gulf Trading").getByText("Lowest for this line")).toHaveCount(2);
-    await expect(row(page, "Al Waha Industrial Supplies").getByText("Lowest for this line")).toHaveCount(0);
+    await expect(row(page, "Delta Valve & Fitting Co.").getByText("Lowest for this line")).toHaveCount(1);
+    await expect(row(page, "Northgate Trading").getByText("Lowest for this line")).toHaveCount(2);
+    await expect(row(page, "Rawabi Industrial Supplies").getByText("Lowest for this line")).toHaveCount(0);
 
     await expect(
       page.getByText(
-        "Splitting across Emirates Valve & Fitting Co. and Northern Gulf Trading would land at AED 13,560 — AED 1,320 under the best single quote, across 2 deliveries.",
+        "Splitting across Delta Valve & Fitting Co. and Northgate Trading would land at AED 13,560 — AED 1,320 under the best single quote, across 2 deliveries.",
       ),
     ).toBeVisible();
     // Accepting is one supplier: the card points at the threads, not at a basket.
-    await expect(page.getByRole("link", { name: "Your thread with Northern Gulf Trading" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Your thread with Northgate Trading" })).toBeVisible();
   });
 
   test("offers Accept on every quoted row, the same control on each (B4)", async ({ page }) => {
@@ -86,7 +86,7 @@ test.describe("the board as drawn", () => {
 
   test("keeps the supplier who opened it and went quiet, with the one nudge (B10)", async ({ page }) => {
     await page.goto(compare(BOARD));
-    const quiet = row(page, "Gulf Cool Technical Services");
+    const quiet = row(page, "Breeze Cooling Services");
     // The seed's clock: two days, and however many hours the shard has run since.
     await expect(quiet).toContainText(/Opened the request 2 d( \d+ h)? ago — no quote yet/);
     // Offered, and not pressed: the fixture keeps its nudge.
@@ -98,19 +98,19 @@ test.describe("the board as drawn", () => {
     await expect(page.getByRole("link", { name: "Total, complete quotes first" })).toHaveAttribute("aria-current", "true");
     const order = await page.getByRole("table").getByRole("rowheader").locator("a").allTextContents();
     expect(order.slice(0, 4)).toEqual([
-      "Al Waha Industrial Supplies",
-      "Technopump Trading LLC",
-      "Northern Gulf Trading",
-      "Emirates Valve & Fitting Co.",
+      "Rawabi Industrial Supplies",
+      "Flowline Pump Trading LLC",
+      "Northgate Trading",
+      "Delta Valve & Fitting Co.",
     ]);
   });
 
   test("states the accept in full before it is offered, and cancelling accepts nothing", async ({ page }) => {
     await page.goto(compare(BOARD));
-    const dialog = await openAccept(page, /^Accept Emirates Valve & Fitting Co\.'s quote/);
+    const dialog = await openAccept(page, /^Accept Delta Valve & Fitting Co\.'s quote/);
     await expect(dialog).toContainText("1 line of your requirement is not quoted in this revision.");
     await expect(dialog).toContainText("AED 13,320 excl. VAT, across 2 lines");
-    await expect(dialog).toContainText("Your name, mobile and email go to Emirates Valve & Fitting Co., and to nobody else.");
+    await expect(dialog).toContainText("Your name, mobile and email go to Delta Valve & Fitting Co., and to nobody else.");
     await expect(dialog).toContainText("are told you chose another supplier");
     await dialog.getByRole("button", { name: "Keep comparing" }).click();
     await expect(dialog).toBeHidden();
@@ -127,7 +127,7 @@ test.describe("the board as drawn", () => {
     const text = await response.text();
     expect(text).toContain("All amounts in AED, excluding VAT.");
     expect(text).toContain("14880.00");
-    expect(text).toMatch(/Lowest per line,,,,Emirates Valve & Fitting Co\.,Northern Gulf Trading,Northern Gulf Trading/);
+    expect(text).toMatch(/Lowest per line,,,,Delta Valve & Fitting Co\.,Northgate Trading,Northgate Trading/);
   });
 
   test("is reached from the handoff's addresses, RFQ- and ENQ- alike", async ({ page }) => {
@@ -176,16 +176,16 @@ test.describe("accepting from the comparison", () => {
     await page.goto(compare(ACCEPTABLE));
     // A retry after a first attempt that accepted finds the record already made.
     if ((await page.getByText(/^You accepted /).count()) === 0) {
-      const dialog = await openAccept(page, /^Accept Northern Gulf Trading's quote/);
+      const dialog = await openAccept(page, /^Accept Northgate Trading's quote/);
       await dialog.getByRole("button", { name: "Accept r1" }).click();
       await expect(page).toHaveURL(/\/accepted/);
-      await expect(page.getByRole("heading", { level: 1 })).toContainText("Northern Gulf Trading");
+      await expect(page.getByRole("heading", { level: 1 })).toContainText("Northgate Trading");
       await page.goto(compare(ACCEPTABLE));
     }
 
-    await expect(page.getByText(/^You accepted Northern Gulf Trading's quote on /)).toBeVisible();
-    await expect(row(page, "Northern Gulf Trading")).toContainText("Accepted");
-    await expect(row(page, "Al Waha Industrial Supplies")).toContainText("Declined");
+    await expect(page.getByText(/^You accepted Northgate Trading's quote on /)).toBeVisible();
+    await expect(row(page, "Northgate Trading")).toContainText("Accepted");
+    await expect(row(page, "Rawabi Industrial Supplies")).toContainText("Declined");
     await expect(page.getByRole("button", { name: /^Accept / })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Message all" })).toHaveCount(0);
   });
@@ -288,7 +288,7 @@ test.describe("a company buyer (B7)", () => {
         [lineId, enquiryId],
       );
       const { rows: suppliers } = await client.query<{ id: string }>(
-        `SELECT id FROM business WHERE slug IN ('al-waha-industrial-supplies-fixture', 'northern-gulf-trading-1n-fixture') ORDER BY slug`,
+        `SELECT id FROM business WHERE slug IN ('rawabi-industrial-supplies-1n', 'northgate-trading-1n') ORDER BY slug`,
       );
       for (const [index, supplier] of suppliers.entries()) {
         await client.query(
