@@ -1,10 +1,10 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
 import { haversineKm } from "@/lib/geo/distance";
-import { CATEGORY_RULES_SELECT, type CategoryRules } from "@/lib/taxonomy/service";
+import { CATEGORY_RULES_SELECT, tradeKindFor, type CategoryRules } from "@/lib/taxonomy/service";
 import { landingState, PUBLIC_BUSINESS, toLandingCategory, type LandingScope } from "./scope";
 import { EMIRATES } from "./scope";
-import type { Emirate } from "@/lib/db/generated/enums";
+import type { Emirate, TradeKind } from "@/lib/db/generated/enums";
 
 /**
  * Board 6a §3 and §6 — the internal link graph, and the rule that governs all
@@ -38,11 +38,22 @@ export interface LandingLink {
   href: string;
   label: string;
   listings: number;
+  /**
+   * The linked page's trade, and what it calls the people in it — board
+   * `6a-s`. The services template words a *Related work* entry the way the
+   * linked page's own H1 reads, so a link and the page it opens agree.
+   */
+  trade?: TradeKind;
+  categoryName?: string;
+  pluralHuman?: string | null;
+  /** Kilometres from this page's area to the linked one, where both are pinned. */
+  distanceKm?: number | null;
 }
 
 interface Candidate {
   scope: LandingScope;
   label: string;
+  distanceKm?: number | null;
 }
 
 /** Every candidate that is genuinely live, with its real count. */
@@ -59,7 +70,36 @@ async function live(candidates: readonly Candidate[]): Promise<LandingLink[]> {
       href: entry.candidate.scope.path,
       label: entry.candidate.label,
       listings: entry.state.listings,
+      trade: entry.candidate.scope.trade,
+      categoryName: entry.candidate.scope.category.name,
+      pluralHuman: entry.candidate.scope.category.pluralHuman,
+      distanceKm: entry.candidate.distanceKm ?? null,
     }));
+}
+
+/**
+ * The trade of every category a block names, resolved once each.
+ *
+ * `tradeKindFor` rather than a walk over the cached map, because the map lives a
+ * day and a trade created since resolves to `goods` from it — and a services
+ * page checked on the goods rule is a page counted by branch address, which is
+ * the one thing this board forbids. `tradeKindFor` reads the table on a miss.
+ */
+async function tradeResolver(categoryIds: readonly string[]): Promise<(categoryId: string) => TradeKind> {
+  const unique = [...new Set(categoryIds)];
+  const resolved = new Map(
+    await Promise.all(unique.map(async (id) => [id, await tradeKindFor(id)] as const)),
+  );
+  return (categoryId) => resolved.get(categoryId) ?? "goods";
+}
+
+/** Kilometres between two areas, or null where either has no centre. */
+function kmBetween(
+  from: { lat: number | null; lng: number | null } | null,
+  to: { lat: number | null; lng: number | null },
+): number | null {
+  if (!from || from.lat === null || from.lng === null || to.lat === null || to.lng === null) return null;
+  return haversineKm({ lat: from.lat, lng: from.lng }, { lat: to.lat, lng: to.lng });
 }
 
 const CATEGORY_SELECT = {
@@ -67,25 +107,33 @@ const CATEGORY_SELECT = {
   slug: true,
   name: true,
   parentId: true,
+  pluralHuman: true,
+  servicesLandingOpenedAt: true,
   ...CATEGORY_RULES_SELECT,
   parent: { select: { slug: true, name: true } },
 } as const;
+
+type CandidateCategory = CategoryRules & {
+  id: string;
+  slug: string;
+  name: string;
+  parentId: string | null;
+  pluralHuman: string | null;
+  servicesLandingOpenedAt: Date | null;
+  parent: { slug: string; name: string } | null;
+};
 
 function scopeOf(
   kind: "area" | "emirate",
   emirate: Emirate,
   area: { id: string; slug: string; name: string; lat: number | null; lng: number | null } | null,
-  category: CategoryRules & {
-    id: string;
-    slug: string;
-    name: string;
-    parentId: string | null;
-    parent: { slug: string; name: string } | null;
-  },
+  category: CandidateCategory,
   categoryIds: string[],
+  trade: TradeKind,
 ): LandingScope {
   return {
     kind,
+    trade,
     emirate,
     area,
     category: toLandingCategory(category),
@@ -154,6 +202,7 @@ export async function nearbyAreas(scope: LandingScope, limit = 5): Promise<Landi
           entry.page.area,
           entry.page.category,
           await categoryIdsFor(entry.page.category),
+          scope.trade,
         ),
         label: entry.page.area.name,
       })),
@@ -179,7 +228,14 @@ export interface SiblingBlocks {
  * loud so nobody later reads a short column as a bug.
  */
 export async function siblingLinks(scope: LandingScope): Promise<SiblingBlocks> {
-  const sectorId = scope.category.parentId ?? scope.category.id;
+  /*
+     The emirate class's trade. For goods it is the sector, because the goods
+     emirate class exists at sector level only. For a trade sold by the job it
+     is the trade itself — board `6a-s` D-EMI puts *VAT consultants in Dubai*
+     at the subcategory, where the services taxonomy lives.
+  */
+  const emirateTradeId =
+    scope.trade === "services" ? scope.category.id : (scope.category.parentId ?? scope.category.id);
 
   const [areaRows, emirateRows, tradeRows] = await Promise.all([
     /*
@@ -207,20 +263,20 @@ export async function siblingLinks(scope: LandingScope): Promise<SiblingBlocks> 
        Deliberately not the area class: "HVAC in Sharjah" is the page a reader
        of "HVAC in Al Quoz" wants, and offering them "HVAC in Industrial Area 4"
        instead would answer a question about Sharjah with a question about one
-       street in it. The trade is the sector, because the emirate class only
-       exists at sector level.
+       street in it.
     */
     prisma.emiratePage.findMany({
       where: {
         publishedAt: { not: null },
-        categoryId: sectorId,
+        categoryId: emirateTradeId,
         emirate: { not: scope.emirate },
       },
       select: { emirate: true, category: { select: CATEGORY_SELECT } },
     }),
     /*
        Other trades in this place. On an area page that is the other published
-       area pages here; on an emirate page, the other sectors in the emirate.
+       area pages here; on an emirate page, the other emirate pages in the
+       emirate — sectors for goods, and the services trades that have one.
     */
     scope.area
       ? prisma.areaPage.findMany({
@@ -244,6 +300,12 @@ export async function siblingLinks(scope: LandingScope): Promise<SiblingBlocks> 
         }),
   ]);
 
+  const tradeOf = await tradeResolver([
+    ...areaRows.map((row) => row.category.id),
+    ...emirateRows.map((row) => row.category.id),
+    ...tradeRows.map((row) => row.category.id),
+  ]);
+
   const [otherAreas, otherEmirates, otherTrades] = await Promise.all([
     live(
       await Promise.all(
@@ -254,8 +316,10 @@ export async function siblingLinks(scope: LandingScope): Promise<SiblingBlocks> 
             row.area,
             row.category,
             await categoryIdsFor(row.category),
+            tradeOf(row.category.id),
           ),
           label: row.area.name,
+          distanceKm: kmBetween(scope.area, row.area),
         })),
       ),
     ),
@@ -268,6 +332,7 @@ export async function siblingLinks(scope: LandingScope): Promise<SiblingBlocks> 
             null,
             row.category,
             await categoryIdsFor(row.category),
+            tradeOf(row.category.id),
           ),
           label: row.emirate,
         })),
@@ -284,6 +349,7 @@ export async function siblingLinks(scope: LandingScope): Promise<SiblingBlocks> 
               area,
               row.category,
               await categoryIdsFor(row.category),
+              tradeOf(row.category.id),
             ),
             label: row.category.name,
           };
@@ -303,6 +369,72 @@ export async function siblingLinks(scope: LandingScope): Promise<SiblingBlocks> 
     ),
     otherTrades: otherTrades.sort((a, b) => b.listings - a.listings),
   };
+}
+
+/**
+ * Board `6a-s`'s *Nearby* — every live page of this trade in the other areas of
+ * this emirate, nearest first.
+ *
+ * Every one, not five. The goods page splits the axis into a five-chip map card
+ * and a full sibling column; the services board draws one card, and `B7` asks
+ * the anchors across the page class to equal the sitemap — so a sixth page left
+ * off this card is a live page nothing on its siblings points at. Services
+ * pages are fewer and larger (`Q1`), so the card stays short in practice.
+ *
+ * Nearest first where both areas are pinned, then by how many firms each page
+ * lists: a remote practice is not nearer for being close, but a buyer in
+ * Business Bay still reads Downtown before Jebel Ali.
+ */
+export function nearestFirst(links: readonly LandingLink[]): LandingLink[] {
+  return [...links].sort((a, b) => {
+    const da = a.distanceKm ?? null;
+    const db = b.distanceKm ?? null;
+    if (da !== null && db !== null && da !== db) return da - db;
+    if (da !== null && db === null) return -1;
+    if (da === null && db !== null) return 1;
+    return b.listings - a.listings || a.label.localeCompare(b.label);
+  });
+}
+
+/**
+ * The emirate class's half of *Nearby* — every live area page of this trade in
+ * this emirate, the most firms first.
+ *
+ * Board `6a-s` D-EMI, undrawn: *VAT consultants in Dubai* is the page a buyer
+ * who does not know the district lands on, and the areas it links are the
+ * narrower pages beneath it. On the goods emirate class that axis is empty by
+ * construction; on the services one it is how the link graph reaches the area
+ * pages from the page above them.
+ */
+export async function areaPagesInEmirate(scope: LandingScope): Promise<LandingLink[]> {
+  if (scope.area) return [];
+  const rows = await prisma.areaPage.findMany({
+    where: {
+      publishedAt: { not: null },
+      categoryId: scope.category.id,
+      area: { emirate: scope.emirate },
+    },
+    select: {
+      area: { select: { id: true, slug: true, name: true, lat: true, lng: true } },
+      category: { select: CATEGORY_SELECT },
+    },
+  });
+  const links = await live(
+    await Promise.all(
+      rows.map(async (row) => ({
+        scope: scopeOf(
+          "area",
+          scope.emirate,
+          row.area,
+          row.category,
+          await categoryIdsFor(row.category),
+          scope.trade,
+        ),
+        label: row.area.name,
+      })),
+    ),
+  );
+  return links.sort((a, b) => b.listings - a.listings || a.label.localeCompare(b.label));
 }
 
 export interface SubcategoryChip {
@@ -327,6 +459,13 @@ export interface SubcategoryChip {
  * A chip reading `0` is a filter that empties the page.
  */
 export async function subcategoryChips(scope: LandingScope): Promise<SubcategoryChip[]> {
+  /*
+     Not on the services template. The board draws none, and a chip counted by
+     branch address would be the location filter B1 forbids, one level down.
+     No chips also means `?sub=` names nothing, so the route 404s it — a filter
+     the page does not offer is not a page.
+  */
+  if (scope.trade === "services") return [];
   const children = await prisma.category.findMany({
     where: { parentId: scope.category.id },
     orderBy: { sortOrder: "asc" },

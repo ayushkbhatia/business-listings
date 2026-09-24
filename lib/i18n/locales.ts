@@ -22,3 +22,21 @@ export function dir(locale: string = DEFAULT_LOCALE): Direction {
 export function isLocale(value: string): value is Locale {
   return (LOCALES as readonly string[]).includes(value);
 }
+
+/**
+ * The path segment a translated landing page will be served under — board
+ * `6a-s` D-AR, and `6a` Q4 before it: *decide the URL shape now, because
+ * retrofitting `hreflang` across a few hundred pages is the expensive version.*
+ *
+ * Decided: a locale prefix in front of the unchanged English path.
+ * `/dubai/business-bay/vat-and-tax` pairs with
+ * `/ar/dubai/business-bay/vat-and-tax`, and `hreflang` links the two — both
+ * published or neither, per scope. Nothing is served under it yet; English is
+ * the only locale.
+ *
+ * Reserved rather than merely planned, and the reservation is structural: the
+ * first segment of a landing URL is an emirate, which is a fixed enum, and no
+ * other public route takes a bare two-letter segment. `locales.test.ts` holds
+ * that true, so the prefix is free on the day Arabic ships.
+ */
+export const LOCALE_PATH_PREFIX = { ar: "ar" } as const;

@@ -18,6 +18,12 @@ import {
   type TaxonomyResult,
 } from "@/lib/taxonomy/service";
 import {
+  saveServicesLandingCopy,
+  setServicesLandingOpen,
+  type CategoryAskInput,
+  type ServicesLandingRefusal,
+} from "@/lib/taxonomy/services-landing";
+import {
   createCategory,
   isVisibilityField,
   saveCategoryDetails,
@@ -161,6 +167,93 @@ export async function switchAction(form: FormData): Promise<ActionResult> {
 
     refresh({ public: field === "showInIndex" });
     return { ok: true, message: t(`taxonomy.visibility.saved.${field}.${value ? "on" : "off"}` as MessageKey) };
+  } catch (error) {
+    return caught(error);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Board 6a-s — the services landing pages' wording, and the template switch
+// ─────────────────────────────────────────────────────────────────────────────
+
+function servicesRefusal(code: ServicesLandingRefusal): { ok: false; error: string } {
+  return { ok: false, error: t(`taxonomy.services_landing.refusal.${code}` as MessageKey) };
+}
+
+/** The questions, off the form. Anything that is not a list of pairs is refused whole. */
+function asksOf(raw: string): CategoryAskInput[] | null {
+  try {
+    const value = JSON.parse(raw) as unknown;
+    if (!Array.isArray(value)) return null;
+    const out: CategoryAskInput[] = [];
+    for (const item of value) {
+      if (!item || typeof item !== "object") return null;
+      const { question, why } = item as Record<string, unknown>;
+      if (typeof question !== "string" || typeof why !== "string") return null;
+      out.push({ question, why });
+    }
+    return out;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Save the trade's page wording — its plural noun, the credential it counts
+ * and its questions — in one decision with one reason.
+ *
+ * The landing pages are dynamic and read the record on every request, so
+ * nothing public needs revalidating: the next render is the new wording.
+ */
+export async function saveServicesLandingAction(form: FormData): Promise<ActionResult> {
+  const seat = await requireStaff();
+  const asks = asksOf(text(form, "asks"));
+  if (!asks) return servicesRefusal("ask_empty");
+  const credential = text(form, "credentialKind");
+
+  try {
+    const result = await saveServicesLandingCopy({
+      actor: seat.actor,
+      categoryId: text(form, "categoryId"),
+      pluralHuman: text(form, "pluralHuman"),
+      credentialKind: credential === "" ? null : credential,
+      asks,
+      reason: text(form, "reason"),
+    });
+    if (!result.ok) return servicesRefusal(result.error);
+    refresh({ public: false });
+    return { ok: true, message: t("taxonomy.services_landing.saved") };
+  } catch (error) {
+    return caught(error);
+  }
+}
+
+/**
+ * Open or close the services template for one trade — build phase 5's flag.
+ *
+ * Public, because it decides which URLs exist: the sitemap and the category
+ * index both read it through the gate, and both are cached.
+ */
+export async function setServicesLandingOpenAction(form: FormData): Promise<ActionResult> {
+  const seat = await requireStaff();
+  const open = text(form, "open") === "on";
+  const name = text(form, "name");
+
+  try {
+    const result = await setServicesLandingOpen({
+      actor: seat.actor,
+      categoryId: text(form, "categoryId"),
+      open,
+      reason: text(form, "reason"),
+    });
+    if (!result.ok) return servicesRefusal(result.error);
+    refresh({ public: true });
+    revalidatePath("/sitemap.xml");
+    revalidatePath("/admin/content/matrix");
+    return {
+      ok: true,
+      message: t(open ? "taxonomy.services_landing.opened" : "taxonomy.services_landing.closed", { name }),
+    };
   } catch (error) {
     return caught(error);
   }

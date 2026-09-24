@@ -11585,6 +11585,8 @@ export const en = {
   "categories.no_subcategories": "Subcategory pages open as more suppliers list.",
   "categories.matrix_caption": "Listings by sector and emirate",
   "categories.col_sector": "Sector",
+  // Board 6a-s: read after a trade's name, where its row sits under its sector.
+  "categories.matrix_trade_in": ", in {sector}",
   "categories.threshold_note":
     "A greyed cell is a page we have not made. A trade needs enough suppliers in that emirate — and enough of them checked — before a page about it is worth arriving at, and how many that is depends on how many people are looking. Nothing is hidden: those pages were never created.",
   "categories.subcategories": { one: "{count} subcategory", other: "{count} subcategories" },
@@ -11672,12 +11674,74 @@ export const en = {
   // Claiming enters the ranking; it does not buy a position in it. The board's
   // fourth correction: "claim it free and you'll appear above them" implied
   // that claiming outranks the verified, which is not what the config does.
-  "landing.claim_body": "{listings} businesses are listed on this page and {unclaimed} of them are unclaimed. Unclaimed listings rank last here — claiming yours is free and puts it in the ranking, and verifying the licence is what lifts it.",
+  // Pluralised on the unclaimed count: "1 of them are unclaimed" printed on
+  // every services page with a single licence import on it.
+  "landing.claim_body": {
+    one: "{listings} businesses are listed on this page and {unclaimed} of them is unclaimed. Unclaimed listings rank last here — claiming yours is free and puts it in the ranking, and verifying the licence is what lifts it.",
+    other: "{listings} businesses are listed on this page and {unclaimed} of them are unclaimed. Unclaimed listings rank last here — claiming yours is free and puts it in the ranking, and verifying the licence is what lifts it.",
+  },
   "landing.claim_action": "Claim your listing",
 
   "landing.siblings_areas": "{category} in other {emirate} areas",
   "landing.siblings_emirates": "{category} in other emirates",
   "landing.siblings_trades": "Other trades in {place}",
+
+  // ── Services area and emirate landing pages, board 6a-s ───────────────────
+  //
+  // The template for a trade sold by the job. Its H1 takes the trade's own
+  // plural noun from the category record — *VAT consultants*, not
+  // *companies* (correction 3) — and falls back to the trade's name plus
+  // "firms" where nobody has written one. Its stat line counts firms that
+  // COVER the place, which is not the same set as firms with an address in it
+  // (B1). Every count arrives formatted from a query, as on the goods template.
+  "landing_services.h1_area": "{noun} in {area}, {emirate}",
+  "landing_services.h1_emirate": "{noun} in {emirate}",
+  "landing_services.noun_fallback": "{category} firms",
+  "landing_services.title": { one: "{subject} — {display} firm", other: "{subject} — {display} firms" },
+  "landing_services.meta_fallback": {
+    one: "{display} firm covers {place} for {trade}. See how it works, what it charges on and how fast it replies, then ask for a quote.",
+    other: "{display} firms cover {place} for {trade}, {verified} with a trade licence we checked. See how each works, then ask several for a quote.",
+  },
+  "landing_services.stat_firms": { one: "{display} firm", other: "{display} firms" },
+  "landing_services.stat_covering": "covering {place}",
+  "landing_services.stat_verified": "{display} licence-verified",
+  // One string per credential a register can answer for. `fta_tax_agent` is
+  // the only such kind today; a kind nobody can check has no stat at all.
+  "landing_services.stat_credential.fta_tax_agent": {
+    one: "{display} registered FTA tax agent",
+    other: "{display} registered FTA tax agents",
+  },
+  "landing_services.stat_reply": "median reply {duration}",
+  "landing_services.results_heading": "{noun} covering {place}",
+  "landing_services.office_in": "Office in {place}",
+  "landing_services.covers": "Covers {place}",
+  "landing_services.covers_named": "How {name} covers {place}",
+  "landing_services.services_label": "Their services in this trade",
+  "landing_services.show_all": { one: "Show all {count} firm", other: "Show all {count} firms" },
+  "landing_services.pagination_label": "More firms",
+  // The rail. D-FAN: the block states the fan-out's own match — up to eight
+  // firms, verified and covering the site — and never the page's count, which
+  // is a different set by construction (correction 1).
+  "landing_services.fanout_title": {
+    one: "Ask {display} firm that covers {place}",
+    other: "Ask {display} firms that cover {place}",
+  },
+  "landing_services.fanout_body": "Describe the work once. We send it to the firms that cover {place} and hold a verified trade licence — up to {cap} of them. We pick them; you do not have to.",
+  "landing_services.fanout_widen": {
+    one: "No firm can take a brief for {place} yet. {display} firm across {emirate} can.",
+    other: "No firm can take a brief for {place} yet. {display} firms across {emirate} can.",
+  },
+  "landing_services.fanout_widen_title": "Ask across {emirate}",
+  "landing_services.nearby": "Nearby",
+  "landing_services.areas_in": "Areas in {emirate}",
+  "landing_services.related_work": "Related work",
+  "landing_services.related_services": "{noun} in {place}",
+  "landing_services.related_goods": "{category} companies in {place}",
+  "landing_services.other_emirates": "{noun} in other emirates",
+  "landing_services.asks_heading": "What to ask {noun} in {place}",
+  "landing_services.about_heading": "About {noun} in {place}",
+  "landing_services.faq_heading": "Questions buyers ask about {noun} in {place}",
+  "landing_services.claim_subject": "A {category} firm in {place}?",
 
   "area.title": "{category} suppliers in {area}",
   "area.meta_description": "{listings} {category} suppliers with premises in {area}, {verified} with a trade licence we have checked. Send one enquiry to up to eight of them.",
@@ -12317,6 +12381,61 @@ export const en = {
   "taxonomy.remove.body_sector": "Its address redirects to the category index. Refused while subcategories, listings or pages depend on it — merge it instead to move them.",
   "taxonomy.remove.confirm": "Remove category",
   "taxonomy.remove.saved": "Removed. Its address redirects.",
+  // ── Board 6a-s: what a services trade's landing pages read off the trade ──
+  "taxonomy.services_landing.title": "Services landing pages",
+  "taxonomy.services_landing.intro": "What this trade's landing pages call the people in it, the credential they count and the questions they tell a buyer to ask. Set once for the trade and read on every page in it — never per area.",
+  "taxonomy.services_landing.plural_label": "What the pages call the firms",
+  // An example place for the hint's sample H1 — a real district, so the
+  // sentence reads like the page it previews.
+  "taxonomy.services_landing.example_area": "Business Bay",
+  "taxonomy.services_landing.plural_hint": "The H1 opens with it: “{example}”. Left empty, the pages say “{fallback}”.",
+  "taxonomy.services_landing.credential_label": "Credential the pages count",
+  "taxonomy.services_landing.credential_inherit": "Inherit",
+  "taxonomy.services_landing.credential_inherited": "Inherited from {source}: {credential}.",
+  "taxonomy.services_landing.credential_none": "No credential is counted for this trade.",
+  "taxonomy.services_landing.credential_hint": "Only a credential a register can check is ever counted, and only the firms whose number the register confirmed. Today that is the FTA tax agent number; any other kind is recorded and counts nothing.",
+  "taxonomy.services_landing.asks_label": "What to ask — up to three questions",
+  "taxonomy.services_landing.asks_hint": "Each question a buyer should put to a firm in this trade, and the consequence of not asking it. The same three render on every landing page in the trade.",
+  "taxonomy.services_landing.ask_question": "Question {n}",
+  "taxonomy.services_landing.ask_why": "Why it earns its place",
+  "taxonomy.services_landing.ask_add": "Add a question",
+  "taxonomy.services_landing.ask_remove": "Remove question {n}",
+  "taxonomy.services_landing.save": "Save",
+  "taxonomy.services_landing.save_title": "Save the landing-page wording for {name}",
+  "taxonomy.services_landing.save_body": "Every landing page in this trade reads it on the next request.",
+  "taxonomy.services_landing.save_confirm": "Save wording",
+  "taxonomy.services_landing.saved": "Saved. Every landing page in this trade now reads it.",
+  "taxonomy.services_landing.template_label": "Services template",
+  "taxonomy.services_landing.template_open": "Open since {date}",
+  "taxonomy.services_landing.template_closed": "Closed — no landing page in this trade can be live",
+  "taxonomy.services_landing.template_note": "Rolled out one trade at a time: open one, check it in Search Console, then open the next.",
+  "taxonomy.services_landing.open.title": "Open the services template for {name}?",
+  "taxonomy.services_landing.open.body": "Published pages in this trade that clear their floors go live on the next request, and enter the sitemap.",
+  "taxonomy.services_landing.open.confirm": "Open the template",
+  "taxonomy.services_landing.close.title": "Close the services template for {name}?",
+  "taxonomy.services_landing.close.body": {
+    // "Can no longer be live", not "leave the site": a published page held by
+    // its floors was never on the site, and the count includes it.
+    one: "{count} published page in this trade can no longer be live. If it is live now, it leaves the site, the sitemap and every link block. Nothing is unpublished — reopening brings it back.",
+    other: "{count} published pages in this trade can no longer be live. Those live now leave the site, the sitemap and every link block. Nothing is unpublished — reopening brings them back.",
+  },
+  // Its own key, not a `zero:` form — English has no zero plural category, so
+  // one would never be selected (see `listing.stays_live_none`).
+  "taxonomy.services_landing.close.body_none": "No page in this trade is published, so nothing leaves the site. Closing it keeps a page published later from going live until the template is opened again.",
+  "taxonomy.services_landing.close.confirm": "Close the template",
+  "taxonomy.services_landing.opened": "The services template is open for {name}.",
+  "taxonomy.services_landing.closed": "The services template is closed for {name}.",
+  "taxonomy.services_landing.read_only": "Read only. Setting these is an ops lead decision.",
+  "taxonomy.services_landing.refusal.plural_too_short": "The noun needs two characters at least — it opens an H1.",
+  "taxonomy.services_landing.refusal.plural_too_long": "Sixty characters at most, so the H1 fits a phone screen on two lines.",
+  "taxonomy.services_landing.refusal.credential_unknown": "That is not a credential the platform records. Pick one from the list.",
+  "taxonomy.services_landing.refusal.too_many_asks": "Three questions at most. A fourth turns the block into a questionnaire.",
+  "taxonomy.services_landing.refusal.ask_empty": "Every question needs its reason, and every reason its question.",
+  "taxonomy.services_landing.refusal.ask_question_too_long": "A question fits on one line: 160 characters at most.",
+  "taxonomy.services_landing.refusal.ask_why_too_long": "The reason is a sentence or two: 400 characters at most.",
+  "taxonomy.services_landing.refusal.not_found": "That category is no longer in the taxonomy. Reload and try again.",
+  "taxonomy.services_landing.refusal.not_services": "This trade is sold by the item, so its landing pages use the goods template and read none of this.",
+  "taxonomy.services_landing.refusal.unchanged": "Nothing here has changed since it was last saved.",
   "taxonomy.visibility.title": "Visibility",
   "taxonomy.visibility.read_only": "Changing these is an ops lead decision.",
   "taxonomy.visibility.home.label": "Show on the home grid",

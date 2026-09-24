@@ -26,6 +26,7 @@ import { ResultClicks } from "@/app/(public)/_results/ResultClicks";
 import { LandingResults } from "./LandingResults";
 import { ClaimPrompt, ReadNext, RelatedSearches } from "./LandingRail";
 import { SiblingLinks } from "./SiblingLinks";
+import { ServicesLandingPage } from "./ServicesLandingPage";
 
 /**
  * Board 6a — the area landing page, and the one controller both classes share.
@@ -73,6 +74,15 @@ function one(value: string | string[] | undefined): string | undefined {
 
 export async function LandingPage({ state, searchParams, pageCount }: LandingPageProps) {
   const { scope } = state;
+  /*
+     Board `6a-s` B2 — a trade sold by the job gets its own template, not this
+     one with the grid hidden. The grid, the chips and the map are never
+     rendered for it: each answers *where is this supplier*, and that page asks
+     *who covers this place*.
+  */
+  if (scope.trade === "services") {
+    return <ServicesLandingPage state={state} searchParams={searchParams} pageCount={pageCount} />;
+  }
   const emirateName = t(`emirate.${scope.emirate}` as never);
   const placeName = scope.area?.name ?? emirateName;
 

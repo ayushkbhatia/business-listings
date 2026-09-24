@@ -3,7 +3,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
 import { acceptQuote, createEnquiry, findFanoutCandidates, descendantsOf } from "@/lib/enquiry/service";
 import { getLeadDetail, getLeadsForBusiness } from "@/lib/db/queries/seller";
-import { monthStart, scoreCandidate } from "@/lib/enquiry/fanout";
+import { atMonthlyCap, monthStart, scoreCandidate } from "@/lib/enquiry/fanout";
 
 /**
  * The handoff 2 step 3 checkpoint, end to end:
@@ -279,7 +279,7 @@ describe("criterion 6 — a capped seller is not offered", () => {
     */
     const within = await descendantsOf(categoryId);
 
-    const outsider = await prisma.business.findFirstOrThrow({
+    const outsiders = await prisma.business.findMany({
       where: {
         publishedAt: { not: null },
         suspendedAt: null,
@@ -290,7 +290,29 @@ describe("criterion 6 — a capped seller is not offered", () => {
         NOT: { categories: { some: { categoryId: { in: within } } } },
       },
       select: { id: true },
+      orderBy: { id: "asc" },
     });
+    /*
+       One with room this month. A supplier at its cap is dropped even when
+       pinned — the test above — so an outsider picked without looking could
+       be one, and this would be asserting the cap rather than the pin. It was
+       `findFirstOrThrow` with no order, which is whatever row the heap hands
+       back first: it passed until another suite's writes and a larger seed put
+       a capped supplier there.
+    */
+    const pool = await findFanoutCandidates({
+      categoryId,
+      categoryIds: within,
+      emirate: "dubai",
+      lineCount: 1,
+      want: 8,
+      pinned: outsiders.map((row) => row.id),
+    });
+    const outsider = outsiders.find((row) => {
+      const candidate = pool.find((entry) => entry.businessId === row.id);
+      return candidate !== undefined && !atMonthlyCap(candidate);
+    });
+    if (!outsider) throw new Error("no supplier outside the trade has room this month");
 
     const candidates = await findFanoutCandidates({
       categoryId,

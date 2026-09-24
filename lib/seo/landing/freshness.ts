@@ -1,7 +1,8 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import { prisma } from "@/lib/db/client";
-import { supplyWhere, type LandingScope } from "./scope";
+import { memberScopeOf, supplyWhere, type LandingScope } from "./scope";
+import { servicesMembers } from "./services-supply";
 
 /**
  * Board 6a §Freshness — what `UPDATED 21 AUG 2026` means.
@@ -44,13 +45,26 @@ import { supplyWhere, type LandingScope } from "./scope";
  * direction that matters.
  */
 
-/** Stable across processes and releases: it is only ever compared to itself. */
-export async function supplyDigest(scope: LandingScope): Promise<string> {
-  const rows = await prisma.business.findMany({
-    where: supplyWhere(scope),
-    select: { id: true, verificationTier: true },
-    orderBy: { id: "asc" },
-  });
+/**
+ * Stable across processes and releases: it is only ever compared to itself.
+ *
+ * Over the page's own members, whichever rule admits them — a branch address
+ * for goods, coverage for services (`6a-s` B1). A digest taken over the wrong
+ * set would move the date for a firm that never appeared on the page and hold
+ * it still for one that did.
+ */
+export async function supplyDigest(scope: LandingScope, now = new Date()): Promise<string> {
+  const rows =
+    scope.trade === "services"
+      ? (await servicesMembers(memberScopeOf(scope), now)).map((member) => ({
+          id: member.id,
+          verificationTier: member.verificationTier,
+        }))
+      : await prisma.business.findMany({
+          where: supplyWhere(scope),
+          select: { id: true, verificationTier: true },
+          orderBy: { id: "asc" },
+        });
   const hash = createHash("sha256");
   for (const row of rows) hash.update(`${row.id}:${row.verificationTier}\n`);
   return `${rows.length}-${hash.digest("hex").slice(0, 32)}`;
@@ -94,7 +108,7 @@ export async function refreshFreshness(
   scope: LandingScope,
   now = new Date(),
 ): Promise<FreshnessResult | null> {
-  const digest = await supplyDigest(scope);
+  const digest = await supplyDigest(scope, now);
 
   if (scope.area) {
     const key = { areaId_categoryId: { areaId: scope.area.id, categoryId: scope.category.id } };
