@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { acceptQuote } from "@/lib/enquiry/service";
 import { requestApproval } from "@/lib/buyer-company/approvals";
 import { signInHref } from "@/lib/auth/next-path";
+import { PermissionError } from "@/lib/auth/errors";
 import { resolveBuyerId } from "./_buyer";
 
 /**
@@ -29,6 +30,15 @@ function returnPath(enquiryId: string, from: FormDataEntryValue | null): string 
   return `${base}/compare`;
 }
 
+/**
+ * Build plan 9.4: `quote.accept`, refused by the service, as the code the
+ * screens already read refusals by. Anything else is still thrown.
+ */
+function refusedByMatrix(error: unknown): { ok: false; error: "not_permitted" } {
+  if (error instanceof PermissionError) return { ok: false, error: "not_permitted" };
+  throw error;
+}
+
 const COMPANY_REFUSALS: ReadonlySet<string> = new Set([
   "approval_required",
   "po_required",
@@ -50,7 +60,7 @@ export async function acceptQuoteAction(formData: FormData): Promise<void> {
 
   const result = await acceptQuote(buyerId, quoteId, new Date(), {
     source: typeof formData.get("from") === "string" && String(formData.get("from")).startsWith("thread:") ? "thread" : "compare",
-  });
+  }).catch(refusedByMatrix);
   const carry = typeof token === "string" && token ? `?t=${token}` : "";
 
   /*
@@ -97,8 +107,8 @@ export async function companyAcceptAction(formData: FormData): Promise<void> {
   const buyerId = await resolveBuyerId(null);
   if (!buyerId) redirect(signInHref(here));
 
-  const request = () => requestApproval(buyerId, quoteId, { poNumber, costCode, note });
-  const accept = () => acceptQuote(buyerId, quoteId, new Date(), { poNumber, costCode, source: "company" });
+  const request = () => requestApproval(buyerId, quoteId, { poNumber, costCode, note }).catch(refusedByMatrix);
+  const accept = () => acceptQuote(buyerId, quoteId, new Date(), { poNumber, costCode, source: "company" }).catch(refusedByMatrix);
 
   let outcome: "accepted" | "requested" | { error: string };
   if (intent === "request") {

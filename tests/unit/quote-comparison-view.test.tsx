@@ -118,7 +118,7 @@ function data(over: Partial<QuoteComparisonData["enquiry"]> = {}): QuoteComparis
   };
 }
 
-function view(input = data(), outlook: ComparisonOutlook = { kind: "personal" }) {
+function view(input = data(), outlook: ComparisonOutlook = { kind: "personal" }, mayAccept = true) {
   return render(
     <QuoteComparisonView
       data={input}
@@ -127,6 +127,7 @@ function view(input = data(), outlook: ComparisonOutlook = { kind: "personal" })
       token={null}
       outlook={outlook}
       error={null}
+      mayAccept={mayAccept}
       live={false}
       idPrefix="t1n"
     />,
@@ -200,6 +201,31 @@ describe("board 1n, rendered", () => {
     expect(screen.queryByText(/^Splitting across/)).toBeNull();
     expect(screen.getByText(/^You accepted Al Waha Industrial Supplies's quote on /)).toBeTruthy();
     expect(screen.getAllByText("Declined")).toHaveLength(2);
+  });
+
+  it("offers no accept to an account the service would refuse, and says why (build plan 9.4)", async () => {
+    const { container } = view(data(), { kind: "personal" }, false);
+    expect(screen.queryAllByRole("button", { name: /^Accept / })).toHaveLength(0);
+    expect(screen.getByText("This account cannot accept quotes, so none is offered here. A quote is accepted from a buyer or a supplier account.")).toBeTruthy();
+    // Asking is still theirs: every quoted row keeps its way into the thread.
+    expect(screen.getAllByRole("link", { name: /^View .+'s quote/ })).toHaveLength(3);
+    // The card that explains an accept goes with the accept.
+    expect(screen.queryByText("What happens on accept")).toBeNull();
+    expect(screen.getByRole("columnheader", { name: "View the quote" })).toBeTruthy();
+    await expectNoAxeViolations(container);
+  });
+
+  it("offers a company buyer the same nothing: no accept screen link either", () => {
+    const outlook: ComparisonOutlook = {
+      kind: "company",
+      companyName: "Marina Facilities LLC",
+      requirePoNumber: false,
+      requireCostCode: false,
+      quotes: new Map([["q-alwaha", { required: true, approverNames: ["Rami Haddad"] }]]),
+    };
+    view(data({ buyerCompanyId: "c1", companyName: "Marina Facilities LLC" }), outlook, false);
+    expect(screen.queryAllByRole("link", { name: /for approval$|^Accept / })).toHaveLength(0);
+    expect(screen.queryByText("Goes to Rami Haddad first")).toBeNull();
   });
 
   it("is axe clean as drawn", async () => {

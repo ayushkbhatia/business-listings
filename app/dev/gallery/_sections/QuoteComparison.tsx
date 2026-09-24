@@ -139,11 +139,13 @@ function View({
   input,
   sort = "received",
   outlook = PERSONAL,
+  mayAccept = true,
 }: {
   id: string;
   input: QuoteComparisonData;
   sort?: SortKey;
   outlook?: ComparisonOutlook;
+  mayAccept?: boolean;
 }) {
   return (
     <div className="w-full min-w-0">
@@ -154,6 +156,7 @@ function View({
         token={null}
         outlook={outlook}
         error={null}
+        mayAccept={mayAccept}
         live={false}
         idPrefix={id}
       />
@@ -231,6 +234,10 @@ export function QuoteComparisonGallery() {
 
       <States label="accepted · the record of what the others offered" stack>
         <View id="g1n-accepted" input={accepted} />
+      </States>
+
+      <States label="account cannot accept · staff role, no buyer role (build plan 9.4)" stack>
+        <View id="g1n-not-permitted" input={data(BOARD)} mayAccept={false} />
       </States>
     </Section>
   );

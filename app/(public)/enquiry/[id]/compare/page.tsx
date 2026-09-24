@@ -17,6 +17,8 @@ import { isVerified } from "@/lib/verification";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { AccountTabs } from "@/app/(public)/account/_tabs";
 import { resolveBuyerId, trackingTokenFor } from "../../_buyer";
+import { actorFor } from "@/lib/auth/actor";
+import { mayAcceptQuote } from "@/lib/auth/guards";
 import { acceptQuoteAction } from "../../actions";
 import { acceptErrorMessage } from "../../_errors";
 import { ApprovalNotice } from "../../_approval-notice";
@@ -70,6 +72,14 @@ export default async function ComparePage({
   const error = acceptErrorMessage(one("error"));
 
   /*
+     Build plan 9.4: `acceptQuote` asks `quote.accept` of the record before it
+     reads the quote, so a person it refuses is not offered the button. Asked
+     the same way the service asks it — `actorFor`, not the session — so the two
+     cannot disagree about a claim-token buyer, who has no session and holds it.
+  */
+  const mayAccept = mayAcceptQuote(await actorFor(buyerId));
+
+  /*
      Board `1n-s`: an enquiry for work is compared as proposals — each fee in its
      own unit, one labelled row of our arithmetic, and nothing ranked.
   */
@@ -90,6 +100,7 @@ export default async function ComparePage({
           }}
           error={error}
           acceptAction={acceptQuoteAction}
+          mayAccept={mayAccept}
         />
       </PublicShell>
     );
@@ -148,6 +159,7 @@ export default async function ComparePage({
         error={error}
         acceptAction={acceptQuoteAction}
         messageAllAction={messageAllAction}
+        mayAccept={mayAccept}
       />
     </PublicShell>
   );

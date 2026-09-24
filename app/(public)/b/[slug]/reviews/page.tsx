@@ -18,6 +18,7 @@ import { t } from "@/lib/i18n";
 import { canReview } from "@/lib/reviews/eligibility";
 import { enquiryForReview } from "@/lib/reviews/service";
 import { getActor } from "@/lib/auth/session";
+import { mayWriteReview } from "@/lib/auth/guards";
 import { prisma } from "@/lib/db/client";
 import { absoluteUrl } from "@/lib/site";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
@@ -136,7 +137,14 @@ export default async function ReviewsPage({ params, searchParams }: Params) {
     getActor(),
   ]);
 
-  const writeReviewHref = await eligibleEnquiry(actor?.id ?? null, business.id);
+  /*
+     Build plan 9.4: `createReview` asks `review.create` before it reads the
+     enquiry, so a seat it refuses — a staff role with no buyer one — gets no
+     button, the same absence an ineligible visitor gets. A signed-in session is
+     never provisional, so the session actor answers what the record would.
+  */
+  const writeReviewHref =
+    actor && mayWriteReview(actor) ? await eligibleEnquiry(actor.id, business.id) : null;
 
   const shown = board.reviews.length;
   const remaining = Math.max(0, board.total - shown);

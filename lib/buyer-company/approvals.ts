@@ -1,6 +1,8 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
 import { Prisma } from "@/lib/db/generated/client";
+import { actorFor } from "@/lib/auth/actor";
+import { assertCanAcceptQuote } from "@/lib/auth/guards";
 import { acceptQuote, type AcceptQuoteResult } from "@/lib/enquiry/service";
 import { onApprovalDecided, onApprovalRequested } from "@/lib/notify/events";
 import { eligibleApprovers, type ApprovalReason } from "./authority";
@@ -64,6 +66,11 @@ export async function requestApproval(
   input: { poNumber?: string | null; costCode?: string | null; note?: string | null },
   now: Date = new Date(),
 ): Promise<RequestResult> {
+  // Build plan 9.4: a request is an acceptance the rule holds, so it asks what
+  // `acceptQuote` asks — before a colleague is sent a question nobody could
+  // answer yes to. Throws `PermissionError`.
+  assertCanAcceptQuote(await actorFor(buyerId));
+
   const poNumber = readReference(input.poNumber);
   const costCode = readReference(input.costCode);
   if (poNumber === "too_long" || poNumber === "invalid" || costCode === "too_long" || costCode === "invalid") {
@@ -217,6 +224,14 @@ export async function approveRequest(
   approvalId: string,
   now: Date = new Date(),
 ): Promise<DecideResult> {
+  /*
+     Build plan 9.4: approving *is* the acceptance, so the approver is asked
+     `quote.accept` as well as the raiser, whose name it goes out in —
+     `acceptQuote` asks that one. The company's rule says whether this colleague
+     may approve this value; the matrix says whether they may accept at all.
+  */
+  assertCanAcceptQuote(await actorFor(approverId));
+
   const request = await prisma.quoteApproval.findUnique({
     where: { id: approvalId },
     select: {

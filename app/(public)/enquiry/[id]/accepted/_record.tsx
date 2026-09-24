@@ -63,6 +63,7 @@ export function AcceptedRecordView({
   record,
   now,
   links,
+  reviewWritable = true,
   breadcrumb,
   referenceForm,
   reportForm,
@@ -70,6 +71,12 @@ export function AcceptedRecordView({
   record: AcceptedRecord;
   now: Date;
   links: AcceptedRecordLinks;
+  /**
+   * Build plan 9.4: whether this person holds `review.create`, which
+   * `createReview` asks first. False takes the write button away and says why;
+   * a review already posted can still be read.
+   */
+  reviewWritable?: boolean;
   /**
    * The page's own chrome, passed in. A breadcrumb is a named `nav` landmark,
    * and the gallery renders this view in several states on one page — where a
@@ -389,13 +396,13 @@ export function AcceptedRecordView({
               {/* §States: once the term has started, coming back is the page's use. */}
               {contractLeads ? contract : null}
               <ProposalCommitmentsCard record={accepted} />
-              <ProposalReviewCard record={accepted} now={now} reviewHref={links.review} />
+              <ProposalReviewCard record={accepted} now={now} reviewHref={links.review} writable={reviewWritable} />
               {contractLeads ? null : contract}
             </>
           ) : (
             <>
               <CommitmentsCard record={record} />
-              <ReviewCard record={record} now={now} reviewHref={links.review} />
+              <ReviewCard record={record} now={now} reviewHref={links.review} writable={reviewWritable} />
             </>
           )}
           <ProblemCard record={record} reportForm={reportForm} />
@@ -504,7 +511,17 @@ function CommitmentsCard({ record }: { record: AcceptedRecord }) {
   );
 }
 
-function ReviewCard({ record, now, reviewHref }: { record: AcceptedRecord; now: Date; reviewHref: string }) {
+function ReviewCard({
+  record,
+  now,
+  reviewHref,
+  writable,
+}: {
+  record: AcceptedRecord;
+  now: Date;
+  reviewHref: string;
+  writable: boolean;
+}) {
   const { review, supplier } = record;
   // Board 10f: a review is open for REVIEW_WINDOW_DAYS from acceptance. After it
   // the form is absent, so this offers no button to it — it says the day.
@@ -519,6 +536,9 @@ function ReviewCard({ record, now, reviewHref }: { record: AcceptedRecord; now: 
         <p className="mt-2 text-body-sm text-body">
           {t("accepted.review.closed", { when: formatDate(window.closesOn), days: REVIEW_WINDOW_DAYS })}
         </p>
+      ) : review.kind === "none" && !writable ? (
+        // Build plan 9.4: no button to a form `createReview` would refuse.
+        <p className="mt-2 text-body-sm text-body">{t("reviewwrite.error.not_permitted")}</p>
       ) : review.kind === "none" ? (
         <>
           <p className="mt-2 text-body-sm text-body">{t("accepted.review.body")}</p>

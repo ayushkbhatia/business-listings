@@ -71,12 +71,13 @@ function fixture(overrides: Partial<AcceptedRecord> = {}): AcceptedRecord {
   };
 }
 
-function renderRecord(record: AcceptedRecord, now = NOW) {
+function renderRecord(record: AcceptedRecord, now = NOW, reviewWritable = true) {
   return render(
     <AcceptedRecordView
       record={record}
       now={now}
       links={LINKS}
+      reviewWritable={reviewWritable}
       breadcrumb={null}
       referenceForm={<span>reference slot</span>}
       reportForm={<button type="button">{t("accepted.report.open")}</button>}
@@ -193,6 +194,14 @@ describe("the other documented states", () => {
     renderRecord({ ...record, supplier: { ...record.supplier, person: null, phone: null, whatsapp: null, location: null } });
     expect(screen.getByText(t("accepted.where.none"))).toBeInTheDocument();
     expect(screen.getByRole("link", { name: t("accepted.contact.no_phone") })).toHaveAttribute("href", LINKS.thread);
+  });
+
+  it("an account that may not review: no button to the form, and the reason instead", async () => {
+    // Build plan 9.4: `createReview` asks `review.create` before anything else.
+    const { container } = renderRecord(fixture(), NOW, false);
+    expect(screen.queryByRole("link", { name: t("accepted.review.write") })).toBeNull();
+    expect(screen.getByText(t("reviewwrite.error.not_permitted"))).toBeInTheDocument();
+    await expectNoAxeViolations(container);
   });
 
   it("review written: a link to it rather than a second prompt", () => {

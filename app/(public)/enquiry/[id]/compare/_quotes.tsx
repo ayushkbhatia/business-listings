@@ -74,6 +74,13 @@ export interface QuoteComparisonViewProps {
   /** The accept server action. Absent in the gallery, where nothing posts. */
   acceptAction?: (formData: FormData) => Promise<void>;
   messageAllAction?: (state: MessageAllState, formData: FormData) => Promise<MessageAllState>;
+  /**
+   * Build plan 9.4: whether this person holds `quote.accept`, which the service
+   * asks before anything else. False takes every accept control away — the
+   * sheet, the company's accept screen link and the card that explains them —
+   * and the page says why. The thread stays: asking is still theirs.
+   */
+  mayAccept?: boolean;
   /** False in the gallery: the nudge is a live control that writes. */
   live?: boolean;
   /** Prefixes ids, so the gallery can draw several states on one page. */
@@ -90,6 +97,7 @@ export function QuoteComparisonView({
   error,
   acceptAction,
   messageAllAction,
+  mayAccept = true,
   live = true,
   idPrefix = "compare",
 }: QuoteComparisonViewProps) {
@@ -100,6 +108,8 @@ export function QuoteComparisonView({
   const quotedRows = model.rows.filter((row): row is QuotedRow => row.kind === "quoted");
   const accepted = model.phase === "accepted" ? quotedRows.find((row) => row.state === "accepted") ?? null : null;
   const messageable = model.phase === "open" && model.rows.some((row) => row.kind !== "no_quote" || !row.declinedBySupplier);
+  // Said before the button is pressed, not after — and only where there is one. The record keeps it.
+  const explainsAccept = mayAccept || model.phase === "accepted";
 
   return (
     <div className="mx-auto w-full max-w-7xl px-[var(--section-pad)] pb-16">
@@ -153,6 +163,12 @@ export function QuoteComparisonView({
             {t("compare.error_enquiry_closed")}
           </Alert>
         ) : null}
+        {/* Said only where an accept would otherwise be offered: closed and accepted say their own. */}
+        {!mayAccept && model.phase === "open" && model.quoted > 0 && !error ? (
+          <Alert tone="neutral" live="off">
+            {t("compare.error_not_permitted")}
+          </Alert>
+        ) : null}
         {accepted ? (
           <Alert
             tone="ok"
@@ -188,14 +204,17 @@ export function QuoteComparisonView({
             style={style}
             outlook={outlook}
             acceptAction={acceptAction}
+            mayAccept={mayAccept}
             live={live}
             idPrefix={idPrefix}
           />
           <p className="mt-2 text-caption text-body">{t("compare_quotes.basis")}</p>
-          <div className="mt-6 grid gap-[var(--gutter)] lg:grid-cols-2">
-            {model.cheapest ? <CheapestCard model={model} style={style} base={base} carry={carry} idPrefix={idPrefix} /> : null}
-            <OnAcceptCard data={data} model={model} outlook={outlook} idPrefix={idPrefix} />
-          </div>
+          {model.cheapest || explainsAccept ? (
+            <div className="mt-6 grid gap-[var(--gutter)] lg:grid-cols-2">
+              {model.cheapest ? <CheapestCard model={model} style={style} base={base} carry={carry} idPrefix={idPrefix} /> : null}
+              {explainsAccept ? <OnAcceptCard data={data} model={model} outlook={outlook} idPrefix={idPrefix} /> : null}
+            </div>
+          ) : null}
         </>
       )}
 
@@ -332,6 +351,7 @@ function ComparisonTable({
   style,
   outlook,
   acceptAction,
+  mayAccept,
   live,
   idPrefix,
 }: {
@@ -342,6 +362,7 @@ function ComparisonTable({
   style: MoneyStyle;
   outlook: ComparisonOutlook;
   acceptAction: ((formData: FormData) => Promise<void>) | undefined;
+  mayAccept: boolean;
   live: boolean;
   idPrefix: string;
 }) {
@@ -392,7 +413,7 @@ function ComparisonTable({
               {t("compare_quotes.col.total")}
             </th>
             <th scope="col" className={`${HEAD} w-[10.5rem]`}>
-              <span className="sr-only">{t("compare_quotes.col.action")}</span>
+              <span className="sr-only">{mayAccept ? t("compare_quotes.col.action") : t("compare_quotes.col.view")}</span>
             </th>
           </tr>
         </thead>
@@ -409,6 +430,7 @@ function ComparisonTable({
                 style={style}
                 outlook={outlook}
                 acceptAction={acceptAction}
+                mayAccept={mayAccept}
               />
             ) : row.kind === "waiting" ? (
               <WaitingTableRow
@@ -500,6 +522,7 @@ function QuotedTableRow({
   style,
   outlook,
   acceptAction,
+  mayAccept,
 }: {
   row: QuotedRow;
   data: QuoteComparisonData;
@@ -509,6 +532,7 @@ function QuotedTableRow({
   style: MoneyStyle;
   outlook: ComparisonOutlook;
   acceptAction: ((formData: FormData) => Promise<void>) | undefined;
+  mayAccept: boolean;
 }) {
   const dim = row.state !== "open" && row.state !== "accepted";
   return (
@@ -538,7 +562,17 @@ function QuotedTableRow({
         ) : null}
       </td>
       <td className={CELL}>
-        <RowActions row={row} data={data} model={model} now={now} token={token} style={style} outlook={outlook} acceptAction={acceptAction} />
+        <RowActions
+          row={row}
+          data={data}
+          model={model}
+          now={now}
+          token={token}
+          style={style}
+          outlook={outlook}
+          acceptAction={acceptAction}
+          mayAccept={mayAccept}
+        />
       </td>
     </tr>
   );
@@ -611,6 +645,7 @@ function RowActions({
   style,
   outlook,
   acceptAction,
+  mayAccept,
 }: {
   row: QuotedRow;
   data: QuoteComparisonData;
@@ -620,6 +655,7 @@ function RowActions({
   style: MoneyStyle;
   outlook: ComparisonOutlook;
   acceptAction: ((formData: FormData) => Promise<void>) | undefined;
+  mayAccept: boolean;
 }) {
   const carry = token ? `?t=${encodeURIComponent(token)}` : "";
   const base = `/enquiry/${encodeURIComponent(data.enquiry.ref)}`;
@@ -664,6 +700,10 @@ function RowActions({
       </span>
     );
   }
+
+  // Build plan 9.4: the service refuses this person before it reads the quote,
+  // so the row offers what they can still do — read it and ask — and the page says why.
+  if (!mayAccept) return view;
 
   const figure = money(row.totalFils, style);
   if (outlook.kind === "company" || outlook.kind === "not_member") {

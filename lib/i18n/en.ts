@@ -4181,6 +4181,10 @@ export const en = {
   "rfq.contact_name": "Your name",
   "rfq.contact_name_hint": "Suppliers see your first name only.",
   "rfq.contact_required": "Add a UAE mobile so the quotes can reach you. It looks like 050 641 2288.",
+  // Build plan 9.4: §07 gives "Send an enquiry" to buyer and supplier accounts, and a staff role does not carry it.
+  "rfq.not_permitted": "This account cannot send enquiries. An enquiry is sent from a buyer or a supplier account.",
+  "rfq.not_permitted.h1": "This account cannot send enquiries",
+  "rfq.not_permitted.body": "An enquiry is sent from a buyer or a supplier account, and this account is neither, so the composer is not offered here. Sign in with a buyer account to ask suppliers for quotes.",
 
   // ── The thread [10h] buyer · [11b] seller ──
   "thread.heading": "Messages",
@@ -4551,6 +4555,7 @@ export const en = {
   "compare.error_supplier_closed": "This supplier has closed their account, so the quote cannot be accepted.",
   "compare_proposals.closed_on": "Enquiry closed {when}. Nothing on it can be accepted now.",
   "compare.error_enquiry_closed": "This enquiry closed before a quote was accepted, so none of its quotes can be accepted now. Re-send it from your enquiries to ask again.",
+  "compare.error_not_permitted": "This account cannot accept quotes, so none is offered here. A quote is accepted from a buyer or a supplier account.",
   "compare.closing.quotes": { one: "{count} quote", other: "{count} quotes" },
   "compare.closing.proposals": { one: "{count} proposal", other: "{count} proposals" },
 
@@ -4563,7 +4568,7 @@ export const en = {
   "compare_quotes.error_fix": "Nothing was accepted. Read the quote again, or ask the supplier in your thread with them.",
   "compare_quotes.view_record": "View the accepted record",
   "compare_quotes.accepted_notice": "You accepted {supplier}'s quote on {date}. The table below is the record of what every supplier offered.",
-  "compare_quotes.basis": "All amounts in AED, excluding VAT. A supplier's lead time is their slowest line. The tick marks the lowest price on each line among the quotes you can still accept.",
+  "compare_quotes.basis": "All amounts in AED, excluding VAT. A supplier's lead time is their slowest line. The tick marks the lowest price on each line among the quotes still open.",
   "compare_quotes.eyebrow_sent": "Sent {date}",
   "compare_quotes.eyebrow_accepted": "Accepted {date}",
   "compare_quotes.eyebrow_closed": "Closed {date}",
@@ -4575,6 +4580,7 @@ export const en = {
   "compare_quotes.col.lead": "Lead time",
   "compare_quotes.col.total": "Total excl. VAT",
   "compare_quotes.col.action": "Accept or view",
+  "compare_quotes.col.view": "View the quote",
   "compare_quotes.col.line_qty": "×{qty} {unit}",
   "compare_quotes.sort_label": "Sort the quotes",
   "compare_quotes.sort_prefix": "Sort",
@@ -5757,6 +5763,7 @@ export const en = {
   "reviewwrite.error.body_long": "Keep it to {max} characters. Cut it back to post.",
   "reviewwrite.error.contact_details": "Take out the {kinds}. A review cannot carry contact details.",
   "reviewwrite.error.photos_invalid": "One of the photos could not be checked. Remove it and add it again.",
+  "reviewwrite.error.not_permitted": "This account cannot write reviews. A review is written from a buyer or a supplier account.",
 
   "reviewwrite.rules.title": "Who can review",
   "reviewwrite.rules.holds": "Yes:",
@@ -5787,6 +5794,7 @@ export const en = {
 
   "reviewwrite.other.title": "Your other enquiries",
   "reviewwrite.other.empty": "No other enquiries on your account.",
+  "reviewwrite.other.not_permitted": "None of them can be reviewed from this account either.",
   "reviewwrite.other.more": { one: "{count} more in your enquiries", other: "{count} more in your enquiries" },
   "reviewwrite.other.open_until": "Open until {date}",
   "reviewwrite.other.open": "Open",
@@ -5806,6 +5814,9 @@ export const en = {
   "reviewwrite.refused.not_your_enquiry.body": "A review comes only from the buyer who sent the enquiry. If this is yours, sign in with the account that sent it.",
   "reviewwrite.refused.no_confirmed_enquiry.title": "No supplier has replied, and no quote was accepted",
   "reviewwrite.refused.no_confirmed_enquiry.body": "A review of {ref} needs a supplier who replied to it or a quote you accepted. When either happens, the review opens here.",
+  "reviewwrite.refused.not_permitted.h1": "This account cannot write reviews",
+  "reviewwrite.refused.not_permitted.title": "Reviews come from buyer and supplier accounts",
+  "reviewwrite.refused.not_permitted.body": "This account is neither, so the review form for {ref} is not offered.",
   "reviewwrite.choose.title": "Which supplier are you reviewing?",
   "reviewwrite.choose.body": { one: "{count} supplier replied to {ref}. An enquiry carries one review, about one of them.", other: "{count} suppliers replied to {ref}. An enquiry carries one review, about one of them." },
   "reviewwrite.choose.pick": "Review this supplier",

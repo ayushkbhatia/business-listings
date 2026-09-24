@@ -7,6 +7,8 @@ import { t } from "@/lib/i18n";
 import { DirectoryFooter } from "@/app/(public)/_chrome";
 import { ViewerNav } from "@/app/(public)/_account-menu";
 import { resolveBuyerId, trackingTokenFor } from "../../_buyer";
+import { actorFor } from "@/lib/auth/actor";
+import { mayWriteReview } from "@/lib/auth/guards";
 import { AcceptedRecordView } from "./_record";
 import { ReferenceForm } from "./ReferenceForm";
 import { ReportForm } from "./ReportForm";
@@ -92,6 +94,8 @@ export default async function AcceptedPage({
       <AcceptedRecordView
         record={record}
         now={new Date()}
+        // Build plan 9.4: asked the way `createReview` asks it, of the record.
+        reviewWritable={mayWriteReview(await actorFor(buyerId))}
         breadcrumb={
           <Breadcrumb
             label={t("accepted.breadcrumb")}
