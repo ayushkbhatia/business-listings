@@ -4,6 +4,7 @@ import { formatCount } from "@/lib/format/count";
 import { t } from "@/lib/i18n";
 import { absoluteUrl } from "@/lib/site";
 import type { LandingState } from "./scope";
+import { servicesH1 } from "./services-words";
 
 /**
  * Board 6a §SEO — the head of a landing page.
@@ -66,6 +67,19 @@ export function landingTitle(state: LandingState): string {
   const { scope } = state;
 
   /*
+     Board `6a-s`: the services template's own subject — *VAT consultants in
+     Business Bay, Dubai* — and its own count, in firms. The count is still the
+     reason the title beats a competitor's, and it is still never the part cut.
+  */
+  if (scope.trade === "services") {
+    return t("landing_services.title", {
+      subject: servicesH1(scope),
+      count: state.listings,
+      display: formatCount(state.listings),
+    });
+  }
+
+  /*
      The trade, shortened if it has to be, and nothing else is.
 
      A word is dropped rather than a character, so a long trade reads as a
@@ -107,6 +121,17 @@ export function landingTitle(state: LandingState): string {
 export function landingDescription(state: LandingState): string {
   if (state.metaDescription) return state.metaDescription;
   const { scope } = state;
+  if (scope.trade === "services") {
+    return t("landing_services.meta_fallback", {
+      count: state.listings,
+      display: formatCount(state.listings),
+      place: scope.area?.name ?? t(`emirate.${scope.emirate}` as never),
+      // The trade's name as the record spells it: lower-casing "VAT & tax
+      // advisory" would print "vat", which is an acronym broken, not a style.
+      trade: scope.category.name,
+      verified: formatCount(state.verified),
+    });
+  }
   return t("landing.meta_fallback", {
     listings: formatCount(state.listings),
     category: scope.category.name.toLowerCase(),

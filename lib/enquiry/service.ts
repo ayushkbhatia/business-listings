@@ -3,6 +3,8 @@ import type { BriefStart, Emirate, EngagementType, Prisma, ServiceCadence } from
 import { prisma } from "@/lib/db/client";
 import { tradeKindFor } from "@/lib/taxonomy/service";
 import { createProvisionalIdentity } from "@/lib/auth/flow";
+import { actorFor } from "@/lib/auth/actor";
+import { assertCanAcceptQuote, assertCanCreateEnquiry } from "@/lib/auth/guards";
 import { normaliseIdentifier } from "@/lib/auth/identity";
 import { routeLead } from "@/lib/leads/router";
 import { sendAutoReplies } from "@/lib/messaging/auto-reply";
@@ -32,6 +34,11 @@ import {
  * Both take a buyer id rather than reading a session, so both can be tested
  * against a real database without a request, and so the anonymous path and the
  * signed-in path go through exactly the same code.
+ *
+ * And both ask the matrix first — `enquiry.create`, `quote.accept` — of the
+ * actor the record holds for that id (`actorFor`), so the question is asked on
+ * every path into them rather than on the screens that happen to offer them.
+ * Before build plan 9.4 neither did, and the guards for both had no caller.
  */
 
 const PUBLIC_BUSINESS = { suspendedAt: null, publishedAt: { not: null } } as const;
@@ -506,6 +513,13 @@ export async function createEnquiry(
   input: CreateEnquiryInput,
   now: Date = new Date(),
 ): Promise<CreateEnquiryResult> {
+  /*
+     Build plan 9.4 — `enquiry.create`, first, for a sender who is somebody.
+     Throws `PermissionError`: a staff seat with no buyer role is refused here
+     however the request reached this function (§07: moderator —, superadmin —).
+  */
+  if (input.buyerId) assertCanCreateEnquiry(await actorFor(input.buyerId));
+
   if (input.lines.length === 0) return { ok: false, error: "no_lines" };
 
   /*
@@ -524,6 +538,17 @@ export async function createEnquiry(
     });
     if (!identity) return { ok: false, error: "no_buyer" };
     buyerId = identity.userId;
+
+    /*
+       And again for the identity the number resolved to, before anything is
+       written against it. Usually that is the provisional one just made, which
+       holds `enquiry.create` by name. But a number already on an account sends
+       as that account — two people cannot share a mobile — and is asked the
+       same question a signed-in send is, or a signed-out one would be the way
+       round it. A suspended provisional identity holds nothing, so suspending
+       one is what stops its number sending.
+    */
+    assertCanCreateEnquiry(await actorFor(buyerId));
 
     const provisional = await prisma.user.findUnique({
       where: { id: buyerId },
@@ -959,6 +984,15 @@ export async function acceptQuote(
   now: Date = new Date(),
   options: AcceptOptions = {},
 ): Promise<AcceptQuoteResult> {
+  /*
+     Build plan 9.4 — `quote.accept`, before the quote is read, of the person
+     the acceptance goes out in the name of. Throws `PermissionError`. From the
+     company approval queue that is the colleague who raised the request;
+     `approveRequest` asks the approver as well, before it gets here. Whether
+     the enquiry is theirs is the row's question, answered below.
+  */
+  assertCanAcceptQuote(await actorFor(buyerId));
+
   const quote = await prisma.quote.findUnique({
     where: { id: quoteId },
     select: {

@@ -3,6 +3,7 @@ import { requireStaff } from "@/lib/auth/staff";
 import { can } from "@/lib/auth/can";
 import { categoryOptions, findNode, loadCategoryEditor, loadTaxonomyTree } from "@/lib/taxonomy/board";
 import { loadTradeKindBoard } from "@/lib/taxonomy/service";
+import { servicesLandingEditor } from "@/lib/taxonomy/services-landing";
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { AdminPage, getAdminNavBadges } from "../../_shell";
@@ -14,6 +15,7 @@ import { HeaderActions } from "./HeaderActions";
 import { TaxonomyTree } from "./TaxonomyTree";
 import { TradeKindBoard } from "./TradeKindBoard";
 import { VisibilityPanel } from "./VisibilityPanel";
+import { ServicesLandingPanel, type ServicesLandingPanelView } from "./ServicesLandingPanel";
 
 /**
  * Board 4d — the category taxonomy. `/admin/categories`.
@@ -72,6 +74,27 @@ export default async function TaxonomyPage({
   const selected = (params.c ? findNode(tree, params.c) : null) ?? tree.sectors[0] ?? null;
   const editor = tab === "tree" && selected ? await loadCategoryEditor(tree, selected.id) : null;
   const sector = selected?.parentId ? findNode(tree, selected.parentId) : null;
+  /*
+     Board `6a-s` — a services trade's landing-page wording and its template
+     switch. Read only for a trade that resolves to `services`; a goods trade's
+     pages read none of it and the panel is not drawn.
+  */
+  const landing = editor?.trade.kind === "services" ? await servicesLandingEditor(editor.id) : null;
+  const landingView: ServicesLandingPanelView | null = landing
+    ? {
+        categoryId: landing.categoryId,
+        name: landing.name,
+        pluralHuman: landing.pluralHuman,
+        credentialKind: landing.credentialKind,
+        inherited:
+          landing.credential.from === "inherited" || landing.credential.from === "family"
+            ? { kind: landing.credential.kind, source: landing.credentialSource }
+            : null,
+        asks: landing.asks.map((ask) => ({ question: ask.question, why: ask.why })),
+        openedAt: landing.openedAt ? landing.openedAt.toISOString() : null,
+        publishedPages: landing.publishedPages,
+      }
+    : null;
 
   return (
     <AdminPage
@@ -157,6 +180,9 @@ export default async function TaxonomyPage({
                 />
                 <DemandPanel editor={editor} />
               </div>
+              {landingView ? (
+                <ServicesLandingPanel key={`landing-${editor.id}`} view={landingView} canWrite={canWrite} />
+              ) : null}
             </div>
           ) : null}
         </div>

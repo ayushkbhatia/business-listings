@@ -1759,7 +1759,7 @@ a control to set it — and "how often", which has no field at all.
 ### Stage 7 · Discovery
 `1c-s` → `10c-s` → `6a-s`
 
-**`1c-s` shipped 14 Sep — see §4x.**
+**`1c-s` shipped 14 Sep — see §4x.** **`6a-s` shipped 24 Sep — see §4y.**
 
 **The epic's urgency for `1c-s` is not real.** It warns a Products default makes a services-only
 firm invisible; `lib/search/query.ts:182` defaults the tab to `businesses`. Worth building for the
@@ -2329,6 +2329,108 @@ into one result set when the words find work sold by the job; goods search (`1c`
 - **`10c-s` kind-scoped facets** — the rail's per-kind behaviour beyond what this board draws.
 - **Family data.** Row labels and filterable flags are ops' on `4e-s`; the rail follows them.
 
+## 4y · Handoff `6a-s` — the landing page for a trade sold by the job
+
+*The page the acquisition flywheel ends on, for work: `/dubai/business-bay/vat-and-tax` reads **VAT
+consultants in Business Bay, Dubai** and lists the firms that cover Business Bay, most of which sit
+somewhere else. Shipped 24 Sep 2026 with migration `20261110090000_services_landing_6as`.*
+
+### Phase 0, as decided
+
+| # | Decision | Taken |
+|---|---|---|
+| D-URL | One URL scheme | Conform to `6a`: `/:emirate/:area/:category`. The flat `/vat-consultants-in-business-bay` is not built. The trade's existing slug is `vat-and-tax` |
+| D-FAN | The rail block under a cap of 8 | Kept. It states `previewBrief`'s count — *Ask 8 firms that cover Business Bay* — and when the area finds nobody it offers the emirate instead |
+| D-EMI | The services emirate class | Built, below sector level: `/dubai/vat-and-tax`. A goods subcategory across an emirate still 404s |
+| D-REG | FTA number in full (Q4) | Yes — on the badge, on every row surface that draws one (landing rows and `10c-s` search rows) |
+| D-AR | Arabic (Q5) | English only. `/ar/` reserved as a prefix to the unchanged path; `lib/i18n/locales.test.ts` keeps any emirate or public route from taking it |
+
+### What shipped
+
+- **One controller, two templates.** `LandingPage` hands a scope whose category resolves to
+  `services` to `ServicesLandingPage`; the goods grid, spec rail and map are not rendered for it (B2).
+  The gate, the floors, the hold band, the 30-day grace and the 308-to-parent on withdrawal are 6f's,
+  unchanged (B11) — only the count they read changes.
+- **B1 as a pure rule** in `lib/seo/landing/services-coverage.ts`: a firm belongs where its work in
+  this trade reaches — each live service's own coverage rows, or the business default where it has
+  none — or where it has an office, which is presence. `servicesMembers` is the one reader; the gate,
+  the pager, the freshness digest, the 6f area and emirate matrices (`coverageGrid`), the sitemap,
+  the link graph, the CRM's held-page candidates and the nightly position snapshot all count through
+  it, so none of them can disagree with the route.
+- **The stat line** — firms covering, licence-verified (tier 2 *and* a licence not lapsed today, so
+  the page does not wait for the expiry sweep), holders of the trade's checked credential, and a median
+  reply over the page's set once five firms are measured. The credential is `Category.credentialKind`,
+  resolved own → ancestor → scope-sheet family → none; only a kind a register can check is ever
+  counted, which today is the FTA tax agent number.
+- **The row** is `CoverageFirmRow`, the `10c-s` shape: licence line under the name, the checked
+  credential with its number, *Office in Deira, Dubai · Covers Business Bay* as two separate facts,
+  the fee basis, delivery and sector chips, the firm's services in this trade, measured reply time,
+  *Ask for a quote*. An unclaimed import is listed by its office, ranked last, with no enquiry button.
+- **The rail**: the fan-out card (matched count, `1h-s`'s cap), *Nearby* (same trade, live area pages
+  by distance) and *Related work* (same place, other trades, services first) as separate queries (B8),
+  each rendering only live pages (B7). On a phone the fan-out card comes above the list.
+- **What to ask** — three questions per trade, `CategoryAsk` rows (position 0–2 by CHECK), rendered in
+  the main column after the long intro on every page in the trade (B9).
+- **The rollout flag.** `Category.servicesLandingOpenedAt`, per trade and never inherited. A closed
+  trade's pages are not live, refuse to publish, and leave the sitemap and every link block; nothing is
+  unpublished, so reopening restores them. Ops open and close it on `/admin/categories` with a reason.
+- **The admin panel** on `/admin/categories` for a services trade: the plural noun the H1 opens with,
+  the credential the stat counts, the three questions, and the template switch — each change audited
+  with its reason through `staffMutation`, merge carrying the absorbed trade's wording into its audit.
+- **The category index links the services emirate class** (`servicesTradeRows`): a row beneath its
+  sector for each trade with an emirate page live, read by `/categories` and by `liveEmiratePages`
+  alike, so board 6c's anchor set and the sitemap stay one set.
+- **Seed** `prisma/seed-services-landing.mts`: 64 practices built around the premise — per-service
+  narrowing both ways, an office-only import, a lapsed FTA number, a licence lapsed yesterday — and the
+  four published pages plus Deira, written and never published.
+
+### Found on the way, and fixed
+
+- **6f's grace window disagreed between the matrices and the route.** `lib/content/matrix.ts` and the
+  emirate matrix held a page in its first 30 days only when the failure was `listings`; `landingState`
+  uses `isSupply`, which covers the verified share as well. A page the route served was absent from the
+  sitemap. Both matrices now call `isSupply`.
+- **The nightly snapshot put a services firm in an emirate by its branches only**, so a Sharjah
+  practice covering Dubai was ranked in no Dubai scope while the Dubai page listed it. Emirate
+  membership now follows the trade kind: coverage for a trade sold by the job.
+- **`heroCredential` on the storefront showed a lapsed number** as checked; it now takes the Dubai
+  day, the rule the badge follows everywhere else.
+- **`/categories` orphaned the services emirate pages** — the handoff's own *Flagged 1* says this is the
+  class 6c links. Found by 6c's set-comparison test; fixed as above.
+- **`landing.claim_body` read "1 of them are unclaimed"**; pluralised.
+- **The 4d editor's template-gap notice** was a `warn` Alert without its `action`, so every editor load
+  logged a development error. The link moved into the slot component 65 reserves for it.
+
+### Decisions taken against the handoff
+
+- **Coverage resolves per service, not as the business union** (B1 and Phase 1.3 say union). The union
+  lists a practice whose VAT work stops at Sharjah on a Dubai page because its audit service covers
+  Dubai. `1c-s` already resolved search this way; the page and the fan-out now answer from the same
+  rows, and correction 1's two sets differ only by the verified-licence requirement and the cap.
+- **No slug table with a `type` column** (Phase 1.2). The URL is positional — an emirate enum, then an
+  area, then a category — so a slug shared by an area and a category can never make an address
+  ambiguous, and each segment 404s against its own table.
+- **Publishing stays a staff decision** (Phase 2.4 has a job publish). 6f publishes on a person's
+  say-so with a reason and unpublishes on the nightly sweep; a job that published would put pages in
+  the index nobody chose to write for.
+- **No full-page cache** (Phase 5.3). The route is dynamic; reads are memoised per request, the page's
+  inputs change from six places, and a deploy starts the cache cold anyway. LCP is unmeasured —
+  Lighthouse waits for the content phase.
+- **Analytics use the tables that exist**: row and fan-out clicks through `ResultClicks`
+  (`data-scope-action`), appearances through `recordCategoryPositions` behind the crawler gate.
+- **The per-scope FAQ stays a publish condition** and renders below the firms, as `6a` does.
+- **The fan-out CTA reads *Post a requirement*,** `10c-s`'s string for the same action.
+- **The row mark is the category code**, not the firm's initials — the tile the rest of the product
+  draws for a firm with no logo.
+
+### Still owed, and the owner's
+
+- **Q2 — a false agent claim in the description** is not caught. The badge is checked; the sentence
+  beside it is seller text. A moderation rule on the claim phrase is the owner's call.
+- **Production has no Business Bay or Downtown area and no live service.** The first live services
+  page needs 12h's areas, supply above the floors, the VAT wording and questions saved, and the
+  template opened for the trade on `/admin/categories`.
+
 ## 4b · What the re-sequence opens up
 
 Three questions the new order forces, in the order they bite.
@@ -2505,7 +2607,7 @@ edit**.
 | **3** | The seller's own details | `2b-s` · `2c-s` · `2d-s` · `3b-s` · `3c-s` | Stage 4 | **Complete.** `2b-s`, `2c-s`, `2d-s` shipped 11 Sep; `3b-s` and `3c-s` 13 Sep (§4r) |
 | **4** | The storefront | `1d-s` · `1e-s` · `5c-s` · `1f-s` | Stage 5 | **All four shipped 13 Sep** (§4m–§4o, §4s) — the public storefront set is complete. `5c-s` was cut with the builder on 15 Sep |
 | **5** | Asking, and answering | `1h-s` · `3j-s` · `1n-s` | Stage 6 | **`1h-s` shipped 13 Sep** (§4p), **`3j-s` and `1n-s` 14 Sep** (§4t, §4u) — the demand-side trio is complete |
-| **6** | Discovery | `1c-s` · `10c-s` · `6a-s` | Stage 7 | `6a-s` roughly doubles the `6f` page matrix |
+| **6** | Discovery | `1c-s` · `10c-s` · `6a-s` | Stage 7 | `6a-s` roughly doubles the `6f` page matrix. **`6a-s` shipped 24 Sep** (§4y) — each trade behind its own rollout flag, so the matrix grows one trade at a time |
 | **7** | Ranking and ops | `12c-s` · `4c-s` · `12g-s` · ~~`6g-s`~~ | Stage 8 | **`12c-s` shipped 13 Sep** (§4q) — the third ranking defect, the singleton, was its own first step. **`4c-s` shipped 14 Sep** (§4w). **`12g-s` shipped 15 Sep** (`/admin/strings/paired`); `6g-s` was cut 14 Sep. `1c-s` is unblocked on Q1, which `rankBlended` answers |
 | — | **Q1 said families** | `4e-s` · `3h-s` | — | Both **shipped 13 Sep** — `3h-s` closed wave 2 (§4k) and `4e-s` authored the five families (§4l) |
 

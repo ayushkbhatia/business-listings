@@ -4,7 +4,14 @@ import { CategoryMark, Eyebrow } from "@/components/display";
 import { PublicShell } from "@/components/structure";
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
-import { emirateMatrix, emiratePagePath, MATRIX_EMIRATES } from "@/lib/seo/emirate";
+import {
+  emirateMatrix,
+  emiratePagePath,
+  MATRIX_EMIRATES,
+  servicesTradeRows,
+  type MatrixRow,
+  type TradeMatrixRow,
+} from "@/lib/seo/emirate";
 import { categoryIndex, listedInIndex } from "@/lib/seo/taxonomy";
 import { absoluteUrl } from "@/lib/site";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
@@ -35,7 +42,9 @@ import { JsonLd } from "@/app/(public)/_json-ld";
  *
  * Both halves read `emirateMatrix`, and so does `sitemap.ts`. That is what
  * makes the set of links here and the set of URLs there identical rather than
- * merely intended to be.
+ * merely intended to be. Since board `6a-s` the matrix also carries a row for
+ * each trade sold by the job with an emirate page live (`servicesTradeRows`),
+ * drawn beneath its sector — the sitemap reads the same rows.
  */
 
 export const revalidate = 3600;
@@ -62,7 +71,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function CategoriesPage() {
-  const [all, fullMatrix] = await Promise.all([categoryIndex(), emirateMatrix()]);
+  const [all, fullMatrix, trades] = await Promise.all([categoryIndex(), emirateMatrix(), servicesTradeRows()]);
   /*
      Board 4d. What the index lists is its own decision now: a sector held out by
      its switch, or with no listings at all, has no block, and a subcategory
@@ -79,7 +88,23 @@ export default async function CategoriesPage() {
      truncated — a hidden row is an orphaned page — and a sector with nothing
      live in any emirate has no page to orphan.
   */
-  const matrix = fullMatrix.filter((row) => listedIds.has(row.id) || row.cells.some((cell) => cell.live));
+  const tradesUnder = new Map<string, TradeMatrixRow[]>();
+  for (const trade of trades) tradesUnder.set(trade.sectorId, [...(tradesUnder.get(trade.sectorId) ?? []), trade]);
+  // A sector whose only live page is one of its trades' keeps its row, so the
+  // trade's row has a sector to sit under.
+  const matrix = fullMatrix.filter(
+    (row) => listedIds.has(row.id) || row.cells.some((cell) => cell.live) || tradesUnder.has(row.id),
+  );
+  /*
+     Board `6a-s`: each sector's row, then the rows of its trades that have an
+     emirate page live. Every trade row's sector is in the matrix — all sectors
+     are, bar a held-out one with nothing live, and the line above keeps that
+     one while a trade under it is live.
+  */
+  const tableRows: { row: MatrixRow; trade: boolean; sector: string }[] = matrix.flatMap((row) => [
+    { row, trade: false, sector: row.name },
+    ...(tradesUnder.get(row.id) ?? []).map((trade) => ({ row: trade, trade: true, sector: row.name })),
+  ]);
 
   /*
      Every subcategory is listed, including the ones below the publish floors.
@@ -117,8 +142,10 @@ export default async function CategoriesPage() {
   );
 
   const listings = sectors.reduce((total, sector) => total + sector.listings, 0);
-  const livePages = matrix.reduce(
-    (total, row) => total + row.cells.filter((cell) => cell.live).length,
+  // Counted off the rows the table draws, trades included: the eyebrow states
+  // the number of anchors below it.
+  const livePages = tableRows.reduce(
+    (total, { row }) => total + row.cells.filter((cell) => cell.live).length,
     0,
   );
   // Sectors in the order the matrix put them: by size, biggest first.
@@ -294,7 +321,7 @@ export default async function CategoriesPage() {
                 </tr>
               </thead>
               <tbody className="max-lg:flex max-lg:flex-col max-lg:gap-3">
-                {matrix.map((row) => (
+                {tableRows.map(({ row, trade, sector }) => (
                   // Zebra striping, per the 6c render. Reserved elsewhere in the
                   // product for row state — here nothing carries state and the
                   // table is seven numeric columns wide, which is exactly the
@@ -303,14 +330,28 @@ export default async function CategoriesPage() {
                     key={row.id}
                     className={
                       "border-b border-line-mid last:border-b-0 even:bg-paper " +
-                      "max-lg:block max-lg:rounded-card max-lg:border max-lg:border-line max-lg:p-3 max-lg:even:bg-paper"
+                      "max-lg:block max-lg:rounded-card max-lg:border max-lg:border-line max-lg:p-3 max-lg:even:bg-paper" +
+                      (trade ? " max-lg:ms-4" : "")
                     }
                   >
                     <th
                       scope="row"
-                      className="px-4 py-2.5 text-start text-body-sm font-normal text-ink max-lg:block max-lg:px-0 max-lg:pt-0 max-lg:pb-2 max-lg:font-medium"
+                      className={
+                        "px-4 py-2.5 text-start text-body-sm font-normal text-ink max-lg:block max-lg:px-0 max-lg:pt-0 max-lg:pb-2 max-lg:font-medium" +
+                        // Board `6a-s`: a trade sold by the job, set in under its
+                        // sector. The indent is the whole visual cue; the name
+                        // read aloud says which sector it belongs to.
+                        (trade ? " ps-8" : "")
+                      }
                     >
-                      {row.name}
+                      {trade ? (
+                        <>
+                          {row.name}
+                          <span className="sr-only">{t("categories.matrix_trade_in", { sector })}</span>
+                        </>
+                      ) : (
+                        row.name
+                      )}
                     </th>
                     {/* One wrapping row of cells below 1024px. */}
                     {row.cells.map((cell) => (

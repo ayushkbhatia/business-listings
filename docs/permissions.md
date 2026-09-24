@@ -22,6 +22,36 @@ reason and is visible in `/admin/audit`.
 The last row is the one that matters most: support needs it, and it must be impossible to do
 silently.
 
+### The buyer with no account, and the two rows this table does not draw
+
+**Buyer includes the buyer who has not signed up** — board 7a `B9`, auth is deferred, not gating.
+Sending an enquiry without an account creates a *provisional identity*: a phone number, a profile
+row, and a claim token the tracking link carries. It holds **no role** — `createProvisionalIdentity`
+gives it none, and claiming it (verifying the mobile) is what grants `buyer` — so no role column can
+reach it. The matrix names what it may do instead: `CapabilitySpec.provisional`, which `can()` reads
+for an actor `actorFor` marks provisional.
+
+It holds exactly three rows, and `tests/unit/permission-matrix.test.ts` holds the count:
+
+| Capability | Buyer | Buyer with no account | Seller seat | Staff role alone |
+|---|---|---|---|---|
+| Send an enquiry / RFQ (`enquiry.create`) | ✓ | ✓ | ✓ | — |
+| Accept a quote (`quote.accept`) | ✓ | ✓ | ✓ | — |
+| Write a review (`review.create`) | ✓ | ✓ | ✓ | — |
+
+The second and third are not rows in §07, which has only "Send an enquiry". They follow it, so that
+no seat can start an enquiry it cannot finish — and each is also about one enquiry, which must be the
+actor's own: `acceptQuote` and `canReview` check that against the row. A staff member who also buys
+holds all three through `buyer`, which board 4i's staff policy keeps.
+
+**Asked in the service, of the record.** `createEnquiry` (and `addSuppliers`), `acceptQuote` (and
+the company approval that ends in it), and every path toward a new review — the post, its draft, its
+photographs — call the `assertCan*` as their first line, against `actorFor(id)` rather than anything a
+caller hands in. A suspended account resolves to an actor holding nothing, so it is refused there
+too, and a suspended provisional identity's number cannot send again. None of the three is audited:
+a buyer's own act is not a staff decision. Build plan 9.4 is when these were first asked; before it,
+the guards had no caller.
+
 ---
 
 ## 2. Seller roles (board 7d) — four roles
@@ -122,17 +152,16 @@ deactivates it.
 
 ### Rows this document does not contain
 
-Nineteen capabilities in `lib/auth/capabilities.ts` carry `source: "inferred"` because §07 has
-no row for them, or departs from the row it has. `tests/unit/permission-matrix.test.ts` names
-all nineteen, so adding a twentieth is a deliberate edit rather than a quiet default. The
-twelve below are the ones with no row at all; `business.verification_tier.write`,
-`review.dispute`, `staff.manage`, `staff.read`, board 12g's two notification rows and
-standing item 9.5's `jobs.read` (in the staff table above) are explained where the test names
-them.
+Twenty-one capabilities in `lib/auth/capabilities.ts` carry `source: "inferred"` because §07
+has no row for them, or departs from the row it has. `tests/unit/permission-matrix.test.ts`
+names all twenty-one, so adding a twenty-second is a deliberate edit rather than a quiet
+default. The fourteen below are the ones with no row at all; `business.verification_tier.write`,
+`review.dispute`, `staff.manage`, `staff.read`, board 12g's two notification rows and standing
+item 9.5's `jobs.read` (in the staff table above) are explained where the test names them.
 
-This paragraph said fifteen while the test named eighteen: board 4h's `report.detectors` and
-the `1d` amendment's two lead rows joined the test and never reached this page. A count
-written beside a list that grows goes wrong quietly — the test is the one that argues back.
+This paragraph once said fifteen while the test named eighteen: board 4h's `report.detectors`
+and the `1d` amendment's two lead rows reached the test and never this page. A count written
+beside a list that grows goes wrong quietly — the test is the one that argues back.
 
 | Capability | Held at | Why, and which way it errs |
 |---|---|---|
@@ -148,6 +177,8 @@ written beside a list that grows goes wrong quietly — the test is the one that
 | `report.detectors` | ops lead | Board 4h `B11`: the detection thresholds — how many listings must share a telephone number, how long a licence must be past expiry — and which sweeps run. Moving one changes what the whole queue holds tomorrow, so it sits with `queue.rules`, a rung above deciding one report — erring **higher**. |
 | `contact_lead.platform.read` | ops lead | The `1d` amendment's `/admin/leads`: every phone lead on the platform, each a buyer's name, work email and mobile. A lead list is the asset most likely to walk out, so it is held at the top rather than with moderation — erring **higher**. Not audited: reading changes nothing. |
 | `contact_lead.read` | seller owner · manager | The `1d` amendment's `/dashboard/leads/phone`: the buyers who revealed this seller's landline. A phone lead is assigned to nobody, so it sits with the two seats that read the whole unassigned queue rather than with a sales seat — erring **higher**. Not a staff row; listed here because it is inferred. |
+| `quote.accept` | buyer · every seller seat · provisional | Build plan 9.4. Was marked `stated` and buyer-only with no row to state it. Asked, it refused the provisional identity most enquiries belong to, and a supplier's seat on the enquiry §07 lets it send. It follows `enquiry.create` — erring **lower**, to the principals the product already lets send. |
+| `review.create` | buyer · every seller seat · provisional | Build plan 9.4, for the same reasons. Whether an enquiry earned a review is board 10f's gate (`canReview`), not a role; a competitor posing as a customer is the `no_traceable_enquiry` dispute ground. Erring **lower**, to the same principals. |
 
 If §07 gains a row for any of these, the row wins and the `source` becomes `stated`.
 

@@ -2,13 +2,12 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import {
   landingMetadata,
+  landingResultCount,
   landingState,
   resolveEmirateScope,
   subcategoryChips,
 } from "@/lib/seo/landing";
-import { countResults } from "@/lib/db/queries";
 import { LandingPage, RESULTS_PER_PAGE } from "@/app/(public)/_landing/LandingPage";
-import { parseSearchQuery } from "@/lib/search/query";
 import { redirectIfMoved } from "@/lib/listing/redirect";
 
 /**
@@ -63,14 +62,8 @@ async function load(
   if (raw && !chip) return null;
 
   const page = Math.max(1, Number(Array.isArray(searchParams["page"]) ? searchParams["page"][0] : searchParams["page"] ?? 1) || 1);
-  const total = await countResults(
-    {
-      ...parseSearchQuery({}),
-      emirate: scope.emirate,
-      tab: "businesses",
-    },
-    chip ? [chip.id] : scope.categoryIds,
-  );
+  // The template's own set — branch addresses for goods, coverage for services.
+  const total = await landingResultCount(scope, chip?.id ?? null);
   const pageCount = Math.max(1, Math.ceil(total / RESULTS_PER_PAGE));
   if (page > pageCount) return null;
 

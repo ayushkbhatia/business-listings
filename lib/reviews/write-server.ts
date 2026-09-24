@@ -1,5 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
+import { actorFor } from "@/lib/auth/actor";
+import { mayWriteReview } from "@/lib/auth/guards";
 import { requirementHeadline } from "@/lib/enquiry/inbox-status";
 import { quoteTotalFils } from "@/lib/quote/money";
 import { toProposalFigure, PROPOSAL_FIGURE_SELECT } from "@/lib/quote/proposal";
@@ -189,6 +191,26 @@ export async function loadReviewWrite(input: {
       replyRemoved: existing.replyRemovedAt !== null,
     };
     return { kind: "reviewed", enquiry, supplier, provenance, company, review, others };
+  }
+
+  /*
+     ── The matrix, before the gate. ──
+
+     Build plan 9.4: `createReview` asks `review.create` of this person before
+     it reads the enquiry, so the form is not offered to one it would refuse —
+     a staff seat with no buyer role, whatever the enquiry earned. Asked of the
+     record, as the service asks it; a claim-token buyer holds it by name. Their
+     own review above stays readable either way.
+  */
+  if (!mayWriteReview(await actorFor(buyerId))) {
+    return {
+      kind: "refused",
+      reason: "not_permitted",
+      enquiry: { id: row.id, ref: row.ref, headline: requirementHeadline(row.requirement) },
+      // Every other enquiry is refused for the same reason. Listing them with
+      // the gate's verdict would call them open to an account that cannot post.
+      others: { rows: [], more: 0 },
+    };
   }
 
   /* ── The gate. ── */

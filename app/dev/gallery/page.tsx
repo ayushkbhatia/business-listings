@@ -30,6 +30,7 @@ import { ProposalReplyGallery } from "./_sections/ProposalReply";
 import { ProposalComparisonGallery } from "./_sections/ProposalComparison";
 import { BuyerInboxGallery } from "./_sections/BuyerInbox";
 import { BlendedSearchGallery } from "./_sections/BlendedSearch";
+import { ServicesLandingGallery } from "./_sections/ServicesLanding";
 import { CompareGallery } from "./_sections/Compare";
 import { CompanyAccountGallery } from "./_sections/CompanyAccount";
 import { ScheduledJobsGallery } from "./_sections/ScheduledJobs";
@@ -230,6 +231,8 @@ const UNLISTED = [
   "product-comparison",
   // Board `7b`: the buying company — details, addresses, team, rule, a request in each state.
   "company-account",
+  // Board `6a-s`: the services landing page — its rows, its rail, and the trade's panel.
+  "services-landing",
   // Standing item 9.5: the scheduled jobs — each cron's standing, its runs with their gaps, a run's steps.
   "scheduled-jobs",
 ] as const;
@@ -348,6 +351,7 @@ export default function Gallery() {
       <HomeCurationGallery />
       {/* After home curation, for the same reason: nothing new above Shells. */}
       <BlendedSearchGallery />
+      <ServicesLandingGallery />
       {/* After blended search, for the same axe-grid reason. */}
       <TaxonomyGallery />
       <MaintenanceGallery />

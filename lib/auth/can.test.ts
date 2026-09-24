@@ -8,7 +8,7 @@ import {
 } from "./capabilities";
 import { PermissionError } from "./errors";
 import { ROLES, STAFF_ROLES, type Actor, type Role } from "./roles";
-import { mayRemoveReview } from "./guards";
+import { mayCreateEnquiry, mayRemoveReview } from "./guards";
 
 const actor = (...roles: Role[]): Actor => ({ id: `user_${roles.join("_")}`, roles });
 
@@ -60,6 +60,14 @@ describe("acceptance criterion 6 — a staff_moderator cannot change a verificat
 describe("the matrix", () => {
   it("grants nothing to an actor with no role", () => {
     expect(capabilitiesFor(actor())).toEqual([]);
+  });
+
+  it("answers a provisional identity from the matrix, never from roles", () => {
+    // Build plan 9.4. Marked by `actorFor`; what it holds is `CapabilitySpec.provisional`.
+    const provisional: Actor = { id: "user_provisional", roles: [], provisional: true };
+    expect(can(provisional, "quote.accept")).toBe(true);
+    expect(can(provisional, "listing.edit")).toBe(false);
+    expect(() => assertCan(provisional, "review.remove")).toThrow(PermissionError);
   });
 
   it("passes when any held role grants the capability", () => {
@@ -157,6 +165,13 @@ describe("may* helpers", () => {
     // they cannot see, and a staff member needs to know a queue exists.
     expect(mayRemoveReview(actor("staff_moderator"))).toBe(false);
     expect(mayRemoveReview(actor("staff_ops_lead"))).toBe(true);
+  });
+
+  it("answer a visitor with no session as the provisional identity their send creates", () => {
+    // Board 7a `B9`: auth is deferred, not gating. Only a signed-in seat is refused.
+    expect(mayCreateEnquiry(null)).toBe(true);
+    expect(mayCreateEnquiry(actor("staff_moderator"))).toBe(false);
+    expect(mayCreateEnquiry(actor("seller_finance"))).toBe(true);
   });
 
   it("are not offered for a subject-dependent row", () => {

@@ -23,6 +23,8 @@ export function acceptErrorMessage(code: string | undefined): string | null {
       return t("compare.error_supplier_closed");
     case "enquiry_closed":
       return t("compare.error_enquiry_closed");
+    case "not_permitted":
+      return t("compare.error_not_permitted");
     default:
       return null;
   }

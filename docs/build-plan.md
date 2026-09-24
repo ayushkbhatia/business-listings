@@ -679,9 +679,23 @@ the only large piece and the only one selling something it does not deliver.
   unplanned error in the same grammar. Design drew only the maintenance half.
 - [ ] **9.3 `13b`** — reconcile a platform hand-off with a detector that reports sellers for
   off-platform steering before drawing it.
-- [ ] **9.4 Standing: three capabilities the product never consults.** `enquiry.create`,
+- [x] **9.4 Standing: three capabilities the product never consults.** `enquiry.create`,
   `quote.accept` and `review.create` each have an assert helper with zero callers — the conversion
-  event, the terminal state and the trust signal.
+  event, the terminal state and the trust signal. *Done 24 Sep 2026.* Asked as written, all three
+  would have refused the buyer the funnel is built for: a provisional identity holds no role, and
+  each row was a role grant. Accept and review also refused a supplier's seat on the enquiry §07 lets
+  it send. Fixed in the definition, not at the call sites: `CapabilitySpec.provisional` names what a
+  provisional identity holds — these three and nothing else — and the three rows share one list of
+  holders, so no seat can start an enquiry it cannot finish. Each `assertCan*` is now the first line
+  of its service, asked of the record through `actorFor` so no caller can skip it or hand in a role:
+  `createEnquiry` (including a signed-out send whose number belongs to an account) and `addSuppliers`;
+  `acceptQuote`, `requestApproval` and `approveRequest`; `createReview`, `saveReviewDraft` and
+  `writableSubject`. A suspended account resolves to nothing. The `may*` halves take the controls off
+  the composer, both comparisons, the thread, the company accept page, the accepted record and the
+  review page. `tests/integration/buyer-capabilities.test.ts` fails all twelve of its refusals with
+  the asserts removed, and the seven passes that depend on the new definition with the old one
+  restored. Found alongside, not fixed: nothing stops a seller's own seat enquiring to, and then
+  reviewing, its own business.
 - [x] **9.5 Standing: 29 scheduled jobs, no run persisted.** Two crons, 29 steps, no row written
   anywhere. If the nightly stops firing nothing changes appearance and nobody is told. *Done 24
   Sep 2026:* `runSteps` is the one writer of a record for every job behind it. It writes a
@@ -810,7 +824,7 @@ Not screens — the reasons a screen can be wrong without anyone finding out. Sc
   `assertCanAcceptQuote` and `assertCanWriteReview` (`lib/auth/guards.ts:147,150,153`) have zero
   callers. The conversion event, the terminal state and the trust signal are gated on eligibility
   rather than the matrix, so `pnpm matrix` prints permissions for three actions the permission
-  system never asks about.
+  system never asks about. *Closed by 9.4 — and `pnpm matrix` prints a `prov` column now.*
 - **Twenty-nine scheduled jobs, no run persisted.** `vercel.json:6-15` runs `/api/jobs/daily` (24
   steps) and `/api/jobs/sweep` (5). No model records an execution; the only outputs are
   `console.info`. The daily route argues this against itself — it added a PDF retry step because a

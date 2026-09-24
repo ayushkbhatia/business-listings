@@ -2,7 +2,8 @@ import "server-only";
 import type { Prisma } from "@/lib/db/generated/client";
 import type { Emirate } from "@/lib/db/generated/enums";
 import { prisma } from "@/lib/db/client";
-import { CHECKED_CREDENTIAL, CREDENTIAL_KINDS } from "@/lib/credentials/kinds";
+import { CREDENTIAL_KINDS, currentCheckedCredential } from "@/lib/credentials/kinds";
+import { dubaiDayStart } from "@/lib/format/date";
 import { BRIEF_MAX_RECIPIENTS } from "@/lib/enquiry/service-brief";
 import { nearestKm } from "@/lib/geo/distance";
 import { t } from "@/lib/i18n";
@@ -40,6 +41,7 @@ import {
   PRODUCT_CHIPS_SHOWN,
   pagerFor,
   type BlendedSearchResult,
+  type CheckedCredentialView,
   type RfqEscapeFacts,
   type RfqPromptFacts,
   type BlendedResultView,
@@ -232,6 +234,8 @@ export interface BlendedSet {
   firmServices: ReadonlyMap<string, { names: string[]; total: number; matched: boolean }>;
   /** Checked credential kinds per firm. */
   credentials: ReadonlyMap<string, string[]>;
+  /** The same credentials as badges — kind and registry number — per firm. */
+  badges: ReadonlyMap<string, CheckedCredentialView[]>;
   /** The trade most of the matched services sit in — where the RFQ prompt sends a brief. */
   briefCategory: { slug: string } | null;
   /** The trade the words mostly found, whichever kind — where a zero-result escape goes. */
@@ -319,18 +323,36 @@ export async function loadBlendedSet(query: SearchQuery): Promise<BlendedSet> {
       where: { businessId: { in: firmIds }, serviceId: null },
       select: { businessId: true, emirate: true, areaId: true },
     }),
+    /*
+       Checked, and not lapsed — board `6a-s` B4. A tick drops the day the date
+       the register confirmed passes; the rail's credential facet, the row's
+       badge and the landing page's count all read this one predicate.
+    */
     prisma.credential.findMany({
-      where: { businessId: { in: firmIds }, ...CHECKED_CREDENTIAL },
-      select: { businessId: true, kind: true },
+      where: { businessId: { in: firmIds }, ...currentCheckedCredential(dubaiDayStart(new Date())) },
+      select: { businessId: true, kind: true, identifier: true },
+      orderBy: [{ kind: "asc" }, { id: "asc" }],
     }),
     loadSpecFields(products.map((product) => product.categoryId)),
   ]);
 
   const firmById = new Map(firms.map((firm) => [firm.id, firm]));
   const credentials = new Map<string, string[]>();
+  /*
+     The badges, beside the kinds. The facet matches on the kind; the badge
+     prints the registry number too — `6a-s` D-REG: the register is public, and
+     a checked number is the claim at its most checkable.
+  */
+  const badges = new Map<string, CheckedCredentialView[]>();
   for (const row of checked) {
     const held = credentials.get(row.businessId) ?? [];
-    if (!held.includes(row.kind)) held.push(row.kind);
+    if (!held.includes(row.kind)) {
+      held.push(row.kind);
+      badges.set(row.businessId, [
+        ...(badges.get(row.businessId) ?? []),
+        { kind: row.kind, identifier: row.identifier },
+      ]);
+    }
     credentials.set(row.businessId, held);
   }
   const defaultsOf = new Map<string, CoverageScope[]>();
@@ -683,6 +705,7 @@ export async function loadBlendedSet(query: SearchQuery): Promise<BlendedSet> {
     feeLabel,
     firmServices,
     credentials,
+    badges,
     briefCategory: topServiceCategory && slugOf.has(topServiceCategory)
       ? { slug: slugOf.get(topServiceCategory)! }
       : null,
@@ -1193,7 +1216,7 @@ function firmFactsOf(
     verifiedAt: Date | null;
     locations: Place[];
   },
-  checked: readonly string[],
+  checked: readonly CheckedCredentialView[],
 ) {
   return {
     businessSlug: firm.slug,
@@ -1240,7 +1263,7 @@ function serviceView(
     name: row.name,
     summary: row.scope?.trim() || null,
     chips,
-    ...firmFactsOf(row.business, set.credentials.get(row.businessId) ?? []),
+    ...firmFactsOf(row.business, set.badges.get(row.businessId) ?? []),
   };
 }
 
@@ -1274,7 +1297,7 @@ function supplierView(
     matchedOnService: offered?.matched ?? false,
     productCount: row._count.products,
     matched,
-    ...firmFactsOf(row, set.credentials.get(row.id) ?? []),
+    ...firmFactsOf(row, set.badges.get(row.id) ?? []),
   };
 }
 

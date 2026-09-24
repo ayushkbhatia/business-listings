@@ -347,6 +347,23 @@ export async function mergeCategories(input: {
       });
 
       const kept = await keptPages(tx, S, T);
+      /*
+         Board `6a-s` — the absorbed trade's landing-page wording. The target
+         keeps its own, as it keeps its own pages; the source's plural noun,
+         credential, template switch and questions survive in the audit row,
+         which is where a merge writes whatever it does not carry over.
+      */
+      const [sourceLanding, sourceAsks] = await Promise.all([
+        tx.category.findUnique({
+          where: { id: S },
+          select: { pluralHuman: true, credentialKind: true, servicesLandingOpenedAt: true },
+        }),
+        tx.categoryAsk.findMany({
+          where: { categoryId: S },
+          orderBy: { position: "asc" },
+          select: { question: true, why: true },
+        }),
+      ]);
 
       await staffMutation(
         {
@@ -369,6 +386,12 @@ export async function mergeCategories(input: {
                 slug: source.slug,
                 parentId: source.parentId,
                 synonyms: source.synonyms,
+                servicesLanding: {
+                  pluralHuman: sourceLanding?.pluralHuman ?? null,
+                  credentialKind: sourceLanding?.credentialKind ?? null,
+                  openedAt: sourceLanding?.servicesLandingOpenedAt ?? null,
+                  asks: sourceAsks,
+                },
               },
               // The authored copy of every page the target already had for the
               // same place. The page row is gone; this is where it survives.

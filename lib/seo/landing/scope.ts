@@ -14,7 +14,9 @@ import {
   type CategoryRules,
 } from "@/lib/taxonomy/service";
 import { VERIFIED_TIER } from "@/lib/verification";
-import type { Emirate } from "@/lib/db/generated/enums";
+import type { Emirate, TradeKind } from "@/lib/db/generated/enums";
+import { tradeKindFor } from "@/lib/taxonomy/service";
+import { servicesSupply } from "./services-supply";
 
 /**
  * Board 6a — the scope object, and the four conditions that decide whether a
@@ -76,6 +78,17 @@ export interface LandingCategory extends CategoryRules {
   parentId: string | null;
   parentSlug: string | null;
   parentName: string | null;
+  /**
+   * What a services page calls the people who do the work — *VAT consultants*.
+   * Board `6a-s` correction 3. Null on most rows; read only on the services
+   * template, which falls back to the trade's own name.
+   */
+  pluralHuman: string | null;
+  /**
+   * When the services template was opened for this trade — the rollout flag.
+   * Null keeps every services page in the trade dark (`landingState.live`).
+   */
+  servicesLandingOpenedAt: Date | null;
 }
 
 export interface LandingArea {
@@ -88,6 +101,16 @@ export interface LandingArea {
 
 export interface LandingScope {
   kind: "area" | "emirate";
+  /**
+   * How this trade is sold — board `6a-s` B2, resolved from `Category.tradeKind`.
+   *
+   * The second thing that branches, after the class, and it branches more than
+   * the class does: which template renders, which supply rule the gate counts
+   * (a branch address for goods, coverage for services), and what the H1 calls
+   * the people on the page. Resolved once, here, so no reader asks twice and
+   * gets two answers.
+   */
+  trade: TradeKind;
   emirate: Emirate;
   /** Absent on the emirate class. The only thing that branches. */
   area: LandingArea | null;
@@ -108,6 +131,8 @@ const CATEGORY_SELECT = {
   slug: true,
   name: true,
   parentId: true,
+  pluralHuman: true,
+  servicesLandingOpenedAt: true,
   ...CATEGORY_RULES_SELECT,
   parent: { select: { slug: true, name: true } },
 } as const;
@@ -125,6 +150,8 @@ export function toLandingCategory(
     slug: string;
     name: string;
     parentId: string | null;
+    pluralHuman: string | null;
+    servicesLandingOpenedAt: Date | null;
     parent: { slug: string; name: string } | null;
   },
 ): LandingCategory {
@@ -168,6 +195,7 @@ export async function resolveAreaScope(params: {
 
   return {
     kind: "area",
+    trade: await tradeKindFor(category.id),
     emirate: area.emirate,
     area: { id: area.id, slug: area.slug, name: area.name, lat: area.lat, lng: area.lng },
     category: toLandingCategory(category),
@@ -194,9 +222,17 @@ export function isEmirate(value: string): value is Emirate {
 /**
  * `/:emirate/:category`, or nothing.
  *
- * Top-level sectors only. A subcategory across a whole emirate would be a
- * fourth page class nobody specified, competing with its sector's own page for
- * the same intent at two depths.
+ * Top-level sectors only **for goods**. A goods subcategory across a whole
+ * emirate would be a fourth page class nobody specified, competing with its
+ * sector's own page for the same intent at two depths.
+ *
+ * A trade sold by the job is the exception, and board `6a-s` D-EMI is why. A
+ * services firm covers an emirate from one office where a goods supplier serves
+ * a district from a warehouse, so *VAT consultants in Dubai* is the page a
+ * buyer searches for — and the sector above it, *Legal, audit & business setup
+ * in Dubai*, answers nobody's question. The services taxonomy lives in its
+ * subcategories (`4d-s`: not one of the thirteen sectors is purely one kind), so
+ * the emirate class for services is a subcategory page or it is nothing.
  */
 export async function resolveEmirateScope(params: {
   emirate: string;
@@ -208,10 +244,13 @@ export async function resolveEmirateScope(params: {
     where: { slug: params.category },
     select: CATEGORY_SELECT,
   });
-  if (!category || category.parentId !== null) return null;
+  if (!category) return null;
+  const trade = await tradeKindFor(category.id);
+  if (category.parentId !== null && trade !== "services") return null;
 
   return {
     kind: "emirate",
+    trade,
     emirate: params.emirate,
     area: null,
     category: toLandingCategory(category),
@@ -305,6 +344,12 @@ export interface LandingState {
   heldAt: Date | null;
   heldReason: string | null;
   /**
+   * The services template is open for this trade — always true for goods.
+   * Board `6a-s`'s rollout flag; a closed one keeps the page dark whatever
+   * else holds.
+   */
+  templateOpen: boolean;
+  /**
    * Intent AND conditions. The only thing that has a URL.
    *
    * §the-publish-gate consequence 1: an unpublished scope is not a thin page
@@ -317,7 +362,15 @@ export interface LandingState {
   holdFailing: readonly PublishFailure[];
 }
 
-/** The listings in one trade in one place, counted the way every surface counts. */
+/**
+ * The listings in one **goods** trade in one place, counted the way every goods
+ * surface counts: a published branch there.
+ *
+ * Never read for a services scope. A firm that sells work is on a page because
+ * it covers the place, not because it has an address there — board `6a-s` B1 —
+ * and `supply` below sends those scopes to `servicesSupply` instead. A caller
+ * reaching for this on a services scope is the defect the board names first.
+ */
 export function supplyWhere(scope: LandingScope) {
   return {
     ...PUBLIC_BUSINESS,
@@ -328,13 +381,40 @@ export function supplyWhere(scope: LandingScope) {
   };
 }
 
-async function supply(scope: LandingScope): Promise<{ listings: number; verified: number }> {
+/** The place a scope names, as the services rule reads it. */
+export function memberScopeOf(scope: LandingScope) {
+  return {
+    categoryIds: scope.categoryIds,
+    emirate: scope.emirate,
+    areaId: scope.area?.id ?? null,
+  };
+}
+
+async function supply(
+  scope: LandingScope,
+  now: Date,
+): Promise<{ listings: number; verified: number }> {
+  if (scope.trade === "services") return servicesSupply(memberScopeOf(scope), now);
   const where = supplyWhere(scope);
   const [listings, verified] = await Promise.all([
     prisma.business.count({ where }),
     prisma.business.count({ where: { ...where, verificationTier: { gte: VERIFIED_TIER } } }),
   ]);
   return { listings, verified };
+}
+
+/**
+ * Whether this scope's template is open — board `6a-s`'s rollout flag.
+ *
+ * Always, for goods. For a trade sold by the job, only once ops has opened the
+ * services template for that trade on `/admin/categories`: build phase 5 asks
+ * for one trade first and a Search Console check before the next. Closed is not
+ * the goods template standing in — that is the defect B2 exists to fix — it is
+ * no page at all, which the route, the sitemap and every link block read
+ * through `live` below.
+ */
+export function templateOpen(scope: LandingScope): boolean {
+  return scope.trade === "goods" || scope.category.servicesLandingOpenedAt !== null;
 }
 
 const FAQ_SELECT = {
@@ -414,7 +494,7 @@ export async function landingPageRow(scope: LandingScope) {
 export async function landingState(scope: LandingScope, now = new Date()): Promise<LandingState> {
   const [row, counts, demand] = await Promise.all([
     landingPageRow(scope),
-    supply(scope),
+    supply(scope, now),
     scopeDemand(scope),
   ]);
 
@@ -466,9 +546,11 @@ export async function landingState(scope: LandingScope, now = new Date()): Promi
     withinGrace,
     heldAt: row?.heldAt ?? null,
     heldReason: row?.heldReason ?? null,
+    templateOpen: templateOpen(scope),
     /*
        Published, not held by a person, and either holding the band or inside
-       the minimum-live window.
+       the minimum-live window — and, for a trade sold by the job, the services
+       template open for it.
 
        The grace covers only the listings floor, because that is the only one
        that moves on its own: `evaluateHold` leaves the copy and question
@@ -476,6 +558,7 @@ export async function landingState(scope: LandingScope, now = new Date()): Promi
        the page down in that request whatever its age.
     */
     live:
+      templateOpen(scope) &&
       row?.publishedAt != null &&
       row.heldAt == null &&
       (hold.publishable || (withinGrace && onlySupplyFailing(hold.failures))),

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { CAPABILITIES, type Capability } from "@/lib/auth/capabilities";
-import { can } from "@/lib/auth/can";
-import { isRole, STAFF_ROLES, type Actor, type Role } from "@/lib/auth/roles";
+import { CAPABILITIES, PROVISIONAL_CAPABILITIES, type Capability } from "@/lib/auth/capabilities";
+import { can, capabilitiesFor } from "@/lib/auth/can";
+import { isRole, ROLES, SELLER_ROLES, STAFF_ROLES, type Actor, type Role } from "@/lib/auth/roles";
 
 /**
  * `lib/auth/capabilities.ts` against `docs/permissions.md`, row by row.
@@ -188,6 +188,54 @@ describe("the cross-surface matrix", () => {
   });
 });
 
+/* ── The buyer journey — build plan 9.4 ───────────────────────────────────── */
+
+describe("the three buyer rows, which nothing asked until 9.4", () => {
+  const JOURNEY: Capability[] = ["enquiry.create", "quote.accept", "review.create"];
+  /** What `actorFor` returns for a claim-token buyer: no role, marked. */
+  const provisional: Actor = { id: "u_provisional", roles: [], provisional: true };
+
+  it("lets a buyer with no account send, accept and review — and do nothing else", () => {
+    /*
+       The finding. A provisional identity holds no role, so while these three
+       were role grants, asking them would have refused most buyers the one
+       thing the funnel exists for. What it holds is named on the matrix, and
+       this is the whole list: a phone number and a claim token go no further.
+    */
+    expect([...PROVISIONAL_CAPABILITIES].sort()).toEqual([...JOURNEY].sort());
+    expect(capabilitiesFor(provisional).sort()).toEqual([...JOURNEY].sort());
+  });
+
+  it("answers a provisional identity from the matrix even if its row carries a role", () => {
+    // Claiming the identity is what grants a role; a stray one on the row grants nothing.
+    const withStrayRole: Actor = { id: "u_stray", roles: ["staff_ops_lead"], provisional: true };
+    expect(capabilitiesFor(withStrayRole).sort()).toEqual([...JOURNEY].sort());
+  });
+
+  it("gives the three the same holders, so no seat can start an enquiry it cannot finish", () => {
+    // §07 row 1 gives sending to buyer and seller; accepting and reviewing were
+    // buyer-only, which left a supplier's seat able to ask and unable to accept.
+    for (const role of ROLES) {
+      const held = JOURNEY.map((capability) => can(actor(role), capability));
+      expect(new Set(held).size, role).toBe(1);
+    }
+    for (const role of ["buyer", ...SELLER_ROLES] as Role[]) {
+      for (const capability of JOURNEY) expect(can(actor(role), capability), `${role} × ${capability}`).toBe(true);
+    }
+  });
+
+  it("gives none of them to a staff role on its own — §07's dash — and all of them to staff who also buy", () => {
+    for (const role of STAFF_ROLES) {
+      for (const capability of JOURNEY) expect(can(actor(role), capability), `${role} × ${capability}`).toBe(false);
+      for (const capability of JOURNEY) expect(can(actor("buyer", role), capability), `buyer+${role}`).toBe(true);
+    }
+  });
+
+  it("gives an account with no role none of them — a claimed account holds at least `buyer`", () => {
+    for (const capability of JOURNEY) expect(can(actor(), capability), capability).toBe(false);
+  });
+});
+
 describe("every row cites the document", () => {
   it("names every row §07 does not contain, so inferred cannot spread quietly", () => {
     /*
@@ -273,6 +321,13 @@ describe("every row cites the document", () => {
        manager, the seats that read the whole unassigned queue; staff's with the
        ops lead alone, because every row is a buyer's contact details.
 
+       `quote.accept` and `review.create` joined on build plan 9.4, having been
+       marked `stated` with no row to state them — §07's only buyer row is
+       "Send an enquiry". 9.4 is when they were first asked, and the answer they
+       gave refused the provisional identity most enquiries belong to and a
+       supplier's seat on the enquiry §07 lets it send. Both now follow
+       `enquiry.create`: whoever may send an enquiry may finish it.
+
        `jobs.read` joined on standing item 9.5, for `/admin/jobs`: when each cron
        last ran, which runs are missing and which steps threw. §07 has no row
        because the record did not exist. Every staff seat holds it — each answers
@@ -294,7 +349,9 @@ describe("every row cites the document", () => {
       "notification.template.write",
       "question.remove",
       "queue.rules",
+      "quote.accept",
       "report.detectors",
+      "review.create",
       "review.dispute",
       "review.hold",
       "staff.manage",

@@ -57,8 +57,13 @@ export function ResultClicks({
            A storefront, a product page or an enquiry composer aimed at one
            supplier. All three are the buyer choosing out of this page; a facet
            chip or a pagination link is not.
+
+           Board `6a-s` adds one more: a link marked `data-scope-action`, which
+           the services landing page puts on its fan-out. A buyer who asks the
+           market for this trade in this place has acted on the scope as surely
+           as one who opened a firm, and it is the stronger signal of the two.
         */
-        const link = target?.closest?.("a[href^='/b/'], a[href^='/rfq/new?to=']");
+        const link = target?.closest?.("a[href^='/b/'], a[href^='/rfq/new?to='], a[data-scope-action]");
         if (!link) return;
         sent.current = true;
         emitEvent("result_clicked", {

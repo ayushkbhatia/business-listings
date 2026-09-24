@@ -9,6 +9,7 @@ import {
   emiratePagePath,
   liveEmiratePages,
   MATRIX_EMIRATES,
+  servicesTradeRows,
 } from "@/lib/seo/emirate";
 import type { Actor } from "@/lib/auth/roles";
 import { VERIFIED_TIER } from "@/lib/verification";
@@ -353,7 +354,12 @@ describe("criterion 4 — the page's links and the sitemap agree", () => {
     });
     await publishEmiratePage(await opsLead(), "sharjah", category.id, "Ready.");
 
-    const matrix = await emirateMatrix();
+    /*
+       The rows `/categories` draws: every sector, and since board `6a-s` a row
+       under its sector for each trade sold by the job with an emirate page
+       live. Both are the page's anchors, so both are in the comparison.
+    */
+    const matrix = [...(await emirateMatrix()), ...(await servicesTradeRows())];
     const fromMatrix = matrix
       .flatMap((row) => row.cells.map((cell) => ({ row, cell })))
       .filter(({ cell }) => cell.live)
