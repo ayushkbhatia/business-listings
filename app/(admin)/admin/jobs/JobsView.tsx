@@ -403,7 +403,8 @@ export function RunHistoryTable({
         </tbody>
       </table>
 
-      {history.rows.length === 0 ? (
+      {/* Only when the cron has no run at all: a page past the last run is not that. */}
+      {history.rows.length === 0 && history.total === 0 ? (
         <div className="px-4 py-8 text-center">
           <p className="text-body-sm text-body">{t("admin.jobs.history.empty.title", { cron: cronInSentence(cron) })}</p>
           <p className="mx-auto mt-1 max-w-prose text-caption text-body">

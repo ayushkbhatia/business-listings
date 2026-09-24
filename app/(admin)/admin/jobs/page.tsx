@@ -4,7 +4,7 @@ import { requireStaff } from "@/lib/auth/staff";
 import { formatCount, formatDateTime } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { JOB_RUN_KEEP_DAYS } from "@/lib/jobs/health";
-import { jobsOverview, refusedCalls, runHistory, stepFailures } from "@/lib/jobs/report";
+import { jobsOverview, parseRunCursor, refusedCalls, runHistory, stepFailures } from "@/lib/jobs/report";
 import { JOB_GRACE_MS, JOB_SCHEDULES, isJobCron, nextSlot, type JobCron } from "@/lib/jobs/schedule";
 import { AdminPage, getAdminNavBadges } from "../../_shell";
 import { CronTable, CronTabs, RefusalTable, RunHistoryTable, StepFailureTable, cronHref, cronInSentence } from "./JobsView";
@@ -37,7 +37,8 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
 
   const query = await searchParams;
   const cron: JobCron = query.cron && isJobCron(query.cron) ? query.cron : "daily";
-  const cursor = query.after ?? null;
+  // A cursor that does not parse is the first page, and is not offered back as one.
+  const cursor = parseRunCursor(query.after) ? (query.after ?? null) : null;
   const now = new Date();
 
   const [overview, badges] = await Promise.all([jobsOverview(now), getAdminNavBadges(seat)]);
