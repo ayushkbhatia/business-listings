@@ -58,7 +58,9 @@ export async function acceptQuoteAction(formData: FormData): Promise<void> {
   // page — board 7a `B9`, a sign-in round trip returns to what was in progress.
   if (!buyerId) redirect(signInHref(back));
 
-  const result = await acceptQuote(buyerId, quoteId).catch(refusedByMatrix);
+  const result = await acceptQuote(buyerId, quoteId, new Date(), {
+    source: typeof formData.get("from") === "string" && String(formData.get("from")).startsWith("thread:") ? "thread" : "compare",
+  }).catch(refusedByMatrix);
   const carry = typeof token === "string" && token ? `?t=${token}` : "";
 
   /*
@@ -106,7 +108,7 @@ export async function companyAcceptAction(formData: FormData): Promise<void> {
   if (!buyerId) redirect(signInHref(here));
 
   const request = () => requestApproval(buyerId, quoteId, { poNumber, costCode, note }).catch(refusedByMatrix);
-  const accept = () => acceptQuote(buyerId, quoteId, new Date(), { poNumber, costCode }).catch(refusedByMatrix);
+  const accept = () => acceptQuote(buyerId, quoteId, new Date(), { poNumber, costCode, source: "company" }).catch(refusedByMatrix);
 
   let outcome: "accepted" | "requested" | { error: string };
   if (intent === "request") {

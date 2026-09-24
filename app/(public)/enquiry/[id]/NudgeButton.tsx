@@ -19,6 +19,8 @@ export function NudgeButton({
   disabled,
   label,
   waitLabel,
+  sentLabel,
+  source = "tracking",
 }: {
   businessId: string;
   enquiryRef: string;
@@ -26,6 +28,10 @@ export function NudgeButton({
   disabled: boolean;
   label: string;
   waitLabel: string;
+  /** What the button says once pressed — the nudge is spent and the buyer should see that it went. */
+  sentLabel?: string;
+  /** The screen it sits on, for telemetry. */
+  source?: "compare" | "tracking";
 }) {
   const [pending, startTransition] = useTransition();
   const [sent, setSent] = useState(false);
@@ -37,7 +43,7 @@ export function NudgeButton({
       title={disabled ? waitLabel : undefined}
       onClick={() =>
         startTransition(async () => {
-          const result = await nudgeRecipient({ ref: enquiryRef, businessId, token });
+          const result = await nudgeRecipient({ ref: enquiryRef, businessId, token, source });
           if (result.ok) setSent(true);
         })
       }
@@ -48,7 +54,7 @@ export function NudgeButton({
         "disabled:cursor-default disabled:text-muted disabled:hover:bg-card",
       )}
     >
-      {label}
+      {sent && sentLabel ? sentLabel : label}
     </button>
   );
 }

@@ -8,7 +8,8 @@ import { assertCanAcceptQuote, assertCanCreateEnquiry } from "@/lib/auth/guards"
 import { normaliseIdentifier } from "@/lib/auth/identity";
 import { routeLead } from "@/lib/leads/router";
 import { sendAutoReplies } from "@/lib/messaging/auto-reply";
-import { onEnquiryDelivered, onQuoteAccepted } from "@/lib/notify/events";
+import { onEnquiryDelivered, onQuoteAccepted, onQuotesDeclined } from "@/lib/notify/events";
+import { recordEvent } from "@/lib/telemetry/record";
 import { quoteTotalAed } from "@/lib/quote/money";
 import { resolveEnquiryArea } from "./area";
 import { gateCompanyAcceptance, GateRefused, readReference, type GateRefusal } from "@/lib/buyer-company/gate";
@@ -955,6 +956,12 @@ export interface AcceptOptions {
   poNumber?: string | null;
   costCode?: string | null;
   approval?: { id: string; approverId: string } | null;
+  /**
+   * Which screen the acceptance was pressed on, for the `quote_accepted` event
+   * only — board `1n`'s telemetry asks whether buyers decide on the comparison
+   * or in a thread. It changes nothing about what accepting does (`10h` B6).
+   */
+  source?: "compare" | "thread" | "company" | "approval";
 }
 
 /**
@@ -1186,6 +1193,19 @@ export async function acceptQuote(
       ...(proposal?.feeAed && proposal.feeBasisLabel
         ? { proposal: { feeAed: proposal.feeAed.toString(), feeBasisLabel: proposal.feeBasisLabel } }
         : {}),
+    });
+    /*
+       Board `1n` `B8`: the quotes that lost are declined out loud, not by a
+       status change nobody reads. Here rather than in any one screen's action,
+       because this is the only way to an acceptance — the comparison, the
+       thread and an approval all arrive through it.
+    */
+    await onQuotesDeclined({ enquiryId: accepted.enquiryId, acceptedBusinessId: accepted.businessId });
+    await recordEvent({
+      name: "quote_accepted",
+      businessId: accepted.businessId,
+      actorId: options.approval?.approverId ?? buyerId,
+      props: { source: options.source ?? "compare", lines: total.length, proposal: proposal !== null },
     });
   }
 

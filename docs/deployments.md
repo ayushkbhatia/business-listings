@@ -190,6 +190,8 @@ simultaneous, and the order is a choice worth making on purpose:
 | Adds a `NOT NULL` column, or a constraint the old code would violate | before the merge, and only if the old code still satisfies it |
 | Drops or renames anything | after the merge, once no running code refers to it |
 | **Does both — adds what the new code needs *and* drops what the old code reads** | **neither. Split it in two** |
+| Adds an enum value | before the merge — a value no row carries is invisible |
+| Inserts rows carrying a new enum value (a notification template for a new event) | **immediately before the merge, and no earlier** |
 
 The middle row is the one that bites: production runs the previous deployment
 until the new one is live, and that code is still writing rows the new
@@ -209,6 +211,24 @@ applied before the merge, and a **contract** migration carrying the drops,
 applied after. Both deployments then run against a schema that satisfies them,
 and `ALLOW_PENDING_MIGRATIONS` names the contract half so the merge's production
 build is not refused for the pending migration it is itself the prerequisite for.
+
+The two enum rows are the quiet case, found on board `1n` (24 Sep 2026). A
+Prisma client refuses to read a row whose enum value its schema lacks: *Value
+'quote_declined' not found in enum 'NotificationEvent'*, thrown from the whole
+`findMany`, not from the one row. So the value itself can go first, but the
+first row that carries it breaks every deployed read that is not scoped to one
+event. On 1n that was the staff template console, and it would have stayed
+broken for as long as the PR waited for its batch. Apply rows like these as the
+last step before pressing merge. The build time is then the whole window, and
+`check:schema-deployed` still refuses a merge that forgot. Proven by generating
+`main`'s client into a scratch directory and reading a database at the proposed
+state. That is also the way to check the next one.
+
+`templateBoard` scopes both of its reads to the events the running client knows
+since 1n, so a board that adds an event no longer breaks the console before its
+code is live. Scoping one reader does not make the order safe in general. Treat
+any new enum value that arrives with rows as this row of the table until every
+unscoped reader of that column is known.
 
 Two things make this easy to miss when reading a diff:
 

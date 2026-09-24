@@ -122,6 +122,16 @@ export const RATE_POLICIES = {
      person re-checking their own.
   */
   report_status: { limit: 30, windowMs: MINUTE, cooldownMs: 0 },
+  /*
+     Board `1n`. *Message all* writes one message into every supplier's thread
+     on an enquiry — up to eight messages a press, each of them landing in
+     somebody's inbox. Keyed on the buyer and the enquiry together, so one
+     enquiry's allowance cannot be spent from another. Three an hour covers a
+     question, a correction to it and a follow-up; the cooldown stops the
+     double-submit a slow page produces, which here would put every question
+     in front of eight suppliers twice.
+  */
+  message_all: { limit: 3, windowMs: 60 * MINUTE, cooldownMs: 60_000 },
 } as const satisfies Record<string, RatePolicy>;
 
 export type RateBucket = keyof typeof RATE_POLICIES;

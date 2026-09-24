@@ -153,6 +153,26 @@ test.describe("the comparison", () => {
     await expect(page.getByRole("link", { name: /^Ask for a quote for / })).toHaveCount(3);
   });
 
+  test("downloads as the same table: the caveat first, a column per product, no price (1n flag 5)", async ({ page }) => {
+    const [a, b, c] = await productIds(page, PUMPS);
+    await page.goto(`/compare?p=${a},${b},${c}`);
+    const link = page.getByRole("link", { name: "Download as CSV" });
+    await expect(link).toHaveAttribute("href", `/compare/export?p=${a},${b},${c}`);
+
+    const response = await page.request.get(`/compare/export?p=${a},${b},${c}`);
+    expect(response.status()).toBe(200);
+    expect(response.headers()["content-type"]).toContain("text/csv");
+    expect(response.headers()["cache-control"]).toBe("private, no-store");
+    expect(response.headers()["content-disposition"]).toMatch(/^attachment; filename="[A-Za-z0-9-]+\.csv"$/);
+    const csv = (await response.text()).replace(/^\uFEFF/, "");
+    const [caveat, head] = csv.split("\r\n");
+    expect(caveat).toContain(`3 products in ${PUMP_TRADE}`);
+    // A column per product, each named with its seller, after the field column.
+    expect(head!.split(",")[0]).toBe("Field");
+    expect(csv).toContain("Availability");
+    expect(csv).not.toMatch(/AED\s*[\d,]/);
+  });
+
   test("B4 — Hide matching rows keeps what differs and the seller rows, and says so", async ({ page }) => {
     const [a, b, c, d] = await productIds(page, PUMPS);
     await page.goto(`/compare?p=${a},${b},${c},${d}`);

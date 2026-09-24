@@ -84,7 +84,15 @@ describe("what an event supplies", () => {
          licence-notice-job.ts` carries the exactly-once guard, per stage.
       */
       "document_expiring",
+      /*
+         Board `1n`. The closing notice is the sixth event sent from a schedule
+         — `lib/enquiry/closing-job.ts`, guarded by the delivery log like the
+         expiry notice — and the nudge's carrier, which `lib/enquiry/nudge.ts`
+         owed from board 1i until this.
+      */
+      "enquiry_closing",
       "enquiry_escalated",
+      "enquiry_nudged",
       "enquiry_received",
       // Board 11b's follow-up. The first message-shaped notification in the
       // product: everything else here is about a quote, because a message was
@@ -103,6 +111,8 @@ describe("what an event supplies", () => {
       */
       "placement_slot_freed",
       "quote_accepted",
+      // Board `1n` `B8`: the quotes a buyer did not accept, declined out loud.
+      "quote_declined",
       /*
          Board 7e §2's added row, and the fourth event sent from a schedule.
          Board 3k shipped the expiry window, the `Expiring soon` tab and the
@@ -160,7 +170,7 @@ describe("what an event supplies", () => {
   it("covers every event in the enum, so none is missing a row", () => {
     // `satisfies Record<NotificationEvent, …>` enforces this at compile time;
     // this fails loudly if somebody widens the enum and the type is loosened.
-    expect(Object.keys(EVENT_PARAMS)).toHaveLength(22);
+    expect(Object.keys(EVENT_PARAMS)).toHaveLength(25);
   });
 
   it("does not claim to emit the alert it only records", () => {

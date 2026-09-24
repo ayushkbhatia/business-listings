@@ -41,6 +41,7 @@ export function CompareHeader({
   hideMatching,
   toggleHref,
   askAllHref,
+  exportHref,
   headingLevel = 1,
 }: {
   columns: readonly CompareColumn[];
@@ -50,6 +51,8 @@ export function CompareHeader({
   /** `?diff=1` on or off, the rest of the URL kept. */
   toggleHref: string;
   askAllHref: string;
+  /** The CSV of this set — board `1n`'s exporter, shared. Absent in the gallery. */
+  exportHref?: string;
   /** 1 on the page. The gallery draws it under its own `h1`, where a second is a defect. */
   headingLevel?: 1 | 2;
 }) {
@@ -79,6 +82,11 @@ export function CompareHeader({
           </a>
         )}
         <PrintButton label={t("compare.print")} />
+        {exportHref ? (
+          <a href={exportHref} rel="nofollow" download className={buttonClassName({ variant: "secondary" })}>
+            {t("compare.export_csv")}
+          </a>
+        ) : null}
         {/*
            `B2`: one CTA string. `Ask all 4 for a quote` opens the composer with
            every column's seller pinned and every column's product as a matched

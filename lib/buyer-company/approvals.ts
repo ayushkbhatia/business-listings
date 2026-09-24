@@ -255,6 +255,7 @@ export async function approveRequest(
     poNumber: request.poNumber,
     costCode: request.costCode,
     approval: { id: request.id, approverId },
+    source: "approval",
   });
 
   if (!result.ok) {

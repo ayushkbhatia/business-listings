@@ -94,7 +94,7 @@ export async function getBuyerInbox(
       anyQuoteRead: enquiry.quotes.some((quote) => quote.readAt !== null),
       accepted: enquiry.contactReleasedToBusinessId !== null,
       nudgeable: recipients.filter((r) =>
-        canNudge({ state: r.state, buyerNudgedAt: r.buyerNudgedAt, deliveredAt: r.createdAt }, now),
+        canNudge({ state: r.state, buyerNudgedAt: r.buyerNudgedAt, deliveredAt: r.createdAt, repliedAt: r.firstReplyAt }, now),
       ).length,
       unanswered: recipients.filter((r) => r.firstReplyAt === null && r.state !== "declined").length,
       allDeclined:

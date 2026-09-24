@@ -8,6 +8,7 @@ import { prisma } from "@/lib/db/client";
 import { acceptanceOutlook } from "@/lib/buyer-company/queue";
 import { amountWords, requestView } from "@/lib/buyer-company/request-words";
 import { reasonLine } from "@/lib/buyer-company/words";
+import { releaseSentences } from "@/lib/enquiry/release-words";
 import { filsToAed, quoteTotalFils } from "@/lib/quote/money";
 import { toProposalFigure, PROPOSAL_FIGURE_SELECT } from "@/lib/quote/proposal";
 import { commitmentFils } from "@/lib/buyer-company/value";
@@ -63,7 +64,14 @@ export default async function AcceptPage({
 
   const enquiry = await prisma.enquiry.findFirst({
     where: { OR: [{ ref: id }, { id }], buyerId },
-    select: { id: true, ref: true, buyerCompanyId: true, closesAt: true, contactReleasedToBusinessId: true },
+    select: {
+      id: true,
+      ref: true,
+      buyerCompanyId: true,
+      closesAt: true,
+      contactReleasedToBusinessId: true,
+      deliverySnapshot: true,
+    },
   });
   if (!enquiry) notFound();
   const tokenCarry = one("t") ? `?t=${encodeURIComponent(one("t")!)}` : "";
@@ -225,15 +233,26 @@ export default async function AcceptPage({
             ) : null}
 
             {!outlook.need.required ? (
-              <p className="max-w-[var(--measure-prose)] text-body-sm text-body">
-                {outlook.role === "company_admin"
-                  ? t("company.accept.within_admin", { company: outlook.companyName })
-                  : t("company.accept.within_limit", {
-                      remaining: formatAED(outlook.remainingAed ?? "0"),
-                      limit: formatAED(outlook.limitAed ?? 0),
-                    })}{" "}
-                {t("company.accept.releases", { supplier: quote.business.displayName })}
-              </p>
+              <>
+                <p className="max-w-[var(--measure-prose)] text-body-sm text-body">
+                  {outlook.role === "company_admin"
+                    ? t("company.accept.within_admin", { company: outlook.companyName })
+                    : t("company.accept.within_limit", {
+                        remaining: formatAED(outlook.remainingAed ?? "0"),
+                        limit: formatAED(outlook.limitAed ?? 0),
+                      })}{" "}
+                  {t("company.accept.releases", { supplier: quote.business.displayName })}
+                </p>
+                {/* Board `1n` `B9`: what goes to the supplier, named as the query layer releases it. */}
+                <ul className="max-w-[var(--measure-prose)] list-disc space-y-1 pl-5 text-body-sm text-body">
+                  {releaseSentences(
+                    { companyName: outlook.companyName, hasDeliveryAddress: enquiry.deliverySnapshot !== null },
+                    quote.business.displayName,
+                  ).map((sentence) => (
+                    <li key={sentence}>{sentence}</li>
+                  ))}
+                </ul>
+              </>
             ) : (
               <>
                 <ul className="space-y-1 text-body-sm text-body">

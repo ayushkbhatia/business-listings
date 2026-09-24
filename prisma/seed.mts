@@ -59,6 +59,7 @@ import { seedStaffRoster } from "./seed-staff-roster.mjs";
 import { seedNegotiationThreads } from "./seed-negotiation.mjs";
 import { seedReviewWrite } from "./seed-review-write.mjs";
 import { seedBuyerCompany } from "./seed-buyer-company.mjs";
+import { seedCompareQuotes } from "./seed-compare-quotes.mjs";
 import { seedContactLeads } from "./seed-contact-leads.mjs";
 import { seedAccountHealth } from "./seed-account-health.mjs";
 import { seedRevenue } from "./seed-revenue.mjs";
@@ -1141,6 +1142,10 @@ async function main() {
   // request its counter explains. The wall clock: "accepted two hours ago"
   // has to fall in the month the page reads.
   await seedBuyerCompany(prisma, new Date());
+  // Board 1n: the RFQ as drawn, one to accept on, and Priya's company version —
+  // after Marina Facilities, whose buyer and address the third one uses. The
+  // wall clock, so "quoted in 1 h 40 min" and "closes in 3 days" read as drawn.
+  await seedCompareQuotes(prisma, new Date());
   await seedContactLeads(prisma, new Date());
   /*
      Board 4h: a collapsed group, an escalated row, a row with an owner, and
@@ -2892,7 +2897,16 @@ async function seedEnquiries(db: Db, businesses: Biz[], buyerId: string, buyerTw
         ],
       },
     },
+    include: { lines: { orderBy: { sortOrder: "asc" } } },
   });
+  /*
+     Board `1n` keys every cell on `QuoteLine.enquiryLineId` — which line of the
+     buyer's a price answers — as the composer has written since board 3j. These
+     quotes predate the column and matched on wording, which is ambiguous here
+     by design: two lines read "Resilient seated gate valve, flanged", told apart
+     only by size. Linked by position, which is how they were written.
+  */
+  const e1Line = (i: number) => e1.lines[i]!.id;
 
   for (const [i, b] of recipients.entries()) {
     await db.enquiryRecipient.create({
@@ -2926,9 +2940,9 @@ async function seedEnquiries(db: Db, businesses: Biz[], buyerId: string, buyerTw
       createdAt: hours(-45),
       lines: {
         create: [
-          { description: "Resilient seated gate valve DN100, flanged PN16", qty: 24, unitPrice: "410.00", leadTimeDays: 0, sortOrder: 0 },
-          { description: "Resilient seated gate valve DN150, flanged PN16", qty: 8, unitPrice: "735.00", leadTimeDays: 14, sortOrder: 1 },
-          { description: "Wafer butterfly valve DN200, gear operated", qty: 6, unitPrice: "980.00", leadTimeDays: 21, sortOrder: 2 },
+          { enquiryLineId: e1Line(0), description: "Resilient seated gate valve DN100, flanged PN16", qty: 24, unitPrice: "410.00", leadTimeDays: 0, sortOrder: 0 },
+          { enquiryLineId: e1Line(1), description: "Resilient seated gate valve DN150, flanged PN16", qty: 8, unitPrice: "735.00", leadTimeDays: 14, sortOrder: 1 },
+          { enquiryLineId: e1Line(2), description: "Wafer butterfly valve DN200, gear operated", qty: 6, unitPrice: "980.00", leadTimeDays: 21, sortOrder: 2 },
         ],
       },
     },
@@ -2950,9 +2964,9 @@ async function seedEnquiries(db: Db, businesses: Biz[], buyerId: string, buyerTw
       createdAt: hours(-20),
       lines: {
         create: [
-          { description: "Resilient seated gate valve DN100, flanged PN16", qty: 24, unitPrice: "398.00", leadTimeDays: 0, sortOrder: 0 },
-          { description: "Resilient seated gate valve DN150, flanged PN16", qty: 8, unitPrice: "712.00", leadTimeDays: 7, sortOrder: 1 },
-          { description: "Wafer butterfly valve DN200, gear operated", qty: 6, unitPrice: "980.00", leadTimeDays: 21, sortOrder: 2 },
+          { enquiryLineId: e1Line(0), description: "Resilient seated gate valve DN100, flanged PN16", qty: 24, unitPrice: "398.00", leadTimeDays: 0, sortOrder: 0 },
+          { enquiryLineId: e1Line(1), description: "Resilient seated gate valve DN150, flanged PN16", qty: 8, unitPrice: "712.00", leadTimeDays: 7, sortOrder: 1 },
+          { enquiryLineId: e1Line(2), description: "Wafer butterfly valve DN200, gear operated", qty: 6, unitPrice: "980.00", leadTimeDays: 21, sortOrder: 2 },
         ],
       },
     },
@@ -2974,9 +2988,9 @@ async function seedEnquiries(db: Db, businesses: Biz[], buyerId: string, buyerTw
       createdAt: hours(-31),
       lines: {
         create: [
-          { description: "Gate valve DN100 PN16, ductile iron", qty: 24, unitPrice: "435.00", leadTimeDays: 2, sortOrder: 0 },
-          { description: "Gate valve DN150 PN16, ductile iron", qty: 8, unitPrice: "690.00", leadTimeDays: 2, sortOrder: 1 },
-          { description: "Butterfly valve DN200, gear operated", qty: 6, unitPrice: "1015.00", leadTimeDays: 2, sortOrder: 2 },
+          { enquiryLineId: e1Line(0), description: "Gate valve DN100 PN16, ductile iron", qty: 24, unitPrice: "435.00", leadTimeDays: 2, sortOrder: 0 },
+          { enquiryLineId: e1Line(1), description: "Gate valve DN150 PN16, ductile iron", qty: 8, unitPrice: "690.00", leadTimeDays: 2, sortOrder: 1 },
+          { enquiryLineId: e1Line(2), description: "Butterfly valve DN200, gear operated", qty: 6, unitPrice: "1015.00", leadTimeDays: 2, sortOrder: 2 },
         ],
       },
     },
@@ -3006,6 +3020,7 @@ async function seedEnquiries(db: Db, businesses: Biz[], buyerId: string, buyerTw
         create: [{ description: "GI pipe, medium duty, 6 m length", qty: 120, unit: "lengths", size: "DN80", sortOrder: 0 }],
       },
     },
+    include: { lines: { select: { id: true } } },
   });
 
   await db.enquiryRecipient.createMany({
@@ -3027,7 +3042,11 @@ async function seedEnquiries(db: Db, businesses: Biz[], buyerId: string, buyerTw
       readAt: days(-22),
       acceptedAt: days(-21),
       createdAt: days(-23),
-      lines: { create: [{ description: "GI pipe DN80 medium duty, 6 m", qty: 120, unitPrice: "168.50", leadTimeDays: 3, sortOrder: 0 }] },
+      lines: {
+        create: [
+          { enquiryLineId: e2.lines[0]!.id, description: "GI pipe DN80 medium duty, 6 m", qty: 120, unitPrice: "168.50", leadTimeDays: 3, sortOrder: 0 },
+        ],
+      },
     },
   });
 
@@ -3085,6 +3104,8 @@ async function seedEnquiries(db: Db, businesses: Biz[], buyerId: string, buyerTw
         ],
       },
     },
+    // Board `1n`: the quotes below answer these lines by id, as the composer writes them.
+    include: { lines: { orderBy: { sortOrder: "asc" }, select: { id: true } } },
   });
 
   // Five recipients, two of whom quote. The shape the step 3 checkpoint walks.
@@ -3118,8 +3139,8 @@ async function seedEnquiries(db: Db, businesses: Biz[], buyerId: string, buyerTw
         createdAt: hours(-26 + i),
         lines: {
           create: [
-            { description: "Wafer butterfly valve DN200, gear operated", qty: 12, unitPrice: i === 0 ? "935.00" : "902.00", leadTimeDays: i === 0 ? 2 : 21, sortOrder: 0 },
-            { description: "Cast iron Y-strainer DN100, flanged", qty: 4, unitPrice: i === 0 ? "340.00" : "358.00", leadTimeDays: i === 0 ? 2 : 21, sortOrder: 1 },
+            { enquiryLineId: e4.lines[0]!.id, description: "Wafer butterfly valve DN200, gear operated", qty: 12, unitPrice: i === 0 ? "935.00" : "902.00", leadTimeDays: i === 0 ? 2 : 21, sortOrder: 0 },
+            { enquiryLineId: e4.lines[1]!.id, description: "Cast iron Y-strainer DN100, flanged", qty: 4, unitPrice: i === 0 ? "340.00" : "358.00", leadTimeDays: i === 0 ? 2 : 21, sortOrder: 1 },
           ],
         },
       },

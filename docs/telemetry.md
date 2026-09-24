@@ -342,3 +342,36 @@ wrong.
 into a screen board 8e §1 says must be reachable exactly once, on the
 transition: an email, a bookmark, a stale tab. There is nothing to fix on the
 day it is zero and something to find on the day it is not.
+
+## Board 1n's five, and what none of them carries
+
+Board `1n` (24 Sep 2026) adds five events. The question they answer is how buyers
+decide between quotes. They never record what anybody quoted, so **no event
+carries a price, a total or a supplier's figure.**
+
+- **`quotes_compared`** is attention, so the browser sends it from the page:
+  the number of quotes and lines on the screen, the sort, and the phase (`open`,
+  `closed`, `accepted`). It has no session: the page is private to one buyer and
+  already knows who they are.
+- **`quote_accepted`** is written by `acceptQuote` itself, not by any screen.
+  `source` is where the accept was pressed: `compare`, `thread`, `company` (7b's
+  accept screen) or `approval` (a colleague approving). The comparison, a thread
+  and an approval all reach an acceptance through that one function, so a split
+  by `source` is complete. It is recorded on the winning supplier's `businessId`,
+  because the acceptance is their fact too.
+- **`suppliers_nudged`** carries `source` (`compare` or `tracking` for one
+  supplier, `inbox` for `10e`'s nudge-all) and the number of rows the
+  conditional write actually changed, which is not the number of buttons shown.
+  A second press that finds nothing left to nudge writes nothing and records
+  nothing.
+- **`suppliers_messaged`** counts the threads *Message all* posted into. Suppliers
+  it skipped (declined, account closed) are not counted, since nothing reached
+  them.
+- **`comparison_exported`** is recorded once the CSV is built, before it is
+  served. It carries quote and line counts only.
+
+`10d`'s product-comparison export shares the exporter and records nothing. It is
+a public GET that anyone without an account can make, so an event for it would
+be a row keyed on nobody (§4). Nothing else in the catalogue records the product
+comparison either. Measuring it needs its own event and its own answer to §4,
+not a borrowed `comparison_exported`.

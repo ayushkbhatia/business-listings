@@ -64,6 +64,7 @@ export async function getTrackingByRef(
           state: true,
           openedAt: true,
           buyerNudgedAt: true,
+          firstReplyAt: true,
           createdAt: true,
           declineReason: true,
           declinedAt: true,
@@ -119,6 +120,7 @@ export async function getTrackingByRef(
          and the latency figure run on.
       */
       deliveredAt: recipient.createdAt,
+      repliedAt: recipient.firstReplyAt,
       quotedAt: quote?.sentAt ?? null,
       quotedLines: quote?._count.lines ?? 0,
       totalLines,

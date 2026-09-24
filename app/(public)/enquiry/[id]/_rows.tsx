@@ -107,11 +107,12 @@ export function RecipientRow({
           >
             {t("track.view_quote")}
           </a>
-        ) : state === "delivered" && !accepted ? (
+        ) : (state === "delivered" || state === "opened") && !row.repliedAt && !accepted ? (
           /*
-             Nudge is one per recipient, ever, and only after 24 hours in
-             `delivered`. Once spent the button becomes the mono line saying so
-             — the buyer needs to remember they already did this.
+             Nudge is one per recipient, ever, and only 24 hours after delivery
+             to a supplier who has not answered — opened or not (`canNudge`).
+             Once spent the button becomes the mono line saying so — the buyer
+             needs to remember they already did this.
           */
           row.buyerNudgedAt ? (
             <span className="font-mono text-eyebrow uppercase text-faint">

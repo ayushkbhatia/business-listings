@@ -91,6 +91,11 @@ export const EVENT_NAMES = [
   "supplier_report_filed",
   "product_cap_refused",
   "service_cap_refused",
+  "quotes_compared",
+  "quote_accepted",
+  "suppliers_nudged",
+  "suppliers_messaged",
+  "comparison_exported",
 ] as const;
 
 export type EventName = (typeof EVENT_NAMES)[number];
@@ -810,6 +815,40 @@ export const EVENT_SPECS = {
       errors: "number",
       round_trip: "boolean",
     },
+  },
+  /*
+     Board `1n` — the buyer's comparison of quotes, and what is done from it.
+
+     `quotes_compared` is attention, so the browser sends it; the other four are
+     state the server knows — an acceptance committed, nudges written, messages
+     posted, a file served. None carries a price: the question each answers is
+     how buyers decide, never what anybody quoted.
+  */
+  quotes_compared: {
+    emitter: "browser",
+    session: "never",
+    props: { quotes: "number", lines: "number", sort: "string?", phase: "string?" },
+  },
+  /** Accepted, from which screen. On the supplier who won, which is their fact too. */
+  quote_accepted: {
+    emitter: "server",
+    session: "never",
+    props: { source: "string", lines: "number", proposal: "boolean?" },
+  },
+  suppliers_nudged: {
+    emitter: "server",
+    session: "never",
+    props: { source: "string", count: "number" },
+  },
+  suppliers_messaged: {
+    emitter: "server",
+    session: "never",
+    props: { recipients: "number" },
+  },
+  comparison_exported: {
+    emitter: "server",
+    session: "never",
+    props: { quotes: "number", lines: "number" },
   },
 } as const satisfies Record<EventName, EventDefinition>;
 

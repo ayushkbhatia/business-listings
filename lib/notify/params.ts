@@ -222,6 +222,24 @@ export const EVENT_PARAMS = {
   approval_requested: ["ref", "quoteRef", "businessName", "amount", "requester", "approvalId"],
   approval_decided: ["ref", "quoteRef", "businessName", "approver", "outcome", "nextStep", "approvalId"],
   off_platform_flagged: ["ref", "businessName"],
+  /*
+     Board `1n`. The three messages around a buyer choosing between quotes.
+
+     `quote_declined` tells a supplier their quote lost and names nothing about
+     what beat it: no supplier, no price, no count. Sellers never see another
+     seller's figures (`permissions.md`), and a decline that said *accepted at
+     AED 13,560* would be the platform publishing one supplier's price to four.
+
+     `enquiry_nudged` is a reminder about an enquiry the supplier already holds —
+     the enquiry's own reference and summary, never a new lead (`B10`).
+
+     `enquiry_closing` is the buyer's, and `quotes` is a phrase (*4 quotes*) the
+     emitter words for the trade: a brief's are proposals. It counts what the
+     buyer holds, for the buyer — never a seller's figure.
+  */
+  quote_declined: ["ref", "quoteRef", "summary", "enquiryId", "shortLink"],
+  enquiry_nudged: ["ref", "summary", "closesAt", "enquiryId", "shortLink"],
+  enquiry_closing: ["ref", "quotes", "closesAt", "enquiryId", "shortLink"],
 } as const satisfies Record<NotificationEvent, readonly string[]>;
 
 export type ParamsOf<E extends NotificationEvent> = (typeof EVENT_PARAMS)[E][number];
@@ -270,6 +288,12 @@ export const EVENT_SOURCES = {
   approval_decided: ["7b"],
   // `postMessage`, when the scanner files an off-platform report on a company enquiry.
   off_platform_flagged: ["7b", "10h"],
+  // `acceptQuote`, which the comparison, the thread and an approval all run.
+  quote_declined: ["1n", "10h", "7b"],
+  // `nudge` and `nudgeUnanswered`: the comparison's row, the tracking page, the inbox.
+  enquiry_nudged: ["1n", "1i", "10e"],
+  // `sweepClosingEnquiries`, in the hourly sweep.
+  enquiry_closing: ["1n"],
 } as const satisfies Record<NotificationEvent, readonly string[]>;
 
 /**
@@ -303,6 +327,9 @@ export const EVENT_AUDIENCE = {
   approval_requested: "buyer",
   approval_decided: "buyer",
   off_platform_flagged: "buyer",
+  quote_declined: "seller",
+  enquiry_nudged: "seller",
+  enquiry_closing: "buyer",
 } as const satisfies Record<NotificationEvent, "seller" | "buyer">;
 
 export type Audience = (typeof EVENT_AUDIENCE)[NotificationEvent];
@@ -405,6 +432,7 @@ export function sampleParams<E extends NotificationEvent>(
     approver: "Rami Haddad",
     approvalId: "sample-approval",
     nextStep: "The quote is accepted and the supplier has your contact details.",
+    quotes: "4 quotes",
   } as const;
   const params: Record<string, string | number> = {};
   for (const name of EVENT_PARAMS[event]) params[name] = all[name as keyof typeof all];

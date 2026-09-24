@@ -244,7 +244,7 @@ test("approving a colleague's request accepts the quote, and the counter says wh
   await expect(page.getByRole("link", { name: /Company & team\s*1/ }).first()).toBeVisible();
 
   const waiting = page.getByRole("complementary", { name: "Approval rule and requests" });
-  await expect(waiting.getByText(`${refs.supplier.name} — 3 lines, AED 15,624`)).toBeVisible();
+  await expect(waiting.getByText(`${refs.supplier.name} — 3 lines, AED 15,624 excl. VAT`)).toBeVisible();
   await expect(waiting.getByText("Beyond Priya Menon's monthly limit: AED 0 of AED 10,000 already used")).toBeVisible();
 
   await waiting.getByRole("button", { name: "Approve" }).click();

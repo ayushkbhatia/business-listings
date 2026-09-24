@@ -1,5 +1,5 @@
 import type { NotificationChannel } from "@/lib/db/generated/enums";
-import { formatCount, formatDate, formatRelative } from "@/lib/format";
+import { formatCount, formatDate, formatList, formatRelative } from "@/lib/format";
 import { t, type MessageKey } from "@/lib/i18n";
 import { EVENT_PARAMS } from "@/lib/notify/params";
 import { BUYER_DEFAULT, PLATFORM_FLOOR } from "@/lib/notify/routing";
@@ -336,9 +336,12 @@ export function presentDetail(detail: TemplateDetail, filters: Filters, now: Dat
             floor.length > 0
               ? t("notifications.opt_out.floor_this", { channels: floor.map(channelWord).join(t("notifications.and")) })
               : t("notifications.opt_out.floor_list", {
-                  events: Object.keys(PLATFORM_FLOOR)
-                    .map((event) => t(`notifications.floor_event.${event}` as MessageKey))
-                    .join(t("notifications.and")),
+                  // Counted, not written: this said "Two messages" over a list
+                  // that had grown to three, and board `1n` adds two more.
+                  count: Object.keys(PLATFORM_FLOOR).length,
+                  events: formatList(
+                    Object.keys(PLATFORM_FLOOR).map((event) => t(`notifications.floor_event.${event}` as MessageKey)),
+                  ),
                 }),
             t("notifications.opt_out.no_report"),
           ]

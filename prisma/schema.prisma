@@ -9161,6 +9161,16 @@ enum NotificationEvent {
   /// outside the platform on a company enquiry — to the company's admins,
   /// when the company asked to be told.
   off_platform_flagged
+  /// Board `1n` `B8`. The buyer accepted another supplier's quote, and every
+  /// supplier whose quote lost is told so, once. The message names nothing
+  /// about the winner — not the supplier, not the price.
+  quote_declined
+  /// Board `1n` `B10`. A buyer's one nudge to a supplier who has not quoted: a
+  /// reminder about an enquiry the supplier already holds, never a new one.
+  enquiry_nudged
+  /// Board `1n`. The buyer holds quotes that stop being acceptable when the
+  /// enquiry closes, within the day, and none is accepted yet.
+  enquiry_closing
 
   @@map("notification_event")
 }

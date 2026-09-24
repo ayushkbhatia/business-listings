@@ -133,6 +133,7 @@ export default async function ComparePage({ searchParams }: Props) {
             hideMatching={hideMatching}
             toggleHref={toggleHref}
             askAllHref={askAllHref}
+            exportHref={`/compare/export${set.length > 0 ? `?p=${set.join(",")}` : ""}`}
           />
           <CompareNotices
             delisted={loaded.delisted}

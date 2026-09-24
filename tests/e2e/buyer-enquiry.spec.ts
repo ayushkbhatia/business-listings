@@ -126,34 +126,41 @@ test.describe("tracking an enquiry", () => {
 });
 
 test.describe("comparing quotes", () => {
-  test("puts the quotes in columns and names what accepting does", async ({ page }) => {
+  /*
+     Board `1n` turned the comparison around: a row per supplier and a column
+     per line of the requirement, as the board draws it. What these protected is
+     unchanged — a real table, an accept control that says what it does, the
+     comparison doing more than arithmetic, and no price for a stranger.
+  */
+  test("lines the quotes up line by line, and names what accepting does", async ({ page }) => {
     await page.goto(enquiryPath("/compare"));
-    await expect(page.getByRole("heading", { name: "Compare quotes" })).toBeVisible();
+    await expect(page).toHaveTitle(/Compare quotes/);
 
     // A real table, because the buyer is reading down a column.
-    const table = page.getByRole("table", { name: /Quotes side by side/ });
+    const table = page.getByRole("table", { name: /priced line by line, excluding VAT/ });
     await expect(table).toBeVisible();
-    await expect(table.getByRole("columnheader")).toHaveCount(3);
+    // Supplier, the requirement's two lines, lead time, total, and the action.
+    await expect(table.getByRole("columnheader")).toHaveCount(6);
 
-    await expect(page.getByText(/Accepting releases your number/)).toBeVisible();
+    await expect(page.getByText(/Your name, mobile and email go to that supplier only/)).toBeVisible();
   });
 
-  test("the accept button names the revision and the amount", async ({ page }) => {
-    // "Accept r1 — AED 8,904". A button that says only "Accept" on a screen
-    // with three columns is a button that does not say what it does.
+  test("the accept control says whose quote it accepts, and for how much", async ({ page }) => {
+    // "Accept" alone on a screen with five rows is a button that does not say
+    // what it does — so its name does, while the label stays the board's.
     await page.goto(enquiryPath("/compare"));
-    await expect(page.getByRole("button", { name: /^Accept r\d+ — AED [\d,]+$/ }).first()).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Accept .+'s quote QT-8871-\w+R1, AED [\d,]+$/ }).first()).toBeVisible();
   });
 
-  test("marks the lowest total, so the comparison is not only arithmetic", async ({ page }) => {
+  test("marks the lowest price on each line, not only the lowest total", async ({ page }) => {
     await page.goto(enquiryPath("/compare"));
-    await expect(page.getByText("Lowest total")).toBeVisible();
+    await expect(page.getByText("Lowest for this line")).toHaveCount(2);
   });
 
-  test("shows no price anywhere for somebody without the token", async ({ page }) => {
-    const path = enquiryPath("/compare");
-    const response = await page.goto(path.replace(/\?t=.*/, ""));
-    expect(response?.status()).toBe(404);
+  test("sends a visitor with no token to sign in, and shows no price", async ({ page }) => {
+    await page.goto(enquiryPath("/compare").replace(/\?t=.*/, ""));
+    await expect(page).toHaveURL(/\/signin\?next=/);
+    await expect(page.getByText(/AED \d/)).toHaveCount(0);
   });
 });
 
