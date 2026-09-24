@@ -101,7 +101,7 @@ export default async function InvoicesPage() {
       </p>
 
       {mayCredit && (
-        <div className="mt-[var(--section-gap)]">
+        <div className="mt-[var(--section-pad)]">
           <CreditPanel businesses={creditable} issueCredit={issueCredit} />
         </div>
       )}

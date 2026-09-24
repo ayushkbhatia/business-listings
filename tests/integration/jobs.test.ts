@@ -1,7 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 import { NextRequest } from "next/server";
 import { GET as sweep } from "@/app/api/jobs/sweep/route";
 import { GET as daily } from "@/app/api/jobs/daily/route";
+import { prisma } from "@/lib/db/client";
 import { runSteps } from "@/lib/jobs/authorize";
 
 /**
@@ -26,6 +27,17 @@ const ROUTES: ReadonlyArray<[string, (r: NextRequest) => Promise<Response>]> = [
 ];
 
 let original: string | undefined;
+
+/*
+   Every call below leaves a `job_run` row now — a run, or a refusal with the
+   secret unset — so the file removes what it wrote. Files run one at a time
+   (`fileParallelism: false`), so nothing else writes this table meanwhile.
+*/
+const suiteStart = new Date();
+
+afterAll(async () => {
+  await prisma.jobRun.deleteMany({ where: { startedAt: { gte: suiteStart } } });
+});
 
 beforeEach(() => {
   original = process.env["CRON_SECRET"];
@@ -95,7 +107,7 @@ describe("runSteps isolates one failure from the rest", () => {
        skip every job after it, silently.
     */
     const ran: string[] = [];
-    const outcome = await runSteps({
+    const outcome = await runSteps("sweep", {
       first: async () => {
         ran.push("first");
         throw new Error("the first one fell over");

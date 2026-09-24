@@ -9612,3 +9612,101 @@ model QueueItem {
   @@index([businessId], map: "queue_item_business_idx")
   @@map("queue_item")
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Scheduled jobs — standing item 9.5
+//
+// Two crons call two routes, and between them they run every renewal, every
+// dunning step, every licence drop and every notification held for quiet
+// hours. Until this section existed a run left nothing behind but a
+// `console.info` in a serverless function, so a nightly that stopped firing
+// changed nothing on any screen and told nobody.
+//
+// **Not an audit log, and not shaped like one.** `AuditEvent.actorId` is NOT
+// NULL because that log holds decisions, and a schedule following its own
+// published sequence has no actor — CLAUDE.md non-negotiable 2 makes the same
+// argument for the licence-expiry sweep. So there is no actor column here, no
+// reason column and no `before`/`after`: this is a record that something ran,
+// what it set out to do, and what came back.
+//
+// One writer, `lib/jobs/record.ts`, reached from the shared guard in
+// `lib/jobs/authorize.ts` and from nowhere else. Kept 90 days
+// (`JOB_RUN_KEEP_DAYS`), pruned by the daily run itself.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// One call to `/api/jobs/daily` or `/api/jobs/sweep`.
+///
+/// Written when the run starts, before its first step, so a function that is
+/// killed half way — a timeout, a crash — still leaves a row saying it began
+/// and how far it got. `finishedAt` and `ok` land together when `runSteps`
+/// returns; a row still without them long after it started is a run that never
+/// reached its end, which the console says in those words rather than guessing
+/// at why.
+///
+/// A call `authorizeJob` turned away is a row too (`authorised` false), because
+/// "the scheduler fired and was refused" and "the scheduler never fired" call
+/// for different fixes. Only two kinds are kept, and at most one per cron per
+/// hour: every call while `CRON_SECRET` is unset, and a wrong secret from a
+/// caller naming itself `vercel-cron/`. A stranger guessing at the endpoint is
+/// not a run of anything and writes nothing.
+model JobRun {
+  /// A UUID the writer makes before the insert, so a start that failed to
+  /// write can still be written, under the same id, when the run ends.
+  id          String    @id
+  /// The route's name — `daily` or `sweep`, `JOB_CRONS` in lib/jobs/schedule.ts.
+  cron        String
+  startedAt   DateTime  @map("started_at")
+  finishedAt  DateTime? @map("finished_at")
+  /// Every step's outcome was `ok`. Null until the run finishes, and on a
+  /// refused call, which ran nothing.
+  ok          Boolean?
+  authorised  Boolean
+  /// `no_secret` | `wrong_secret`. Set exactly when `authorised` is false.
+  refusal     String?
+  /// The hour a refused call fell in. With `cron` it is the unique key that
+  /// holds refusals to one row an hour; null on every authorised run, and a
+  /// null never collides.
+  refusedHour DateTime? @map("refused_hour")
+  /// The `x-vercel-cron-schedule` header — the expression that fired this call.
+  /// Null when the call did not come from the scheduler: somebody holding the
+  /// secret, or a test.
+  schedule    String?
+  /// The step names the run set out to take, in order. Written at the start,
+  /// so a run that stopped can say which steps it never reached.
+  planned     String[]  @default([])
+
+  steps JobRunStep[]
+
+  @@unique([cron, refusedHour], map: "job_run_refusal_hour_key")
+  @@index([cron, authorised, startedAt, id], map: "job_run_cron_started_idx")
+  @@index([startedAt], map: "job_run_started_idx")
+  @@map("job_run")
+}
+
+/// One step of a run, written as the step settles — including a step that
+/// threw, which is the reason the table exists.
+///
+/// `result` is what the step returned, the same object the route used to log
+/// and nobody read: `outstanding` invoices, a `capped` backlog, a renewal count
+/// with `skippedNoProvider` beside it. Bounded by `boundResult` in
+/// lib/jobs/outcome.ts. `json`, not `jsonb`: nothing queries inside it, and
+/// `jsonb` reorders keys by length, so `ranAt` would lead every result and
+/// `considered` would land beside the wrong count. `error` is the message a
+/// failed step threw, with addresses and secrets masked; the stack stays in
+/// the function log.
+model JobRunStep {
+  runId      String   @map("run_id")
+  name       String
+  /// Where the step sits in the run's `planned` order, from zero.
+  position   Int
+  startedAt  DateTime @map("started_at")
+  finishedAt DateTime @map("finished_at")
+  ok         Boolean
+  error      String?
+  result     Json?    @db.Json
+
+  run JobRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@id([runId, name])
+  @@map("job_run_step")
+}

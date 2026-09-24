@@ -75,7 +75,7 @@ export default async function RunPage({
         />
       </div>
 
-      <section aria-labelledby="run-records" className="mt-[var(--section-gap)]">
+      <section aria-labelledby="run-records" className="mt-[var(--section-pad)]">
         <h2 id="run-records" className="mb-3 text-h2 text-ink">
           {t("admin.records.title")}
         </h2>

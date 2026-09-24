@@ -3,7 +3,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
 import { acceptQuote, createEnquiry, findFanoutCandidates, descendantsOf } from "@/lib/enquiry/service";
 import { getLeadDetail, getLeadsForBusiness } from "@/lib/db/queries/seller";
-import { atMonthlyCap, monthStart, scoreCandidate } from "@/lib/enquiry/fanout";
+import { atMonthlyCap, monthStart, scoreCandidate, type FanoutCandidate } from "@/lib/enquiry/fanout";
 
 /**
  * The handoff 2 step 3 checkpoint, end to end:
@@ -279,7 +279,27 @@ describe("criterion 6 — a capped seller is not offered", () => {
     */
     const within = await descendantsOf(categoryId);
 
-    const outsiders = await prisma.business.findMany({
+    /*
+       In id order, and the first with room this month — not whichever row
+       Postgres hands back first.
+
+       A pin puts a supplier in the pool; it does not lift their cap.
+       `selectRecipients` skips a pinned supplier at `at_monthly_cap`, which is
+       the rule (`docs/inferred.md`): one who cannot reply costs the buyer a
+       slot. This took `findFirstOrThrow` with no `orderBy`, and the row that
+       comes back moves as earlier files rewrite businesses. Whether it has room
+       moves with the date as well, because the seed dates its enquiries from
+       its own NOW and the cap counts from `monthStart(now)`. When the pick had
+       none, the enquiry left them out, correctly, and this failed on a missing
+       id — on `main` on 22 and 24 Sep 2026, over trees that were green on
+       their pull requests.
+
+       Room is what `findFanoutCandidates` reports, because that is what
+       `selectRecipients` judges: the cap arrives through `effectiveCaps`, so an
+       entitlement snapshot outranks `Plan.enquiriesPerMonth`. And it is asked
+       with `atMonthlyCap`, the matcher's own predicate, rather than a copy.
+    */
+    const outside = await prisma.business.findMany({
       where: {
         publishedAt: { not: null },
         suspendedAt: null,
@@ -290,39 +310,35 @@ describe("criterion 6 — a capped seller is not offered", () => {
         NOT: { categories: { some: { categoryId: { in: within } } } },
       },
       select: { id: true },
-      orderBy: { id: "asc" },
+      orderBy: [{ id: "asc" }],
     });
-    /*
-       One with room this month. A supplier at its cap is dropped even when
-       pinned — the test above — so an outsider picked without looking could
-       be one, and this would be asserting the cap rather than the pin. It was
-       `findFirstOrThrow` with no order, which is whatever row the heap hands
-       back first: it passed until another suite's writes and a larger seed put
-       a capped supplier there.
-    */
-    const pool = await findFanoutCandidates({
-      categoryId,
-      categoryIds: within,
-      emirate: "dubai",
-      lineCount: 1,
-      want: 8,
-      pinned: outsiders.map((row) => row.id),
-    });
-    const outsider = outsiders.find((row) => {
-      const candidate = pool.find((entry) => entry.businessId === row.id);
-      return candidate !== undefined && !atMonthlyCap(candidate);
-    });
-    if (!outsider) throw new Error("no supplier outside the trade has room this month");
+    expect(
+      outside.length,
+      "no claimed supplier is outside valves-and-fittings, so this proves nothing",
+    ).toBeGreaterThan(0);
 
-    const candidates = await findFanoutCandidates({
-      categoryId,
-      categoryIds: within,
-      emirate: "dubai",
-      lineCount: 1,
-      want: 8,
-      pinned: [outsider.id],
-    });
-    expect(candidates.map((c) => c.businessId)).toContain(outsider.id);
+    let outsider: FanoutCandidate | undefined;
+    for (const { id } of outside) {
+      const candidates = await findFanoutCandidates({
+        categoryId,
+        categoryIds: within,
+        emirate: "dubai",
+        lineCount: 1,
+        want: 8,
+        pinned: [id],
+      });
+      expect(candidates.map((c) => c.businessId)).toContain(id);
+
+      const offered = candidates.find((c) => c.businessId === id)!;
+      if (!atMonthlyCap(offered)) {
+        outsider = offered;
+        break;
+      }
+    }
+    expect(
+      outsider,
+      "every supplier outside valves-and-fittings has used its month; the seed needs one with room",
+    ).toBeDefined();
 
     const result = await createEnquiry({
       buyerId,
@@ -331,14 +347,14 @@ describe("criterion 6 — a capped seller is not offered", () => {
       categoryId,
       emirate: "dubai",
       fanoutTo: 5,
-      pinnedBusinessIds: [outsider.id],
+      pinnedBusinessIds: [outsider!.businessId],
     });
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("unreachable");
     createdEnquiryIds.push(result.enquiryId);
 
     // The supplier the buyer actually clicked is on their own enquiry.
-    expect(result.recipients.map((r) => r.businessId)).toContain(outsider.id);
+    expect(result.recipients.map((r) => r.businessId)).toContain(outsider!.businessId);
   });
 });
 

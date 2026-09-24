@@ -223,6 +223,32 @@ export function formatDuration(ms: number): string {
 }
 
 /**
+ * `340 ms` → `2.4 s` → `4 min 12 s` → `2 h 14 min`. How long a piece of work
+ * took, at the precision the work runs at.
+ *
+ * `formatDuration` is the seller-facing ladder and says "under a minute" for
+ * anything shorter, which is right for a reply time and useless for a job step:
+ * the whole daily run takes five seconds, and "under a minute" beside every one
+ * of its steps would say nothing at all. Past an hour the two agree.
+ */
+export function formatElapsed(ms: number): string {
+  if (!Number.isFinite(ms) || ms < 0) {
+    throw new TypeError(`formatElapsed expects a non-negative number of milliseconds, received: ${String(ms)}`);
+  }
+  if (ms < 1_000) return `${Math.floor(ms)} ms`;
+  if (ms < MINUTE) {
+    // One decimal, rounded down, so 59.96 s never reads as "60.0 s".
+    return `${(Math.floor(ms / 100) / 10).toFixed(1)} s`;
+  }
+  if (ms < HOUR) {
+    const m = Math.floor(ms / MINUTE);
+    const s = Math.floor((ms % MINUTE) / 1_000);
+    return s === 0 ? `${m} min` : `${m} min ${s} s`;
+  }
+  return formatDuration(ms);
+}
+
+/**
  * Midnight in Dubai, as the instant Postgres stores in a `date` column.
  *
  * The home the two copies of this were waiting for. `dubaiDay` in

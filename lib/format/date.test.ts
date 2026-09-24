@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dubaiDayStart, formatCloses, formatCountdown, formatDate, formatDateRange, formatDateShort, formatDateTime, formatDuration, formatMonth, formatRelative, isWithinRelativeWindow } from "./date";
+import { dubaiDayStart, formatCloses, formatCountdown, formatDate, formatDateRange, formatDateShort, formatDateTime, formatDuration, formatElapsed, formatMonth, formatRelative, isWithinRelativeWindow } from "./date";
 
 const AUG_14 = new Date("2026-08-14T09:30:00+04:00");
 
@@ -121,6 +121,26 @@ describe("formatDuration", () => {
 
   it("rejects a negative duration", () => {
     expect(() => formatDuration(-1)).toThrow(TypeError);
+  });
+});
+
+describe("formatElapsed", () => {
+  it("keeps the precision a job step runs at", () => {
+    expect(formatElapsed(0)).toBe("0 ms");
+    expect(formatElapsed(340.7)).toBe("340 ms");
+    expect(formatElapsed(2_460)).toBe("2.4 s");
+    expect(formatElapsed(59_960)).toBe("59.9 s");
+    expect(formatElapsed(4 * 60_000)).toBe("4 min");
+    expect(formatElapsed(4 * 60_000 + 12_500)).toBe("4 min 12 s");
+  });
+
+  it("hands over to formatDuration past an hour", () => {
+    expect(formatElapsed(2 * 3_600_000 + 14 * 60_000)).toBe(formatDuration(2 * 3_600_000 + 14 * 60_000));
+  });
+
+  it("rejects a negative or missing duration", () => {
+    expect(() => formatElapsed(-1)).toThrow(TypeError);
+    expect(() => formatElapsed(Number.NaN)).toThrow(TypeError);
   });
 });
 

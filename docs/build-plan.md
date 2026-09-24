@@ -709,8 +709,22 @@ the only large piece and the only one selling something it does not deliver.
   the asserts removed, and the seven passes that depend on the new definition with the old one
   restored. Found alongside, not fixed: nothing stops a seller's own seat enquiring to, and then
   reviewing, its own business.
-- [ ] **9.5 Standing: 29 scheduled jobs, no run persisted.** Two crons, 29 steps, no row written
-  anywhere. If the nightly stops firing nothing changes appearance and nobody is told.
+- [x] **9.5 Standing: 29 scheduled jobs, no run persisted.** Two crons, 29 steps, no row written
+  anywhere. If the nightly stops firing nothing changes appearance and nobody is told. *Done 24
+  Sep 2026:* `runSteps` is the one writer of a record for every job behind it. It writes a
+  `job_run` row before the first step — so a run the platform stops half way still leaves a row
+  — a `job_run_step` per step as it settles, a step that threw included with its message (masked
+  for addresses and secrets), and the finish and the verdict last. None of those writes can throw
+  back into the run: each catches its own failure, and what did not land is written once more at
+  the close. A call `authorizeJob` refused is a row too, at most one per cron per hour: every call
+  while `CRON_SECRET` is unset, and a wrong secret sent under the scheduler's `vercel-cron/` user
+  agent. `/admin/jobs` (new `jobs.read`, every staff seat) gives each cron's last run and its
+  age, counts the scheduled runs missing against `vercel.json`'s schedule and draws them as rows
+  of their own, and lists the steps that threw and the calls refused; `/admin/jobs/:id` draws
+  every step a run planned, reached or not; the sidebar counts the crons that want looking at.
+  Kept **90 days**, pruned by the daily run's own `prunedJobRuns`. Not an audit row: a cron has
+  no actor. The title's 29 is stale and now a query — the `planned` column holds 31 daily steps
+  and 7 sweep steps. Migration `20261109090000_job_runs`.
 - [x] **9.6 Standing: the sale path has no test.** Closed by 6.3. `lib/placement` now has three test
   files — the band ladder and the two arithmetic decisions inside the classifier as unit tests, and
   the sale, the queue, the race and the frozen price as integration ones. `takeSlot`'s comment

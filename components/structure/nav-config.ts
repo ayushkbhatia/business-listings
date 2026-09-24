@@ -369,6 +369,13 @@ export const ADMIN_NAV: readonly NavGroup[] = [
       */
       { key: "notifications", labelKey: "nav.notifications", href: "/admin/notifications", capability: "notification.read" },
       { key: "audit", labelKey: "nav.audit", href: "/admin/audit", capability: "audit.read" },
+      /*
+         Standing item 9.5. Beside the audit log, the other record of what
+         happened on the platform. Its badge counts the crons with a missing
+         run or a latest run that failed — the one place a stopped nightly shows
+         up on a screen nobody opened to look for it.
+      */
+      { key: "jobs", labelKey: "nav.jobs", href: "/admin/jobs", capability: "jobs.read" },
       { key: "support", labelKey: "nav.support", href: "/admin/support", capability: "support.view_as" },
       { key: "users", labelKey: "nav.users", href: "/admin/users", capability: "staff.manage", later: true },
       { key: "compliance", labelKey: "nav.compliance", href: "/admin/compliance", capability: "staff.manage", later: true },
