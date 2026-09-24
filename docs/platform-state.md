@@ -322,17 +322,18 @@ its own docblock rather than letting the cron entry imply otherwise.
 the advice that used to sit here, to fold `sweep` into `measure`, named a cron
 that does not exist.
 
-The count is now inside the Hobby cap of two. The **schedule** is the open
-question: Hobby allows daily granularity only, and `sweep` asks for hourly. Which
-plan the project is on is not inferable from the repo, and a deploy carrying an
-hourly schedule succeeds either way, so a green deployment is not evidence that
-`sweep` runs hourly.
+**Settled, 24 Sep 2026.** The schedule was the open question — Hobby allows
+daily granularity only, and `sweep` asks for hourly. Production's runtime log
+answers it: the sweep ran at 10:42:37 and 20:42:37 UTC and the daily at 20:23:26
+UTC, each inside the minute its expression names. Vercel's own documentation
+also corrects the premise this section rested on: a Hobby deployment carrying a
+cron that runs more than once a day *fails*, rather than succeeding and running
+daily. So the project is on a plan with per-minute precision, and the hourly
+sweep is happening.
 
-Settle it in the dashboard — Settings → Cron Jobs lists each job with the
-schedule Vercel actually registered, which is the only place the two can be seen
-to disagree. If the project is on Hobby, `sweep` runs once a day whatever the
-expression says, and the hourly sweep that `docs/deployments.md` documents is not
-happening.
+It no longer has to be settled by reading a log. Every run is recorded (standing
+item 9.5) and `/admin/jobs` says when each cron last ran and how many scheduled
+runs are missing, against the schedule `vercel.json` declares.
 
 ## How to test what you have
 

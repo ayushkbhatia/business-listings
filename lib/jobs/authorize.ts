@@ -1,6 +1,9 @@
 import "server-only";
 import { NextResponse, type NextRequest } from "next/server";
 import { timingSafeEqual } from "node:crypto";
+import { messageOf, scheduleHeader } from "./outcome";
+import { closeRun, openRun, recordRefusal, recordStep, stepRecord } from "./record";
+import type { JobCron } from "./schedule";
 
 /**
  * The guard on every scheduled job route.
@@ -22,17 +25,38 @@ import { timingSafeEqual } from "node:crypto";
  *   - **401** when the secret is wrong. No body, no message — an endpoint that
  *     explains why it refused is an endpoint that helps somebody guess.
  *
+ * ## A refusal is recorded when it is the schedule being refused
+ *
+ * Standing item 9.5. "The nightly has not run since Tuesday" has two causes
+ * that look identical from outside — the scheduler stopped calling, or it
+ * called and was turned away — and only the record can tell them apart. So a
+ * refused call writes a `job_run` row with `authorised` false, but only two
+ * kinds of it, and at most one per cron per hour:
+ *
+ *   - **Every call while `CRON_SECRET` is unset.** Whoever made it, the answer
+ *     is that no scheduled run can succeed, which is the thing to know.
+ *   - **A wrong secret from a caller naming itself `vercel-cron/`**, the user
+ *     agent Vercel's scheduler always sends. A stranger guessing at the
+ *     endpoint is not a run of anything, and writes nothing.
+ *
+ * The user agent can be forged, which is why the hourly cap exists: the worst a
+ * forger can do is one row an hour, not one row a request.
+ *
  * @returns a response to return immediately, or `null` when the caller may run.
  */
-export function authorizeJob(request: NextRequest, name: string): NextResponse | null {
+export async function authorizeJob(request: NextRequest, cron: JobCron): Promise<NextResponse | null> {
   const secret = process.env["CRON_SECRET"];
   if (!secret) {
-    console.error(`[jobs] ${name} called with no CRON_SECRET set`);
+    console.error(`[jobs] ${cron} called with no CRON_SECRET set`);
+    await recordRefusal(cron, "no_secret", scheduleOf(request));
     return new NextResponse(null, { status: 500 });
   }
 
   const offered = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
-  if (!constantTimeEqual(offered, secret)) return new NextResponse(null, { status: 401 });
+  if (!constantTimeEqual(offered, secret)) {
+    if (fromScheduler(request)) await recordRefusal(cron, "wrong_secret", scheduleOf(request));
+    return new NextResponse(null, { status: 401 });
+  }
 
   return null;
 }
@@ -47,6 +71,16 @@ function constantTimeEqual(a: string, b: string): boolean {
     return false;
   }
   return timingSafeEqual(left, right);
+}
+
+/** Vercel's scheduler, by the user agent its docs promise on every invocation. */
+function fromScheduler(request: NextRequest): boolean {
+  return request.headers.get("user-agent")?.startsWith("vercel-cron/") ?? false;
+}
+
+/** The expression that fired this call, when the scheduler sent one. */
+function scheduleOf(request: NextRequest | undefined): string | null {
+  return scheduleHeader(request?.headers.get("x-vercel-cron-schedule"));
 }
 
 export type StepOutcome =
@@ -68,23 +102,42 @@ export type StepOutcome =
  * The caller returns 500 when any step failed. Every job behind this helper is
  * idempotent, so Vercel retrying the whole batch is safe — and a failed run
  * that reports 200 is a run nobody finds out about.
+ *
+ * ## And it writes the run down
+ *
+ * Standing item 9.5: this is the one place a run is recorded, for every job
+ * behind it, so no job keeps a record of its own. The run's row is written
+ * before the first step, each step's row as it settles — a step that threw
+ * included, with the message it threw — and the finish and verdict last. See
+ * `lib/jobs/record.ts` for why none of those writes can throw back into here:
+ * the steps run, and the response says what they did, whatever the database
+ * made of the record.
  */
 export async function runSteps(
+  cron: JobCron,
   steps: Record<string, () => Promise<unknown>>,
-): Promise<{ ok: boolean; steps: Record<string, StepOutcome> }> {
+  request?: NextRequest,
+): Promise<{ ok: boolean; steps: Record<string, StepOutcome>; runId: string }> {
+  const names = Object.keys(steps);
+  const run = await openRun(cron, names, scheduleOf(request));
   const outcomes: Record<string, StepOutcome> = {};
   let ok = true;
 
-  for (const [name, step] of Object.entries(steps)) {
+  for (const [position, name] of names.entries()) {
+    const step = steps[name]!;
+    const startedAt = new Date();
+    let settled: { ok: true; result: unknown } | { ok: false; message: string };
     try {
-      outcomes[name] = { ok: true, result: await step() };
+      settled = { ok: true, result: await step() };
     } catch (error) {
       ok = false;
-      const message = error instanceof Error ? error.message : String(error);
       console.error(`[jobs] ${name} threw`, error);
-      outcomes[name] = { ok: false, error: message };
+      settled = { ok: false, message: messageOf(error) };
     }
+    outcomes[name] = settled.ok ? settled : { ok: false, error: settled.message };
+    await recordStep(run, stepRecord({ name, position, startedAt, finishedAt: new Date(), outcome: settled }));
   }
 
-  return { ok, steps: outcomes };
+  await closeRun(run, ok);
+  return { ok, steps: outcomes, runId: run.id };
 }

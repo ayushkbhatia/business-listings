@@ -128,7 +128,7 @@ export default async function DedupePage({
         </div>
       </div>
 
-      <section aria-labelledby="dedupe-reversible" className="mt-[var(--section-gap)]">
+      <section aria-labelledby="dedupe-reversible" className="mt-[var(--section-pad)]">
         <h2 id="dedupe-reversible" className="mb-3 text-h2 text-ink">
           {t("admin.dedupe.reversible_title")}
         </h2>

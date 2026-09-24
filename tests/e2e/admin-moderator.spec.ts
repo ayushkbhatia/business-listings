@@ -238,3 +238,14 @@ test.describe("board 4d — the taxonomy, read-only", () => {
     for (const control of await switches.all()) await expect(control).toBeDisabled();
   });
 });
+
+test.describe("standing item 9.5 — the scheduled jobs are every seat's to read", () => {
+  test("opens the record and is offered nothing to press on it", async ({ page }) => {
+    // `jobs.read` is every staff seat's: a moderator answers for the
+    // notifications the hourly sweep releases and the reports the nightly files.
+    const response = await page.goto("/admin/jobs");
+    expect(response?.status()).toBe(200);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Scheduled jobs");
+    await expect(page.getByRole("main").getByRole("button")).toHaveCount(0);
+  });
+});

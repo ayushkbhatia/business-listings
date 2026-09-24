@@ -69,7 +69,11 @@ export const MATRIX_GROUPS = [
   },
   {
     key: "staff",
-    capabilities: ["staff.manage", "staff.read", "audit.read"],
+    /*
+       Standing item 9.5's `jobs.read` sits with the audit log: the two records
+       of what happened on the platform, one of decisions and one of schedules.
+    */
+    capabilities: ["staff.manage", "staff.read", "audit.read", "jobs.read"],
   },
 ] as const satisfies readonly { key: string; capabilities: readonly Capability[] }[];
 

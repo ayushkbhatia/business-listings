@@ -103,6 +103,8 @@ const STAFF_TABLE: [Capability, Staff[]][] = [
   ["placement.boost", ["ops"]],
   ["support.view_as", ["ops", "moderator"]],
   ["audit.read", ["ops", "moderator", "finance"]],
+  // Standing item 9.5's run record. Inferred; named in the inferred list below.
+  ["jobs.read", ["ops", "moderator", "finance"]],
 ];
 
 describe("staff roles match board 4i", () => {
@@ -134,7 +136,7 @@ describe("staff roles match board 4i", () => {
     // §07: "Every ✓ in this table that changes state writes an AuditEvent with
     // a non-null reason. Ops lead has no exemption."
     // Board 4d's `taxonomy.read` reads the tree and changes nothing.
-    const readOnly = new Set<Capability>(["revenue.read", "audit.read", "taxonomy.read"]);
+    const readOnly = new Set<Capability>(["revenue.read", "audit.read", "taxonomy.read", "jobs.read"]);
     for (const [capability] of STAFF_TABLE) {
       if (readOnly.has(capability)) continue;
       expect(CAPABILITIES[capability].audited, capability).toBe(true);
@@ -325,6 +327,12 @@ describe("every row cites the document", () => {
        gave refused the provisional identity most enquiries belong to and a
        supplier's seat on the enquiry §07 lets it send. Both now follow
        `enquiry.create`: whoever may send an enquiry may finish it.
+
+       `jobs.read` joined on standing item 9.5, for `/admin/jobs`: when each cron
+       last ran, which runs are missing and which steps threw. §07 has no row
+       because the record did not exist. Every staff seat holds it — each answers
+       for something the two routes do — and it is not audited: the screen has
+       nothing to press.
     */
     const inferred = (Object.keys(CAPABILITIES) as Capability[]).filter(
       (c) => CAPABILITIES[c].source === "inferred",
@@ -336,6 +344,7 @@ describe("every row cites the document", () => {
       "contact_lead.platform.read",
       "contact_lead.read",
       "homepage.curate",
+      "jobs.read",
       "notification.read",
       "notification.template.write",
       "question.remove",

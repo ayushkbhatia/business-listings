@@ -58,10 +58,10 @@ export const dynamic = "force-dynamic";
 const MAX_PASSES = 25;
 
 export async function GET(request: NextRequest) {
-  const refusal = authorizeJob(request, "sweep");
+  const refusal = await authorizeJob(request, "sweep");
   if (refusal) return refusal;
 
-  const outcome = await runSteps({
+  const outcome = await runSteps("sweep", {
     /*
        First, because it is the one step somebody is waiting on. Board 8d's
        invite screen promises "anything unanswered for two hours escalates to
@@ -129,7 +129,7 @@ export async function GET(request: NextRequest) {
        reason the product alert above does. Bounded per run, oldest first.
     */
     savedSearches: () => sweepSavedSearches(),
-  });
+  }, request);
 
   console.info("[jobs] sweep", outcome.steps);
   return NextResponse.json(outcome, { status: outcome.ok ? 200 : 500 });

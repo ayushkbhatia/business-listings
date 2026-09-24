@@ -115,6 +115,7 @@ reading `Business.leadEscalationMinutes` and sending once per enquiry.
 | See staff & roles | ✓ | ✓ | ✓ |
 | Invite staff, change roles, deactivate | ✓ | — | — |
 | Read the audit log | ✓ | own actions | own actions |
+| Read the scheduled-job record (standing item 9.5) | ✓ | ✓ | ✓ |
 
 **`field verifier` is retired, and retired means removed.** It existed only to record site
 visits and set the tier that followed; both are gone. Site visits were withdrawn on 5 Sep
@@ -151,12 +152,16 @@ deactivates it.
 
 ### Rows this document does not contain
 
-Twenty capabilities in `lib/auth/capabilities.ts` carry `source: "inferred"` because §07 has no
-row for them, or departs from the row it has. `tests/unit/permission-matrix.test.ts` names all
-twenty, so adding a twenty-first is a deliberate edit rather than a quiet default. The eleven
-below are the ones with no row at all; `business.verification_tier.write`, `review.dispute`,
-`staff.manage`, `staff.read`, board 12g's two notification rows (in the staff table above),
-`report.detectors` and the two `contact_lead` rows are explained where the test names them.
+Twenty-one capabilities in `lib/auth/capabilities.ts` carry `source: "inferred"` because §07
+has no row for them, or departs from the row it has. `tests/unit/permission-matrix.test.ts`
+names all twenty-one, so adding a twenty-second is a deliberate edit rather than a quiet
+default. The fourteen below are the ones with no row at all; `business.verification_tier.write`,
+`review.dispute`, `staff.manage`, `staff.read`, board 12g's two notification rows and standing
+item 9.5's `jobs.read` (in the staff table above) are explained where the test names them.
+
+This paragraph once said fifteen while the test named eighteen: board 4h's `report.detectors`
+and the `1d` amendment's two lead rows reached the test and never this page. A count written
+beside a list that grows goes wrong quietly — the test is the one that argues back.
 
 | Capability | Held at | Why, and which way it errs |
 |---|---|---|
@@ -169,6 +174,9 @@ below are the ones with no row at all; `business.verification_tier.write`, `revi
 | `strings.write` | ops lead | Board 12g-s. `/admin/strings` borrowed `taxonomy.write` while it was a report; the paired view writes the half of a string every business of one kind reads, on every screen carrying the key, the moment it is saved and without a deploy — and suppressing a half removes a control from all of them. Held where "Edit taxonomy & spec templates" is — erring **higher**. It writes `string_written`, `string_suppressed` and `string_restored`. |
 | `taxonomy.read` | ops lead · moderator | Board 4d. A non-ops-lead admin sees the taxonomy read-only — it is how other staff answer "why does this seller see that screen", and the moderator decides category changes in the approval queue against this tree. Reading changes nothing, so it is not audited — erring **lower** on a read. |
 | `taxonomy.merge` | ops lead | Board 4d Q4. A merge moves every listing, product and service under one category into another and writes a redirect for every address the absorbed one owned; it cannot be undone by editing a field. Its own capability so narrowing or widening it touches one row — erring **higher**. |
+| `report.detectors` | ops lead | Board 4h `B11`: the detection thresholds — how many listings must share a telephone number, how long a licence must be past expiry — and which sweeps run. Moving one changes what the whole queue holds tomorrow, so it sits with `queue.rules`, a rung above deciding one report — erring **higher**. |
+| `contact_lead.platform.read` | ops lead | The `1d` amendment's `/admin/leads`: every phone lead on the platform, each a buyer's name, work email and mobile. A lead list is the asset most likely to walk out, so it is held at the top rather than with moderation — erring **higher**. Not audited: reading changes nothing. |
+| `contact_lead.read` | seller owner · manager | The `1d` amendment's `/dashboard/leads/phone`: the buyers who revealed this seller's landline. A phone lead is assigned to nobody, so it sits with the two seats that read the whole unassigned queue rather than with a sales seat — erring **higher**. Not a staff row; listed here because it is inferred. |
 | `quote.accept` | buyer · every seller seat · provisional | Build plan 9.4. Was marked `stated` and buyer-only with no row to state it. Asked, it refused the provisional identity most enquiries belong to, and a supplier's seat on the enquiry §07 lets it send. It follows `enquiry.create` — erring **lower**, to the principals the product already lets send. |
 | `review.create` | buyer · every seller seat · provisional | Build plan 9.4, for the same reasons. Whether an enquiry earned a review is board 10f's gate (`canReview`), not a role; a competitor posing as a customer is the `no_traceable_enquiry` dispute ground. Erring **lower**, to the same principals. |
 

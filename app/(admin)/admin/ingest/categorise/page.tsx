@@ -112,7 +112,7 @@ export default async function CategorisePage({
         />
       </div>
 
-      <section aria-labelledby="remembered" className="mt-[var(--section-gap)]">
+      <section aria-labelledby="remembered" className="mt-[var(--section-pad)]">
         <h2 id="remembered" className="text-h2 text-ink">
           {t("admin.mappings.title")}
         </h2>

@@ -420,7 +420,38 @@ whether a push builds.
 | `/api/jobs/sweep` | `42 * * * *` |
 | `/api/jobs/daily` | `23 20 * * *` |
 
-The plan's cron allowance is a live question rather than a settled one —
-`docs/platform-state.md` § Vercel's cron allowance describes three entries and
-an hourly schedule that a Hobby plan would not accept. Two entries are in the
-file today; that section has not been revisited since.
+`lib/jobs/schedule.ts` is the reading of that table for code that cannot read
+`vercel.json` at request time, and `tests/unit/job-schedule.test.ts` fails if the
+two part — including for a third entry added here and not there.
+
+### Every run is recorded
+
+Standing item 9.5. `runSteps` in `lib/jobs/authorize.ts` writes a `job_run` row
+for every call to either route — before the first step, so a function Vercel
+stops at its duration limit still leaves a row — a `job_run_step` for each step
+as it settles, including a step that threw and the message it threw, and the
+finish and verdict last. A refused call is a row too, at most one per cron per
+hour: every call while `CRON_SECRET` is unset, and a wrong secret sent under the
+scheduler's `vercel-cron/1.0` user agent. `/admin/jobs` reads it: each cron's
+last run and its age, the scheduled runs that are missing, the steps that threw
+and the calls that were refused.
+
+**Kept 90 days** (`JOB_RUN_KEEP_DAYS` in `lib/jobs/health.ts`), pruned by the
+daily run's own `prunedJobRuns` step; a run's steps go with it by
+`ON DELETE CASCADE`. Ninety days holds three of the first-of-the-month nights
+`demandBands` actually runs on and a quarter of hourly history to say whether a
+failure is new. At the current 31 daily steps and 7 sweep steps that is about
+223 rows a day, so the table sits near twenty thousand rows.
+
+The record is not an audit log and does not write one: `AuditEvent.actorId` is
+NOT NULL because that log holds decisions, and a cron has no actor.
+
+### Which plan the crons run on
+
+Settled by measurement on 24 Sep 2026. Production's runtime log shows the daily
+at 20:23:26 UTC and the sweep at 10:42:37 and 20:42:37 UTC — inside the minute
+each expression names, and hourly. Vercel fails a Hobby deployment whose cron
+runs more than once a day and fires Hobby crons anywhere within the hour, so
+this project is on a plan with per-minute precision. `docs/platform-state.md`
+§ Vercel's cron allowance carried this as an open question; `/admin/jobs` now
+answers it continuously rather than once.

@@ -342,3 +342,13 @@ test.describe("board 4g — subscriptions", () => {
     await expect(page.getByRole("heading", { level: 1 })).toContainText("Umm Al Quwain Boatyard");
   });
 });
+
+test.describe("standing item 9.5 — finance reads the scheduled jobs", () => {
+  test("opens the record, because renewals and dunning run inside it", async ({ page }) => {
+    const response = await page.goto("/admin/jobs");
+    expect(response?.status()).toBe(200);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Scheduled jobs");
+    const sidebar = page.getByRole("navigation", { name: "Staff navigation" });
+    await expect(sidebar.getByRole("link", { name: /^Scheduled jobs/ })).toBeVisible();
+  });
+});

@@ -2,9 +2,9 @@ import "server-only";
 import { AdminShell, AppSidebar, PageHeader, resolveNav } from "@/components/structure";
 import { ADMIN_NAV } from "@/components/structure/nav-config";
 import { can } from "@/lib/auth/can";
-import { prisma } from "@/lib/db/client";
 import { queueCount } from "@/lib/moderation/queue";
 import { reportQueueHealth } from "@/lib/reports/queue";
+import { jobsNeedingAttention } from "@/lib/jobs/report";
 import type { StaffSeat } from "@/lib/auth/staff";
 import { t } from "@/lib/i18n";
 
@@ -46,9 +46,10 @@ export async function getAdminNavBadges(seat: StaffSeat): Promise<Record<string,
   const wanted = {
     queue: can(seat.actor, "queue.decide"),
     reports: can(seat.actor, "report.resolve"),
+    jobs: can(seat.actor, "jobs.read"),
   };
 
-  const [queue, reports] = await Promise.all([
+  const [queue, reports, jobs] = await Promise.all([
     // Board 4b: every kind the queue holds, counted the way the queue counts it,
     // so the badge and the page's "All" chip are the same number.
     wanted.queue ? queueCount() : Promise.resolve(null),
@@ -60,11 +61,19 @@ export async function getAdminNavBadges(seat: StaffSeat): Promise<Record<string,
        missing, and three buyers reporting one telephone number were three.
     */
     wanted.reports ? reportQueueHealth().then((health) => health.open) : Promise.resolve(null),
+    /*
+       Standing item 9.5. Not work waiting in a queue but a cron that wants
+       looking at: a scheduled run missing, or the latest run failed a step or
+       never finished. A nightly that stopped used to change nothing on any
+       screen; this is the number that changes.
+    */
+    wanted.jobs ? jobsNeedingAttention() : Promise.resolve(null),
   ]);
 
   const badges: Record<string, number> = {};
   if (queue !== null) badges["queue"] = queue;
   if (reports !== null) badges["reports"] = reports;
+  if (jobs !== null) badges["jobs"] = jobs;
   return badges;
 }
 

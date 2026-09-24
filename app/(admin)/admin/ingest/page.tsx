@@ -109,7 +109,7 @@ export default async function IngestPage() {
         </aside>
       </div>
 
-      <div className="mt-[var(--section-gap)]">
+      <div className="mt-[var(--section-pad)]">
         <RunTable rows={runs} />
       </div>
     </AdminPage>
