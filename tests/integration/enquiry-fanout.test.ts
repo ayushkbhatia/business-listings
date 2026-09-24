@@ -3,7 +3,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
 import { acceptQuote, createEnquiry, findFanoutCandidates, descendantsOf } from "@/lib/enquiry/service";
 import { getLeadDetail, getLeadsForBusiness } from "@/lib/db/queries/seller";
-import { monthStart, scoreCandidate } from "@/lib/enquiry/fanout";
+import { atMonthlyCap, monthStart, scoreCandidate } from "@/lib/enquiry/fanout";
 
 /**
  * The handoff 2 step 3 checkpoint, end to end:
@@ -279,7 +279,7 @@ describe("criterion 6 — a capped seller is not offered", () => {
     */
     const within = await descendantsOf(categoryId);
 
-    const outsider = await prisma.business.findFirstOrThrow({
+    const outsiders = await prisma.business.findMany({
       where: {
         publishedAt: { not: null },
         suspendedAt: null,
@@ -289,17 +289,34 @@ describe("criterion 6 — a capped seller is not offered", () => {
         primaryCategoryId: { notIn: within },
         NOT: { categories: { some: { categoryId: { in: within } } } },
       },
+      orderBy: { id: "asc" },
+      take: 20,
       select: { id: true },
     });
 
-    const candidates = await findFanoutCandidates({
-      categoryId,
-      categoryIds: within,
-      emirate: "dubai",
-      lineCount: 1,
-      want: 8,
-      pinned: [outsider.id],
-    });
+    /*
+       One the monthly cap does not already exclude, found by the rule the
+       fan-out applies. A capped seller is skipped even when pinned — the test
+       above holds that — so an outsider at their cap would make this test about
+       the cap rather than the trade. It picked `findFirstOrThrow` with no order,
+       which is whichever row Postgres returned first; on CI from 22 Sep that
+       row was a seller at their cap — the one thing that drops a pinned
+       candidate — and the assertion below failed on `main` for a reason that
+       had nothing to do with `?to=`.
+    */
+    const request = { categoryId, categoryIds: within, emirate: "dubai" as const, lineCount: 1, want: 8 };
+    let outsider: { id: string } | null = null;
+    let candidates: Awaited<ReturnType<typeof findFanoutCandidates>> = [];
+    for (const option of outsiders) {
+      const found = await findFanoutCandidates({ ...request, pinned: [option.id] });
+      const pinned = found.find((c) => c.businessId === option.id);
+      if (pinned && !atMonthlyCap(pinned)) {
+        outsider = option;
+        candidates = found;
+        break;
+      }
+    }
+    if (!outsider) throw new Error("the seed has no uncapped supplier outside valves-and-fittings");
     expect(candidates.map((c) => c.businessId)).toContain(outsider.id);
 
     const result = await createEnquiry({
