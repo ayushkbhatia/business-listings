@@ -5,6 +5,8 @@ import { areaMatrix } from "@/lib/content/matrix";
 import { stateWhere } from "@/lib/accounts/health-where";
 import { CAP_REFUSED_EVENTS, UPGRADE_WINDOW_DAYS } from "@/lib/accounts/health";
 import { VERIFIED_TIER } from "@/lib/verification";
+import type { Emirate } from "@/lib/db/generated/enums";
+import { coverageGrid, loadCoverageFirms } from "@/lib/seo/landing/services-supply";
 import {
   SIGNAL_WINDOW_DAYS,
   demandScoreOf,
@@ -221,8 +223,18 @@ async function heldPages(now: Date, week: Date): Promise<DerivedSignal[]> {
     return current;
   };
 
-  const areaIds = [...new Set(recruiting.map((row) => row.areaId))];
-  const candidates = await prisma.$queryRaw<{ business_id: string; area_id: string; category_id: string; emirate: string; claimed: boolean }[]>`
+  /*
+     Board `6a-s` B1 — a services scope's listings are the firms that cover the
+     area, so the firms a verification would move are those, not the ones with
+     a branch there. Read through `coverageGrid`, the rule the page is gated on;
+     the branch query below is the goods rule and is kept to the goods rows.
+  */
+  const goodsRows = recruiting.filter((row) => row.trade !== "services");
+  const servicesRows = recruiting.filter((row) => row.trade === "services");
+  const servicesCandidates = await servicesHeldCandidates(servicesRows, now);
+
+  const areaIds = [...new Set(goodsRows.map((row) => row.areaId))];
+  const branchCandidates = areaIds.length === 0 ? [] : await prisma.$queryRaw<{ business_id: string; area_id: string; category_id: string; emirate: string; claimed: boolean }[]>`
     SELECT DISTINCT ON (b.id, l.area_id) b.id AS business_id, l.area_id, b.primary_category_id AS category_id, l.emirate::text AS emirate,
            (b.claim_status = 'claimed') AS claimed
       FROM business b
@@ -236,6 +248,7 @@ async function heldPages(now: Date, week: Date): Promise<DerivedSignal[]> {
        AND b.closure_requested_at IS NULL
      ORDER BY b.id, l.area_id, l.id
   `;
+  const candidates = [...branchCandidates, ...servicesCandidates];
 
   const searches = await prisma.zeroResultQuery.groupBy({
     by: ["categoryId", "emirate"],
@@ -248,7 +261,10 @@ async function heldPages(now: Date, week: Date): Promise<DerivedSignal[]> {
   const scopes = new Map(recruiting.map((row) => [`${row.areaId}:${row.categoryId}`, row]));
   const out: DerivedSignal[] = [];
   for (const candidate of candidates) {
-    const scope = scopes.get(`${candidate.area_id}:${candidate.category_id}`) ?? scopes.get(`${candidate.area_id}:${rootOf(candidate.category_id)}`);
+    const scope =
+      ("scope_category_id" in candidate ? scopes.get(`${candidate.area_id}:${candidate.scope_category_id}`) : undefined) ??
+      scopes.get(`${candidate.area_id}:${candidate.category_id}`) ??
+      scopes.get(`${candidate.area_id}:${rootOf(candidate.category_id)}`);
     if (!scope) continue;
     out.push(
       derived(candidate.business_id, "held_page", `${scope.areaId}:${scope.categoryId}`, {
@@ -276,6 +292,61 @@ async function heldPages(now: Date, week: Date): Promise<DerivedSignal[]> {
     );
   }
   return out;
+}
+
+/**
+ * The unverified firms on each recruiting services page — by coverage.
+ *
+ * One load of the trades' firms and `coverageGrid`'s unverified members per
+ * (trade, area), then the closure check the branch query makes in SQL: a firm
+ * closing its account is not a firm to call about verifying it.
+ */
+async function servicesHeldCandidates(
+  rows: readonly { areaId: string; categoryId: string; emirate: string }[],
+  now: Date,
+): Promise<
+  { business_id: string; area_id: string; category_id: string; scope_category_id: string; emirate: string; claimed: boolean }[]
+> {
+  if (rows.length === 0) return [];
+  const children = await prisma.category.findMany({
+    where: { parentId: { in: [...new Set(rows.map((row) => row.categoryId))] } },
+    select: { id: true, parentId: true },
+  });
+  const trades = [...new Set(rows.map((row) => row.categoryId))].map((categoryId) => ({
+    categoryId,
+    categoryIds: [categoryId, ...children.filter((child) => child.parentId === categoryId).map((child) => child.id)],
+  }));
+  const places = [...new Map(rows.map((row) => [row.areaId, { emirate: row.emirate as Emirate, areaId: row.areaId }])).values()];
+  const grid = coverageGrid(
+    await loadCoverageFirms(trades.flatMap((trade) => trade.categoryIds)),
+    trades,
+    places,
+    now,
+  );
+
+  const wanted = new Map<string, { areaId: string; categoryId: string; emirate: string }[]>();
+  for (const row of rows) {
+    for (const id of grid.get(`${row.categoryId}:${row.areaId}`)?.unverifiedIds ?? []) {
+      wanted.set(id, [...(wanted.get(id) ?? []), row]);
+    }
+  }
+  if (wanted.size === 0) return [];
+
+  const open = await prisma.business.findMany({
+    where: { id: { in: [...wanted.keys()] }, closedAt: null, closureRequestedAt: null },
+    select: { id: true, primaryCategoryId: true, claimStatus: true },
+    orderBy: { id: "asc" },
+  });
+  return open.flatMap((firm) =>
+    (wanted.get(firm.id) ?? []).map((row) => ({
+      business_id: firm.id,
+      area_id: row.areaId,
+      category_id: firm.primaryCategoryId,
+      scope_category_id: row.categoryId,
+      emirate: row.emirate,
+      claimed: firm.claimStatus === "claimed",
+    })),
+  );
 }
 
 // ── zero_result ──────────────────────────────────────────────────────────────

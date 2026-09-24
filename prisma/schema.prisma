@@ -940,6 +940,49 @@ model Category {
   /// The sweep skips a page inside this window rather than the page staying
   /// live while thin: see `AreaPage.firstPublishedAt`.
   minLiveDays         Int        @default(30) @map("min_live_days")
+  /// What a services landing page calls the people who do this work — board
+  /// `6a-s`, correction 3.
+  ///
+  /// *VAT consultants in Business Bay, Dubai*, not *VAT & tax advisory companies
+  /// in Business Bay, Dubai*. Board 6a's H1 rule takes the category record's
+  /// plural human form, and for a trade sold by the item `Category.name` plus
+  /// "companies" is that form. For work it is not: a buyer searches for the
+  /// person who does it, and the noun changes with the trade — consultants,
+  /// auditors, surveyors, contractors. That is data, never a component.
+  ///
+  /// Null falls back to the trade's own name and "firms", which reads plainly
+  /// and claims nothing. Read only where the trade resolves to `services`.
+  pluralHuman         String?    @map("plural_human")
+  /// The credential buyers in this trade look for — board `6a-s`, and the
+  /// per-subcategory resolution `4e-s` Q3 said the family could not be.
+  ///
+  /// A family prompts one credential for every trade under it, and
+  /// Professional services holds tax, audit and law: the FTA for the first, the
+  /// Ministry of Finance for the second, a bar for the third. So the family
+  /// column is null there, deliberately, and this column is where a trade names
+  /// its own. Null inherits up the tree and then from the family, the same walk
+  /// `tradeKind` takes.
+  ///
+  /// **What it may cause on a public page is narrow.** A services landing page
+  /// counts the firms holding this credential *checked against its register*,
+  /// and only for a kind a register can answer for — today `fta_tax_agent`
+  /// alone. A kind nobody can check renders nothing: counting claims as though
+  /// they were checks is the one thing a trust stat cannot do.
+  credentialKind      CredentialKind? @map("credential_kind")
+  /// When ops opened the services landing template for this trade — board
+  /// `6a-s`, build phase 5: *feature flag the services template; roll out one
+  /// category first and check it in Search Console before opening the others.*
+  ///
+  /// A timestamp rather than a boolean, because the Search Console check is
+  /// measured from the day it opened. Per trade and never inherited: opening a
+  /// sector does not open the trades under it. Written only with a reason
+  /// through `lib/taxonomy/services-landing.ts`, which audits it.
+  ///
+  /// Closed means a landing page in this trade cannot be live — it 404s, it is
+  /// absent from the sitemap and from every link block — rather than rendering
+  /// the goods template, which is the defect the services template exists to
+  /// fix (`6a-s` B2).
+  servicesLandingOpenedAt DateTime? @map("services_landing_opened_at")
   sortOrder           Int        @default(0) @map("sort_order")
   createdAt           DateTime   @default(now()) @map("created_at")
 
@@ -977,6 +1020,8 @@ model Category {
   savedSearches     SavedSearch[]            @relation("SavedSearchCategory")
   /// Board 13c `B9`. *Not this trade* names the trade it should be.
   reportSuggestions SupplierReport[]         @relation("ReportSuggestedCategory")
+  /// Board `6a-s` B9. *What to ask* — per trade, never per area.
+  asks              CategoryAsk[]
 
   @@index([parentId])
   /// Synonyms are matched exactly — an Arabic term either is or is not in the
@@ -8023,6 +8068,44 @@ model LandingRelatedSearch {
   @@index([areaPageId])
   @@index([emiratePageId])
   @@map("landing_related_search")
+}
+
+/// *What to ask* — one question a buyer should put to a firm in this trade, and
+/// why it earns its place. Board `6a-s` B9.
+///
+/// **Keyed on the trade, never on the area**, and that is the whole rule. The
+/// same three questions render on every landing page in the trade — *Are you a
+/// registered FTA tax agent? Is the fee per return or a retainer? Who handles an
+/// FTA audit if one comes?* — because what a buyer should ask a VAT consultant
+/// does not change between Business Bay and Deira. Written per area it would be
+/// thirty-seven near-copies of one paragraph, which is the thin-content problem
+/// the landing template's publish gate exists to keep out.
+///
+/// Not the per-scope FAQ. `LandingFaq` answers questions *about a place* and is
+/// a publish condition; this tells a buyer what to ask *the firm* and gates
+/// nothing. A page with no rows here renders no block.
+///
+/// Three at most — `position` is 0, 1 or 2, by CHECK — because the board draws
+/// three and a fourth turns an editorial block into a questionnaire. Replaced
+/// whole by `saveServicesLandingCopy`, audited, for the reason `LandingFaq` is: moving
+/// one question up walks through a state where two share a position.
+model CategoryAsk {
+  id         String @id @default(cuid())
+  categoryId String @map("category_id")
+  position   Int
+  question   String
+  /// The consequence the answer carries, in a sentence. Required: a question
+  /// with no reason is a checklist item, and the board's point is that each one
+  /// names what goes wrong when it is not asked.
+  why        String
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([categoryId, position])
+  @@map("category_ask")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

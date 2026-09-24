@@ -17,3 +17,7 @@ export * from "./metadata";
 export * from "./read-next";
 export * from "./slug-namespace";
 export * from "./content";
+export * from "./services-coverage";
+export * from "./services-supply";
+export * from "./services-words";
+export * from "./count";

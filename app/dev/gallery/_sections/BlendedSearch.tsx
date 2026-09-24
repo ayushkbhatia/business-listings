@@ -40,7 +40,7 @@ import { Section, States } from "../_kit";
  */
 
 const firm = {
-  checkedCredentials: ["fta_tax_agent"],
+  checkedCredentials: [{ kind: "fta_tax_agent", identifier: "100177120400003" }],
   verificationTier: 2,
   verifiedAt: "2026-04-02T08:00:00.000Z",
   rating: null,

@@ -54,6 +54,7 @@ import { seedDedupe } from "./seed-dedupe.mjs";
 import { seedQueue } from "./seed-queue.mjs";
 import { seedCredentialReview } from "./seed-credential-review.mjs";
 import { seedBlendedSearch } from "./seed-blended-search.mjs";
+import { seedServicesLanding } from "./seed-services-landing.mjs";
 import { seedStaffRoster } from "./seed-staff-roster.mjs";
 import { seedNegotiationThreads } from "./seed-negotiation.mjs";
 import { seedReviewWrite } from "./seed-review-write.mjs";
@@ -1106,6 +1107,10 @@ async function main() {
   // Board 1c-s: a VAT search that blends services, firms and a product. New
   // businesses under their own trade, so no fixture another board counts moves.
   await seedBlendedSearch(prisma, NOW);
+  // Board 6a-s: VAT practices that cover Business Bay, most of them from
+  // somewhere else, and the four pages they publish. New businesses under
+  // their own prefix; before `recomputeDerived`, which measures their replies.
+  await seedServicesLanding(prisma, NOW);
   // Board 4i: invitations, a deactivated former field verifier, measured last
   // activity and two acceptance fixtures. After every seed that writes audit
   // rows, so the roster's decision counts read a finished log.

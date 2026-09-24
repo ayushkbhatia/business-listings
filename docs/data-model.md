@@ -131,8 +131,30 @@ model Category {
   requiresExtraCheck Boolean @default(false)
   publishThreshold  Int      @default(60)   // listings needed before landing pages publish
   verifiedShareMin  Float    @default(0.30)
+  // Board 6a-s — read only where the trade resolves to `services`.
+  pluralHuman             String?          // the H1's noun: "VAT consultants"; null reads "{name} firms"
+  credentialKind          CredentialKind?  // what the stat line counts; own → ancestor → family → none
+  servicesLandingOpenedAt DateTime?        // the services template's switch, per trade, never inherited
+  asks                    CategoryAsk[]
+}
+
+model CategoryAsk {                 // "What to ask", per trade and never per area (6a-s B9)
+  id         String   @id @default(cuid())
+  categoryId String                 // cascade: the questions go with their trade
+  position   Int                    // 0..2 by CHECK — three at most
+  question   String                 // ≤ 160
+  why        String                 // ≤ 400
+  @@unique([categoryId, position])
 }
 ```
+
+**A services landing page counts licence-verified more strictly** (board 6a-s): tier 2 *and* a
+licence that has not lapsed as of the request, in `lib/seo/landing/services-supply.ts`. A goods
+page waits for `sweepExpiredLicences` to drop the tier; a services page moves on the expiry date
+itself, so a practice whose licence lapsed yesterday is out of the count before the job runs. The
+same consequence applies with less delay, and one more: a sweep run with a clock far ahead —
+`area-pages.test.ts` does, at +400 days — takes every seeded services page down while the goods
+pages hold. Reseed a shared local database before an end-to-end run that reads them.
 
 **The verified share counts `verificationTier >= 2`** — `VERIFIED_TIER`, the same rung the
 badge, the `/verified` filter, the home counters and the sitemap read. Four surfaces compute

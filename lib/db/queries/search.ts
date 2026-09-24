@@ -565,6 +565,19 @@ export async function searchBusinesses(
      */
     categoryDepth?: (businessId: string, primaryCategoryId: string) => number;
     /**
+     * The set, already decided — board `6a-s`.
+     *
+     * A services landing page does not filter by `businessWhere`: its members
+     * are firms that *cover* the place, resolved per service in
+     * `lib/seo/landing/services-supply.ts`, and a branch-address filter here
+     * would drop exactly the firms the page exists to list (B1). Handed the
+     * ids, this ranks that set and nothing else — the same ranking, vectors,
+     * boosts and browse mode every other caller gets. `categoryIds` still
+     * decides which vector each listing ranks on and which services its
+     * signals read.
+     */
+    ids?: readonly string[];
+    /**
      * Rows per page. `PAGE_SIZE` where absent.
      *
      * Board 6a §4 draws ten, against the twenty a search returns, and the
@@ -626,7 +639,9 @@ export async function searchBusinesses(
           : null,
       }
     : { goods: weightsForShape(stored.goods, shape), services: stored.services };
-  const where = businessWhere(query, categoryIds);
+  const where: Prisma.BusinessWhereInput = options.ids
+    ? { AND: [PUBLIC_BUSINESS, { id: { in: [...options.ids] } }] }
+    : businessWhere(query, categoryIds);
 
   const [candidates, total] = await Promise.all([
     prisma.business.findMany({

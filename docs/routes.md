@@ -58,7 +58,10 @@ and it is the one that argues back.
 /best/:slug                             Curated list                          [6b]  built h5s4
 /categories                             Category index                        [6c]  built h5s2
 /:emirate/:category                     Trade across one emirate — 84 of them [6a]  built h5s2
+                                        — a trade sold by the job, subcategories too [6a-s] built 6a-s
 /:emirate/:area/:category               Area landing page                     [6a]  built h5s3
+                                        — a trade sold by the job: the firms that cover it [6a-s] built 6a-s
+/ar/…                                   Reserved for the Arabic landing pages [6a-s D-AR] not served
 /lp/:campaign                           Campaign landing                     [10i]  built h5s5
 /report                                 Report hub — find the listing; ?ref= looks up a report [13c] built 13c · noindex
 /report/:slug                           Report a listing — the page the modal degrades to [4h · 13c] built 4h, 13c
@@ -675,6 +678,26 @@ accumulated ranking a 404 would discard.
 
 All of it is enforced in code, not by editorial discipline, and the numbers are edited on
 `/admin/content/matrix` behind an impact preview and a second approver.
+
+**A trade sold by the job gets the same two routes and a template of its own** (board 6a-s).
+One controller still resolves the scope and runs the gate; a scope whose category resolves to
+`services` renders `ServicesLandingPage` instead of the goods page. Its list is the firms that
+**cover** the place, not the ones addressed in it: coverage resolves per service — a service's
+own rows, or the business default where it has none — and an office in the place counts as
+presence. The union of a firm's coverage rows is never read, because it lists a practice
+whose VAT work stops at Sharjah on a Dubai page. The floors, the hold band and the grace
+period are 6f's, counted over that set, so the matrix, the sitemap and the route agree.
+
+Two things differ in the address space. The emirate class goes below sector level for work —
+`/dubai/vat-and-tax` exists, a goods subcategory across an emirate does not — because a
+practice covers an emirate the way a sector's suppliers do. And every services trade starts
+**closed**: an ops lead opens its template on `/admin/categories`, with a reason, one trade at
+a time. A closed trade's pages 404 and leave the sitemap and every link block, and nothing is
+unpublished; reopening brings them back.
+
+`/ar/` is reserved for the translated pages (6a-s D-AR): a locale prefix in front of the
+unchanged English path, paired by `hreflang`, both published or neither. No emirate and no
+public top-level route may take the segment — `lib/i18n/locales.test.ts` holds that true.
 
 ## Why the product editor is `:id` and not `:sku`
 

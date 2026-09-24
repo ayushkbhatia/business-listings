@@ -4,6 +4,7 @@ import {
   countWords,
   evaluateHold,
   evaluatePublish,
+  isSupply,
   listingsNeeded,
   supplyGap,
   type PublishFailure,
@@ -15,6 +16,10 @@ import {
   type CategoryRules,
 } from "@/lib/taxonomy/service";
 import { VERIFIED_TIER } from "@/lib/verification";
+import type { Emirate, TradeKind } from "@/lib/db/generated/enums";
+import { loadTradeKinds } from "@/lib/taxonomy/service";
+import { resolveTradeKind } from "@/lib/taxonomy/trade-kind";
+import { coverageGrid, loadCoverageFirms, placeKey } from "@/lib/seo/landing/services-supply";
 
 /**
  * Board 6f — the SEO page matrix.
@@ -194,6 +199,17 @@ export async function pageMatrix(): Promise<Matrix> {
 export interface AreaMatrixRow {
   areaId: string;
   categoryId: string;
+  /**
+   * How the trade is sold — board `6a-s`. A services row counts firms that
+   * cover the area, not firms with a branch in it, which is the rule the page
+   * itself is served on.
+   */
+  trade: TradeKind;
+  /**
+   * The services template is open for this trade — always true for goods.
+   * A closed one keeps the row from being live whatever else holds.
+   */
+  templateOpen: boolean;
   path: string;
   areaName: string;
   emirate: string;
@@ -284,6 +300,7 @@ export async function areaMatrix(
         name: true,
         slug: true,
         parentId: true,
+        servicesLandingOpenedAt: true,
         // Whether anything already has a page under this trade. A subcategory
         // is not part of the row set on its own, but one that somebody has
         // written a page for has to be: board 6a criterion 12 asks the sitemap
@@ -366,6 +383,36 @@ export async function areaMatrix(
     descendants.get(child.parentId)?.push(child.id);
   }
 
+  /*
+     Board `6a-s` B1 — a services trade's supply is coverage, not address.
+
+     The SQL above counts branches, which is the goods rule and the wrong
+     answer for a firm that works in Business Bay from an office in Deira. So
+     the services rows are counted by `coverageGrid`: the same membership rule
+     the page itself is gated and served on, applied to one load of the
+     trade's firms. Were the two ever computed differently, this screen would
+     offer a publish the route then 404s — board 6a criterion 12, in the
+     expensive direction.
+  */
+  const kinds = await loadTradeKinds();
+  const tradeOf = (categoryId: string): TradeKind => resolveTradeKind(kinds, categoryId);
+  const servicesTrades = categories
+    .filter((category) => tradeOf(category.id) === "services")
+    .filter((category) => category.parentId === null || category._count.areaPages > 0)
+    .map((category) => ({ categoryId: category.id, categoryIds: descendants.get(category.id) ?? [category.id] }));
+  const grid =
+    servicesTrades.length > 0
+      ? coverageGrid(
+          await loadCoverageFirms(
+            servicesTrades.flatMap((trade) => trade.categoryIds),
+            (filter.emirate as Emirate | undefined) ?? null,
+          ),
+          servicesTrades,
+          areas.map((area) => ({ emirate: area.emirate, areaId: area.id })),
+          now,
+        )
+      : new Map();
+
   const supplyFor = new Map<string, { listings: number; verified: number }>();
   for (const row of supply) {
     supplyFor.set(`${row.area_id}:${row.category_id}`, {
@@ -392,14 +439,22 @@ export async function areaMatrix(
       */
       if (category.parentId !== null && category._count.areaPages === 0) continue;
 
+      const trade = tradeOf(category.id);
       let listings = 0;
       let verified = 0;
-      for (const id of descendants.get(category.id) ?? []) {
-        const found = supplyFor.get(`${area.id}:${id}`);
-        if (!found) continue;
-        listings += found.listings;
-        verified += found.verified;
+      if (trade === "services") {
+        const cell = grid.get(`${category.id}:${placeKey({ emirate: area.emirate, areaId: area.id })}`);
+        listings = cell?.listings ?? 0;
+        verified = cell?.verified ?? 0;
+      } else {
+        for (const id of descendants.get(category.id) ?? []) {
+          const found = supplyFor.get(`${area.id}:${id}`);
+          if (!found) continue;
+          listings += found.listings;
+          verified += found.verified;
+        }
       }
+      const templateOpen = trade === "goods" || category.servicesLandingOpenedAt !== null;
 
       const page = pageFor.get(`${area.id}:${category.id}`);
       const recorded = demandFor.get(`${area.id}:${category.id}`);
@@ -427,10 +482,16 @@ export async function areaMatrix(
       // The same three clauses `landingState` applies, in the same order. If
       // this screen and the route ever disagree, one of them is lying to staff.
       const live =
+        templateOpen &&
         page?.publishedAt != null &&
         page.heldAt == null &&
-        (hold.publishable ||
-          (withinGrace && hold.failures.every((failure) => failure.reason === "listings")));
+        /*
+           The grace covers the two supply conditions, as `landingState` has it
+           (`isSupply`): listings, and the verified share measured against
+           them. This read "listings" alone, so a page inside its window whose
+           share slipped was live on the site and not live here.
+        */
+        (hold.publishable || (withinGrace && hold.failures.every(isSupply)));
 
       const state = pageState({
         live,
@@ -452,6 +513,8 @@ export async function areaMatrix(
       rows.push({
         areaId: area.id,
         categoryId: category.id,
+        trade,
+        templateOpen,
         path: `/${area.emirate}/${area.slug}/${category.slug}`,
         areaName: area.name,
         emirate: area.emirate,

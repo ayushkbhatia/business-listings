@@ -274,12 +274,21 @@ export function CategoryEditor({
         </div>
 
         {/* States table: "Category with no spec template — editor shows the gap". */}
+        {/*
+           The link is the notice's `action`, not a word in its sentence: a
+           `warn` Alert owes its fix in the slot component 65 reserves for it,
+           and refuses in development without one.
+        */}
         {!editor.resolvedTemplate ? (
-          <Alert tone="warn">
-            {t("taxonomy.editor.template_gap")}{" "}
-            <Link href="/admin/spec-library" className="underline underline-offset-2">
-              {t("taxonomy.editor.template_gap_link")}
-            </Link>
+          <Alert
+            tone="warn"
+            action={
+              <Link href="/admin/spec-library" className="text-body-sm underline underline-offset-2">
+                {t("taxonomy.editor.template_gap_link")}
+              </Link>
+            }
+          >
+            {t("taxonomy.editor.template_gap")}
           </Alert>
         ) : null}
 

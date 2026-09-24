@@ -69,6 +69,16 @@ describe("heroCredential — B3", () => {
       ]),
     ).toEqual({ id: "checked", verified: true });
   });
+
+  it("drops a checked credential the day after its confirmed date — 6a-s B4", () => {
+    const today = new Date("2026-09-24T00:00:00.000Z");
+    const lapsed = { id: "lapsed", verified: true, expiresOn: new Date("2026-09-23T00:00:00.000Z") };
+    const lastDay = { id: "last-day", verified: true, expiresOn: new Date("2026-09-24T00:00:00.000Z") };
+    expect(heroCredential([lapsed], today)).toBeNull();
+    expect(heroCredential([lapsed, lastDay], today)).toEqual(lastDay);
+    // No date is not a lapse: the register confirmed no end.
+    expect(heroCredential([{ id: "open", verified: true, expiresOn: null }], today)?.id).toBe("open");
+  });
 });
 
 describe("composerService — B11", () => {

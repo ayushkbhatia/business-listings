@@ -78,6 +78,32 @@ export const CHECKED_CREDENTIAL = {
 };
 
 /**
+ * A checked credential that has not lapsed — board `6a-s` B4: *"the expiry pass
+ * drops it on lapse"*, the day it lapses and with no grace.
+ *
+ * Read, not swept. `8b-s` captures `expiresOn` and deliberately chases nothing —
+ * no reminder, no renewal notice — and nothing here chases either. What changes
+ * is narrower: a badge that says *checked* stops saying it the day the date
+ * passes. For a checked credential that date is not the seller's word — `4c-s`
+ * compared the certificate's day with the register's before the check was
+ * granted (`statusOf` in `./compare.ts`) — so the badge is dropping on a date
+ * the platform verified, not inventing a check on one it did not.
+ *
+ * The storefront's credential table is untouched by this and should be: it
+ * prints the date as the certificate carries it, and a buyer reading a lapsed
+ * date has learned something true. A tick is a different claim from a row.
+ *
+ * `today` is the start of the UAE day as a UTC instant (`dubaiDayStart`), the
+ * shape a `date` column reads back in — a certificate valid to the 24th is
+ * valid all of the 24th in Dubai.
+ */
+export function currentCheckedCredential(today: Date) {
+  return {
+    AND: [CHECKED_CREDENTIAL, { OR: [{ expiresOn: null }, { expiresOn: { gte: today } }] }],
+  };
+}
+
+/**
  * What a credential says about itself, given what actually happened to it.
  *
  * Three labels over two stored tiers. `we_verify_this` is **not** a state a row

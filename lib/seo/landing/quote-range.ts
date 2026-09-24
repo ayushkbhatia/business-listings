@@ -75,6 +75,15 @@ export async function quoteRangeFor(
   scope: LandingScope,
   now = new Date(),
 ): Promise<QuoteRange | null> {
+  /*
+     Never on a page for work — board `6a-s` B5: *"No price on this page in any
+     state."* A service has a basis, not a number, and `1n-s` shows four firms
+     quoting one job per month, per visit, per sq ft and as a fixed fee: a range
+     across those is a number that means nothing, stated as though it did. The
+     row that carries the token simply does not render, as it does below the
+     sample floor.
+  */
+  if (scope.trade === "services") return null;
   if (!(await quoteAggregatesEnabled())) return null;
 
   const since = new Date(now);

@@ -75,7 +75,7 @@ export async function areaPageState(
   return toAreaState(await landingState(scope, now));
 }
 
-export type AreaPageRefusal = "not_found" | "below_floors" | "not_published" | "held";
+export type AreaPageRefusal = "not_found" | "below_floors" | "not_published" | "held" | "template_closed";
 
 export type AreaPageResult<T = unknown> =
   | ({ ok: true } & T)
@@ -206,6 +206,20 @@ export async function publishAreaPage(
       ok: false,
       error: "held",
       message: `Held by a person on ${state.heldAt.toISOString().slice(0, 10)}: ${state.heldReason ?? ""}`.trim(),
+    };
+  }
+
+  /*
+     Board `6a-s` — the services template is rolled out one trade at a time,
+     and a trade it has not been opened for cannot have a live page. Checked
+     before the floors: a page that clears every one of them still would not
+     be served, and "publishes at 60" would be the wrong reason to give.
+  */
+  if (!state.templateOpen) {
+    return {
+      ok: false,
+      error: "template_closed",
+      message: `The services landing template is not open for ${state.scope.category.name} yet. Open it on the trade's page in /admin/categories, with a reason, and this page can be published.`,
     };
   }
 
