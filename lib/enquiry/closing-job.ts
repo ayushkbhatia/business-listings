@@ -24,7 +24,8 @@ import { onEnquiryClosing } from "@/lib/notify/events";
  * The guard is the delivery log, as `sweepExpiringQuotes` does it: a
  * `NotificationDelivery` row for this event on this enquiry means it went, or
  * was held for quiet hours and will go. `notify` deduplicates nothing, and the
- * sweep runs hourly.
+ * sweep runs hourly. The log is read before the batch, so the batch is only
+ * enquiries not yet told.
  *
  * Bounded, oldest close first, so a backlog clears in order and a run costs the
  * same at any size.
@@ -39,11 +40,35 @@ export interface ClosingSweepResult {
   alreadySent: number;
 }
 
-export async function sweepClosingEnquiries(now: Date = new Date()): Promise<ClosingSweepResult> {
+export async function sweepClosingEnquiries(
+  now: Date = new Date(),
+  { batch = BATCH }: { batch?: number } = {},
+): Promise<ClosingSweepResult> {
   const until = new Date(now.getTime() + CLOSING_NOTICE_MS);
+
+  /*
+     Excluded before the batch is taken, not skipped after it. Skipping after
+     would let two hundred enquiries already told fill every later run's batch
+     until they closed, and an enquiry behind them would hear minutes before its
+     close, or not at all. A notice for an enquiry still open went inside the
+     last day, so a day of the log is all there is to read. A close moved later
+     than a day after its notice is told again, about its new date.
+  */
+  const told = await prisma.notificationDelivery.findMany({
+    where: {
+      event: "enquiry_closing",
+      enquiryId: { not: null },
+      createdAt: { gte: new Date(now.getTime() - CLOSING_NOTICE_MS) },
+    },
+    select: { enquiryId: true },
+    distinct: ["enquiryId"],
+    orderBy: { enquiryId: "asc" },
+  });
+  const alreadySent = told.flatMap((row) => (row.enquiryId ? [row.enquiryId] : []));
 
   const enquiries = await prisma.enquiry.findMany({
     where: {
+      ...(alreadySent.length > 0 ? { id: { notIn: alreadySent } } : {}),
       closesAt: { gt: now, lte: until },
       contactReleasedToBusinessId: null,
       quotes: {
@@ -55,7 +80,7 @@ export async function sweepClosingEnquiries(now: Date = new Date()): Promise<Clo
       },
     },
     orderBy: [{ closesAt: "asc" }, { id: "asc" }],
-    take: BATCH,
+    take: batch,
     select: {
       id: true,
       quotes: {
@@ -68,23 +93,12 @@ export async function sweepClosingEnquiries(now: Date = new Date()): Promise<Clo
       },
     },
   });
-  if (enquiries.length === 0) return { considered: 0, notified: 0, alreadySent: 0 };
-
-  const sent = await prisma.notificationDelivery.findMany({
-    where: { event: "enquiry_closing", enquiryId: { in: enquiries.map((e) => e.id) } },
-    select: { enquiryId: true },
-    distinct: ["enquiryId"],
-    orderBy: { enquiryId: "asc" },
-  });
-  const done = new Set(sent.map((row) => row.enquiryId));
-
   let notified = 0;
   for (const enquiry of enquiries) {
-    if (done.has(enquiry.id)) continue;
     // Suppliers, not rows: a revision is the same supplier's quote again.
     const quotes = new Set(enquiry.quotes.map((quote) => quote.businessId)).size;
     if (await onEnquiryClosing({ enquiryId: enquiry.id, quotes })) notified += 1;
   }
 
-  return { considered: enquiries.length, notified, alreadySent: done.size };
+  return { considered: enquiries.length, notified, alreadySent: alreadySent.length };
 }

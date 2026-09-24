@@ -387,6 +387,23 @@ describe("the closing notice", () => {
     expect(notices.filter((n) => n.channel === "in_app")).toHaveLength(1);
   });
 
+  it("never lets an enquiry already told hold the batch", async () => {
+    const sooner = await board({ closesAt: new Date(Date.now() + 2 * HOUR) });
+    const after = await board({ closesAt: new Date(Date.now() + 4 * HOUR) });
+    // A batch of one takes the day's closes one run at a time, whatever else the
+    // database holds. Filtered after the batch, the first enquiry told would have
+    // been the whole batch on every later run.
+    const inWindow = await prisma.enquiry.count({ where: { closesAt: { gt: new Date(), lte: new Date(Date.now() + DAY) } } });
+    for (let run = 0; run <= inWindow; run += 1) await sweepClosingEnquiries(new Date(), { batch: 1 });
+    const told = await prisma.notificationDelivery.findMany({
+      where: { event: "enquiry_closing", enquiryId: { in: [sooner.id, after.id] } },
+      select: { enquiryId: true },
+      distinct: ["enquiryId"],
+      orderBy: { enquiryId: "asc" },
+    });
+    expect(new Set(told.map((row) => row.enquiryId))).toEqual(new Set([sooner.id, after.id]));
+  });
+
   it("says nothing where nothing can be lost — accepted, or no quote", async () => {
     const accepted = await board({ closesAt: new Date(Date.now() + 6 * HOUR) });
     const winner = await prisma.quote.findFirstOrThrow({ where: { enquiryId: accepted.id, businessId: suppliers[1]!.id }, select: { id: true } });

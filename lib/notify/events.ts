@@ -3,7 +3,7 @@ import { feeOnBasis } from "@/lib/quote/proposal-words";
 import { filsToAed } from "@/lib/quote/money";
 import { approversFor } from "@/lib/buyer-company/queue";
 import { prisma } from "@/lib/db/client";
-import { formatAED, formatCount, formatDate, UAE_LOCALE } from "@/lib/format";
+import { formatAED, formatCount, formatDate, formatDateTime, UAE_LOCALE } from "@/lib/format";
 /*
    Type-only, and written as `import type` rather than an inline `type` marker.
 
@@ -1732,7 +1732,8 @@ export async function onEnquiryClosing(input: { enquiryId: string; quotes: numbe
         tradeKind === "services"
           ? t("compare.closing.proposals", { count: input.quotes })
           : t("compare.closing.quotes", { count: input.quotes }),
-      closesAt: formatDate(enquiry.closesAt),
+      // To the minute: this goes inside the last day, when *closes 25 Sep* is ambiguous on the 25th.
+      closesAt: formatDateTime(enquiry.closesAt),
       enquiryId: enquiry.id,
       shortLink: absoluteUrl(`/enquiry/${enquiry.id}/compare`),
     });
