@@ -4,6 +4,14 @@ on:
   push:
     branches: [main]
   pull_request:
+  # By hand, from the Actions tab or `gh workflow run ci.yml --ref main`. A push
+  # whose commit message carries GitHub's skip marker starts no run, and nothing
+  # else can start one afterwards: ff7f503 (#229) reached `main` that way, because
+  # a squash commit here lists every branch commit's message. The migrations step
+  # is gated on `pull_request` and sits a manual run out; everything else runs.
+  # A manual run on `main` shares the push runs' concurrency group, so a merge
+  # landing mid-run cancels it and runs on the newer tree instead.
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
