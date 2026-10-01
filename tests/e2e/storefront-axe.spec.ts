@@ -13,6 +13,10 @@ const ROUTES = [
   "/b/al-manara-equipment-trading-llc/reviews",
   "/b/al-marwan-industrial-supplies-llc/p/resilient-seated-gate-valve-dn150-0",
   "/b/al-wadi-technical-services-llc",
+  // Board 10g as drawn: the rail, the record and the suggestions all present.
+  "/b/deira-cooling-house-llc",
+  // Two claims open, rendered as unclaimed with the under-review card.
+  "/b/redstone-trading-co-llc",
 ];
 
 for (const route of ROUTES) {

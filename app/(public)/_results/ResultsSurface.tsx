@@ -15,7 +15,6 @@ import {
 } from "@/lib/db/queries";
 import { toSearchParams, withoutFacet, type SearchQuery, pathWithQuery } from "@/lib/search/query";
 import { crawlRel } from "@/lib/seo/crawl-policy";
-import { publiclyClaimed } from "@/lib/claims/status";
 
 /**
  * The results list, shared by the category pages and search.
@@ -212,16 +211,19 @@ export function ResultsList({
               )}
               <ListingCard
                 enquireHref={`/rfq/new?to=${business.slug}`}
-                context={
-                  !publiclyClaimed(business.claimStatus)
-                    ? "unclaimed"
-                    : query.view === "grid"
-                      ? "grid"
-                      : "search"
-                }
+                /*
+                   The layout only. Whether the row is claimed is the card's to
+                   read off the business — this surface used to decide it here,
+                   and decided it with `=== "unclaimed"`, so a disputed listing
+                   got the claimed row.
+                */
+                context={query.view === "grid" ? "grid" : "search"}
                 business={{
                   slug: business.slug,
                   displayName: business.displayName,
+                  claimStatus: business.claimStatus,
+                  licenceNumber: business.licenceNumber,
+                  licenceExpiry: business.licenceExpiry,
                   categoryName: business.primaryCategory.name,
                   categoryCode: business.primaryCategory.code,
                   areaName: business.locations[0]?.area.name ?? "",

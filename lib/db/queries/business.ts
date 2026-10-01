@@ -2,7 +2,6 @@ import "server-only";
 import { cache } from "react";
 import { prisma } from "@/lib/db/client";
 import { resolveTemplate } from "@/lib/spec/resolve";
-import { VERIFIED_TIER } from "@/lib/verification";
 import { PUBLISHABLE_DOCUMENT_KINDS } from "@/lib/verification/credentials";
 import { hostnameFor } from "@/lib/domains/label";
 import { STANDING_CREDENTIAL } from "@/lib/credentials/kinds";
@@ -270,91 +269,6 @@ export async function getBusinessReviews(businessId: string) {
 }
 
 export type PublicReview = Awaited<ReturnType<typeof getBusinessReviews>>[number];
-
-/**
- * Claimed suppliers for an unclaimed listing to point at.
- *
- * Board 10g asks for two in the same trade. An unclaimed page that offers a
- * buyer nothing is a dead end for them and a wasted impression for us, so when
- * a category has no claimed suppliers yet — a real state in a young directory,
- * and the exact state that needs recruiting into — the search widens rather
- * than the section disappearing.
- *
- * The basis is returned so the heading can say which it is. "Verified
- * suppliers in the same trade" over a list from a different trade would be the
- * kind of small lie that costs more than the click it earns.
- */
-export type SimilarBasis = "category" | "parent" | "emirate";
-
-const SIMILAR_INCLUDE = {
-  primaryCategory: true,
-  locations: { where: { published: true }, include: { area: true }, take: 1 },
-} as const;
-
-const SIMILAR_ORDER = [
-  { verificationTier: "desc" },
-  { reviewCount: "desc" },
-  { id: "desc" },
-] as const;
-
-export async function getSimilarClaimedBusinesses(
-  category: { id: string; parentId: string | null },
-  excludeId: string,
-  emirate: string | null,
-  take = 2,
-) {
-  const base = {
-    ...PUBLIC_BUSINESS,
-    claimStatus: "claimed",
-    id: { not: excludeId },
-  } as const;
-
-  const sameTrade = await prisma.business.findMany({
-    where: {
-      ...base,
-      OR: [
-        { primaryCategoryId: category.id },
-        { categories: { some: { categoryId: category.id } } },
-      ],
-    },
-    include: SIMILAR_INCLUDE,
-    orderBy: [...SIMILAR_ORDER],
-    take,
-  });
-  if (sameTrade.length > 0) return { basis: "category" as SimilarBasis, businesses: sameTrade };
-
-  if (category.parentId) {
-    const siblings = await prisma.business.findMany({
-      where: {
-        ...base,
-        primaryCategory: {
-          OR: [{ id: category.parentId }, { parentId: category.parentId }],
-        },
-      },
-      include: SIMILAR_INCLUDE,
-      orderBy: [...SIMILAR_ORDER],
-      take,
-    });
-    if (siblings.length > 0) return { basis: "parent" as SimilarBasis, businesses: siblings };
-  }
-
-  if (!emirate) return { basis: "category" as SimilarBasis, businesses: [] };
-
-  const nearby = await prisma.business.findMany({
-    where: {
-      ...base,
-      verificationTier: { gte: VERIFIED_TIER },
-      locations: { some: { emirate: emirate as never, published: true } },
-    },
-    include: SIMILAR_INCLUDE,
-    orderBy: [...SIMILAR_ORDER],
-    take,
-  });
-  return { basis: "emirate" as SimilarBasis, businesses: nearby };
-}
-
-export type SimilarBusiness =
-  Awaited<ReturnType<typeof getSimilarClaimedBusinesses>>["businesses"][number];
 
 /** Rating breakdown across the four dimensions, for the reviews page. */
 export async function getReviewSummary(businessId: string) {

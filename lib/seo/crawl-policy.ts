@@ -146,6 +146,15 @@ export const DISALLOWED_PATHS = [
      request, and the attribute stops the rest from learning the URLs exist.
   */
   "/report",
+  /*
+     Board 10g, for the reason `/report` is here. Every unclaimed listing links
+     its claim as `/onboarding/claim?licence=<number>` — on its own page and now
+     on its card on every results surface — so the set is one force-dynamic URL
+     per listing, roughly thirty thousand, each of which runs 2a's search and
+     writes a search-log row. With the query string only: the bare
+     `/onboarding/claim` keeps the `noindex, follow` 2a chose for it.
+  */
+  "/onboarding/claim?",
 ] as const;
 
 /**

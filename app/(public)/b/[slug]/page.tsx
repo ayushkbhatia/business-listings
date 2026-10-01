@@ -1,22 +1,23 @@
 import { pairedCopies } from "@/lib/strings/store";
 import type { Metadata } from "next";
-import Link from "next/link";
 import { Suspense } from "react";
 import { notFound, permanentRedirect } from "next/navigation";
 import { redirectIfMoved, absorbedInto } from "@/lib/listing/redirect";
-import { Button, buttonClassName } from "@/components/primitives";
-import { Breadcrumb, Card, KeyValuePanel, Panel, PublicShell } from "@/components/structure";
-import { ListingCard, tierSpec } from "@/components/domain";
-import { getBusinessBySlug, getSimilarClaimedBusinesses } from "@/lib/db/queries";
+import { Breadcrumb, PublicShell } from "@/components/structure";
+import { tierSpec } from "@/components/domain";
+import { isVerified } from "@/lib/verification";
+import { getBusinessBySlug } from "@/lib/db/queries";
 import { formatDate, formatDuration } from "@/lib/format";
 import { MEDIA_BUCKET, publicUrl } from "@/lib/storage";
 import { t } from "@/lib/i18n";
 import { absoluteUrl } from "@/lib/site";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { JsonLd } from "@/app/(public)/_json-ld";
-import { crawlRel } from "@/lib/seo/crawl-policy";
 import { StorefrontHeader, storefrontCrumbs } from "./_storefront";
 import { ClosedStorefront } from "./_closed";
+import { UnclaimedStorefront } from "./_unclaimed";
+import { unclaimedIndexable } from "@/lib/listing/index-rule";
+import { unclaimedFacts } from "@/lib/listing/unclaimed";
 import { closedListing } from "@/lib/closure/public";
 import { Branches, CatalogueGrid, Hero, Reviews, TrustStrip } from "@/components/storefront";
 import { CompareTick } from "@/app/(public)/_compare/CompareTick";
@@ -42,7 +43,7 @@ import { storefrontPhotos } from "@/lib/storefront/photos";
 import { servicesStorefrontFor } from "@/lib/storefront/services";
 import { CredentialsSection, ServicesSection, ServicesStorefrontPage } from "./_services";
 import { OwnListingNote, isOwnListing } from "./_own";
-import { ReportDialog, ReportTrigger } from "./ReportDialog";
+import { ReportDialog } from "./ReportDialog";
 import { fileReport, loadReportForm } from "@/app/(public)/report/actions";
 import { reportFormData } from "@/lib/reports/form";
 import { reportSubject } from "@/lib/reports/subject";
@@ -102,20 +103,43 @@ export async function generateMetadata({ params, searchParams }: Params): Promis
   const emirate = head ? t(`emirate.${head.emirate}` as never) : "";
   const unclaimed = !publiclyClaimed(business.claimStatus);
 
+  /*
+     The place clause only where there is a place. The importer publishes a
+     record whose area it cannot match with no branch at all rather than a
+     guessed one, so a listing with no head office is ordinary, and the
+     sentence read "holds a DED trade licence in , ." on every one of them.
+  */
   const description = unclaimed
-    ? t("seo.unclaimed_description", {
-        name: business.displayName,
-        authority: business.licenceAuthority,
-        area,
-        emirate,
-      })
-    : t("seo.business_description", {
-        name: business.displayName,
-        category: business.primaryCategory.name,
-        area,
-        emirate,
-        verification: t(tierSpec(business.verificationTier).checkedKey as never) + ".",
-      });
+    ? [
+        head
+          ? t("seo.unclaimed_description", {
+              name: business.displayName,
+              authority: business.licenceAuthority,
+              area,
+              emirate,
+            })
+          : t("seo.unclaimed_description_no_place", {
+              name: business.displayName,
+              authority: business.licenceAuthority,
+            }),
+        // "Nothing verified" is false of a licence we checked without a claim.
+        isVerified(business.verificationTier)
+          ? t("seo.unclaimed_state_checked")
+          : t("seo.unclaimed_state"),
+      ].join(" ")
+    : head
+      ? t("seo.business_description", {
+          name: business.displayName,
+          category: business.primaryCategory.name,
+          area,
+          emirate,
+          verification: t(tierSpec(business.verificationTier).checkedKey as never) + ".",
+        })
+      : t("seo.business_description_no_place", {
+          name: business.displayName,
+          category: business.primaryCategory.name,
+          verification: t(tierSpec(business.verificationTier).checkedKey as never) + ".",
+        });
 
   return {
     title: `${business.displayName} — ${business.primaryCategory.name}`,
@@ -137,13 +161,29 @@ export async function generateMetadata({ params, searchParams }: Params): Promis
       type: "website",
       url: `/b/${business.slug}`,
     },
-    // An unclaimed page is thin by nature and honest about it. It stays
-    // indexable — 30,000 of them are how a supplier first finds us — but it
-    // never claims a rating it does not have.
+    /*
+       An unclaimed page is thin by nature and honest about it, and most of
+       them stay indexable — 30,000 are how a supplier first finds us. Board
+       10g Q4, the owner's answer of 1 Oct 2026: not one whose licence has
+       lapsed, and not one somebody has reported closed while 4h decides.
+       `follow` either way, so the claimed suppliers it points at keep the
+       link. `app/sitemap.ts` applies the same rule through
+       `indexableListingWhere`, and a test holds the two equal.
+    */
     robots: reporting
       ? { index: false, follow: false }
       : unclaimed
-        ? { index: true, follow: true }
+        ? {
+            index: unclaimedIndexable(
+              {
+                licenceExpiry: business.licenceExpiry,
+                closedReportOpen: (await unclaimedFacts(business.id, business.claimStatus))
+                  .closedReportOpen,
+              },
+              new Date(),
+            ),
+            follow: true,
+          }
         : undefined,
   };
 }
@@ -758,185 +798,6 @@ async function ClaimedStorefront({
         <div className="h-16 md:hidden" aria-hidden />
         {mobileActionBar}
         </ContactReveal>
-      </div>
-    </PublicShell>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Board 10g — the unclaimed composition. Same route, no second page component.
-// ─────────────────────────────────────────────────────────────────────────────
-
-async function UnclaimedStorefront({ business }: { business: Business }) {
-  const head = business.locations[0];
-  const claimHref = `/onboarding/claim?q=${encodeURIComponent(business.displayName)}`;
-  const similar = await getSimilarClaimedBusinesses(
-    { id: business.primaryCategoryId, parentId: business.primaryCategory.parentId },
-    business.id,
-    head?.emirate ?? null,
-    2,
-  );
-  const crumbs = storefrontCrumbs(business);
-
-  return (
-    <PublicShell
-      nav={<DirectoryNav />}
-      breadcrumb={<Breadcrumb label={t("gallery.breadcrumb_label")} items={crumbs} />}
-      footer={<DirectoryFooter />}
-    >
-      {/*
-        LocalBusiness with no aggregateRating, no opening hours and no telephone.
-        Only what the licence record actually holds. Marking up hours we do not
-        have would be a lie in a machine-readable format, which is the worst
-        kind.
-      */}
-      <JsonLd
-        data={{
-          "@context": "https://schema.org",
-          "@type": "LocalBusiness",
-          name: business.displayName,
-          legalName: business.tradeName, // licence-locked
-          identifier: business.licenceNumber,
-          address: head
-            ? {
-                "@type": "PostalAddress",
-                addressLocality: head.area.name,
-                addressRegion: t(`emirate.${head.emirate}` as never),
-                addressCountry: "AE",
-              }
-            : undefined,
-        }}
-      />
-
-      <header className="border-b border-line pb-5">
-        <p className="font-mono text-eyebrow uppercase text-faint">
-          {business.primaryCategory.name}
-        </p>
-        <h1 className="mt-0.5 font-serif text-h1-serif text-ink">{business.displayName}</h1>
-        {head && (
-          <p className="mt-1 text-body-sm text-muted">
-            {head.area.name} · {t(`emirate.${head.emirate}` as never)}
-          </p>
-        )}
-      </header>
-
-      <div className="mt-5 grid gap-[var(--gutter)] lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <div className="min-w-0">
-          <Panel title={t("listing.unclaimed_title")}>
-            <p className="max-w-[var(--measure-prose)] text-prose text-prose">
-              {t("listing.unclaimed_body")}
-            </p>
-            {/*
-               Both of these were `disabled` with the tooltip "Enquiries open in
-               the next release" — stale, and wrong twice: this page has no
-               enquiry action by design, and the claim flow shipped long ago.
-               `2a` names the claim prompt on an unclaimed listing as one of its
-               four entry points and already reads a pre-filled `q`, so the
-               destination and the intent existed and only the href was absent.
-
-               Report opens board `13c`'s modal, as the storefront rail's
-               *Report an issue* does; the footer's *Report a listing* goes to
-               the `/report` hub, which has no listing to open one over.
-
-               `crawlRel` on the claim link because this composition renders on
-               roughly 30,000 pages, each producing a distinct `?q=` URL into a
-               noindex funnel step. That is the shape `lib/seo/crawl-policy.ts`
-               exists to stop, and it derives the answer from the href rather
-               than trusting anyone to remember.
-            */}
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Link
-                href={claimHref}
-                rel={crawlRel(claimHref)}
-                className={buttonClassName()}
-              >
-                {t("listing.claim_cta")}
-              </Link>
-              {/*
-                 Boards 4h and 13c. *Report this listing* opened the
-                 verification policy until 4h; it opens the report modal now,
-                 over this page, and falls back to `/report/:slug` wherever a
-                 script cannot run. On an unclaimed listing this is the most
-                 likely thing on the page to be wrong, and the person who knows
-                 is standing in front of it.
-              */}
-              <ReportTrigger
-                slug={business.slug}
-                className={buttonClassName({ variant: "link" })}
-              >
-                {t("listing.report")}
-              </ReportTrigger>
-            </div>
-          </Panel>
-
-          <section className="mt-5">
-            <h2 className="text-h2 text-ink">{t("storefront.at_a_glance")}</h2>
-            <div className="mt-2">
-              {/*
-                Only the licence record. Absent fields are marked absent rather
-                than dropped — and there is no rating, no review count, no
-                hours and no empty star row anywhere on this page.
-              */}
-              <KeyValuePanel
-                notProvidedLabel={t("table.not_provided")}
-                entries={[
-                  { key: "trade", label: t("storefront.about"), value: business.tradeName }, // licence-locked
-                  { key: "licence", label: t("storefront.licence"), value: business.licenceNumber, mono: true },
-                  { key: "authority", label: t("storefront.authority"), value: business.licenceAuthority },
-                  { key: "expiry", label: t("listing.licence_expiry"), value: formatDate(business.licenceExpiry) },
-                  { key: "area", label: t("trade.emirate"), value: head ? `${head.area.name}, ${t(`emirate.${head.emirate}` as never)}` : undefined },
-                  { key: "category", label: t("storefront.categories"), value: business.primaryCategory.name },
-                  { key: "established", label: t("storefront.established") },
-                  { key: "team", label: t("storefront.team") },
-                  { key: "languages", label: t("storefront.languages") },
-                  { key: "phone", label: t("storefront.phone") },
-                ]}
-              />
-            </div>
-          </section>
-        </div>
-
-        <aside className="min-w-0">
-          {similar.businesses.length > 0 && (
-            <Card padded={false}>
-              <div className="border-b border-line px-4 py-3">
-                <h2 className="text-h3 text-ink">{t(`listing.similar.${similar.basis}` as never)}</h2>
-              </div>
-              <div className="flex flex-col gap-2 p-3">
-                {similar.businesses.map((other) => (
-                  <ListingCard
-                    /*
-                       Another supplier's card, on this supplier's storefront.
-                       It goes to their storefront, where a buyer can compose in
-                       place — criterion 3 again, and a fan-out started from
-                       somebody else's card is the wrong shape twice over.
-                    */
-                    enquireHref={`/b/${other.slug}`}
-                    key={other.id}
-                    context="map"
-                    business={{
-                      slug: other.slug,
-                      displayName: other.displayName,
-                      categoryName: other.primaryCategory.name,
-                      categoryCode: other.primaryCategory.code,
-                      areaName: other.locations[0]?.area.name ?? "",
-                      emirateName: other.locations[0]
-                        ? t(`emirate.${other.locations[0].emirate}` as never)
-                        : "",
-                      verificationTier: other.verificationTier,
-                      verifiedAt: other.verifiedAt,
-                      responseTimeMedianMs: other.responseTimeMedianMs,
-                      responseDurationLabel: other.responseTimeMedianMs
-                        ? formatDuration(other.responseTimeMedianMs)
-                        : undefined,
-                      reviewCount: other.reviewCount,
-                    }}
-                  />
-                ))}
-              </div>
-            </Card>
-          )}
-        </aside>
       </div>
     </PublicShell>
   );
