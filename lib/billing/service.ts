@@ -671,10 +671,15 @@ export async function changeTerm(
 
   const reference = `TERM-${businessId.slice(-6)}-${toTerm}-${now.getTime()}`;
 
+  /*
+     VAT included, as `changePlan` charges and for its reason: the invoice below
+     puts 5% on every line, and this took the net — 5% less than the paid
+     invoice it wrote said it took.
+  */
   if (quote.proration.netFils > 0) {
     const charge = await paymentProvider().charge({
       businessId,
-      fils: quote.proration.netFils,
+      fils: quote.proration.dueFils,
       description: `${quote.planName} plan, ${toTerm === "annual" ? "one year" : "one month"}`,
       reference,
     });
