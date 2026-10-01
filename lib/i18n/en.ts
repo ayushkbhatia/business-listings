@@ -988,7 +988,8 @@ export const en = {
   "admin.conflict.note.hint": "Required for every resolution. It is the reason on the audit row and is never sent to a claimant.",
 
   // The rail: the listing, what the delay costs, and the log (B9, B14).
-  "admin.conflict.rail.label": "The listing in dispute and the decision log",
+  "admin.conflict.rail.label": "{name}: the listing in dispute and the decision log",
+  "admin.conflict.claims_label": "The claims, scored on the same rows",
   "admin.conflict.rail.eyebrow": "The listing in dispute",
   "admin.conflict.rail.place": "{category} · {area}",
   "admin.conflict.rail.source": "Source",
@@ -9415,7 +9416,7 @@ export const en = {
 
   "verify.contested_heading": "Somebody else has claimed this listing",
   "verify.contested_body": "We are taking your submission anyway. If a former employee or an agency claimed it, this is how it gets put right — a person will look at both.",
-  "verify.contested_fix": "Submit below and carry on setting up. Nothing you fill in is lost if the claim takes a day to resolve.",
+  "verify.contested_fix": "Submit below. A person decides between the claims, and you can set the listing up once it is yours.",
   "verify.contested_after": "Another claim on this listing is with our team. A person decides between them within {hours} hours of the second claim, and may ask you for one more document.",
   "verify.contested_after_fix": "We will email you the decision. You can set the listing up once it is yours.",
   "verify.contested_seatless": "A contested claim does not open the listing to you until it is decided, so nothing here can be edited yet.",

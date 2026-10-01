@@ -52,6 +52,7 @@ import { seedCampaignLegal } from "./seed-campaign-legal.mjs";
 import { seedLicenceImports } from "./seed-licence-imports.mjs";
 import { seedDedupe } from "./seed-dedupe.mjs";
 import { seedQueue } from "./seed-queue.mjs";
+import { seedClaimConflict } from "./seed-claim-conflict.mjs";
 import { seedCredentialReview } from "./seed-credential-review.mjs";
 import { seedBlendedSearch } from "./seed-blended-search.mjs";
 import { seedServicesLanding } from "./seed-services-landing.mjs";
@@ -1101,6 +1102,8 @@ async function main() {
   // Board 4b: one queue row per argument the board makes, on new unpublished
   // listings so no existing fixture becomes contested or counted.
   await seedQueue(prisma, NOW);
+  // Board 4c: the conflict the board draws, on its own unpublished listing.
+  await seedClaimConflict(prisma, NOW);
   // Board 4c-s: one FTA credential per review state, built from the fixture
   // register, on new unpublished listings for the same reason as 4b's.
   await seedCredentialReview(prisma);

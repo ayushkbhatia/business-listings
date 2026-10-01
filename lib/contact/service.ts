@@ -98,7 +98,7 @@ export interface Landlines {
  */
 export async function landlinesFor(businessId: string): Promise<Landlines | null> {
   const business = await prisma.business.findFirst({
-    where: { id: businessId, suspendedAt: null, publishedAt: { not: null }, claimStatus: { not: "unclaimed" } },
+    where: { id: businessId, suspendedAt: null, publishedAt: { not: null }, claimStatus: "claimed" },
     select: {
       id: true,
       locations: {

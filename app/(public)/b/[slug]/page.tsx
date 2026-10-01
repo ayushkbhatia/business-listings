@@ -46,6 +46,7 @@ import { ReportDialog, ReportTrigger } from "./ReportDialog";
 import { fileReport, loadReportForm } from "@/app/(public)/report/actions";
 import { reportFormData } from "@/lib/reports/form";
 import { reportSubject } from "@/lib/reports/subject";
+import { publiclyClaimed } from "@/lib/claims/status";
 
 export const revalidate = 300;
 
@@ -99,7 +100,7 @@ export async function generateMetadata({ params, searchParams }: Params): Promis
   const head = business.locations[0];
   const area = head?.area.name ?? "";
   const emirate = head ? t(`emirate.${head.emirate}` as never) : "";
-  const unclaimed = business.claimStatus === "unclaimed";
+  const unclaimed = !publiclyClaimed(business.claimStatus);
 
   const description = unclaimed
     ? t("seo.unclaimed_description", {
@@ -207,7 +208,7 @@ export default async function StorefrontPage({ params, searchParams }: Params) {
          will not count a draft or a suspended listing whatever is posted at it.
       */}
       <PageEvent name="listing_viewed" businessId={business.id} />
-      {business.claimStatus === "unclaimed" ? (
+      {!publiclyClaimed(business.claimStatus) ? (
         <UnclaimedStorefront business={business} />
       ) : (
         <ClaimedStorefront business={business} requestedService={requestedService} />

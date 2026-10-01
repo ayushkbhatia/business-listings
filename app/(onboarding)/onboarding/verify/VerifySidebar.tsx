@@ -1,6 +1,7 @@
 import { Alert, Eyebrow } from "@/components/display";
 import { Check } from "@/components/primitives/icons";
 import { t } from "@/lib/i18n";
+import { CONFLICT_SLA_HOURS } from "@/lib/claims/clock";
 
 /**
  * Board 2b's 320px column. Three cards, and each answers a different hesitation.
@@ -81,8 +82,8 @@ export function VerifySidebar({
         does not become friendlier or harsher depending on who is reading it.
       */}
       {contested ? (
-        <Alert tone="warn" title={t("verify.conflict_heading")} fix={t("verify.contested_after")}>
-          {t("verify.conflict_body")}
+        <Alert tone="warn" title={t("verify.conflict_heading")} fix={t("verify.contested_after", { hours: CONFLICT_SLA_HOURS })}>
+          {t("verify.conflict_body", { hours: CONFLICT_SLA_HOURS })}
         </Alert>
       ) : (
         <section
@@ -92,7 +93,7 @@ export function VerifySidebar({
           <h2 id="conflict-heading" className="text-body-sm font-medium text-ink">
             {t("verify.conflict_heading")}
           </h2>
-          <p className="mt-2 text-body-sm text-body">{t("verify.conflict_body")}</p>
+          <p className="mt-2 text-body-sm text-body">{t("verify.conflict_body", { hours: CONFLICT_SLA_HOURS })}</p>
         </section>
       )}
     </div>

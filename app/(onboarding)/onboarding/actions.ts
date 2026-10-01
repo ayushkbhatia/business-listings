@@ -7,6 +7,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getActor } from "@/lib/auth/session";
 import { checkThrottle, recordAttempt } from "@/lib/auth/attempts";
 import { submitClaim, withdrawClaim, type ClaimantRole } from "@/lib/onboarding/claim";
+import { attachTenancyDocument } from "@/lib/claims/claimant";
+import { lockListingClaims } from "@/lib/claims/lock";
 import { clearDraft, readDraft, saveDraft, type VerifyDraft } from "@/lib/onboarding/draft";
 import { goLive } from "@/lib/onboarding/service";
 import { isClaimantRole, recordScan, scanLicenceDocument, type LicenceScan } from "@/lib/onboarding/verify";
@@ -153,6 +155,90 @@ export async function withdrawClaimToResend(formData: FormData): Promise<void> {
   await withdrawClaim(actor, businessId, t("verify.withdrawn_reason"));
   revalidatePath("/onboarding/verify");
 }
+
+/**
+ * Board 4c. A claimant takes back a claim that is one side of a conflict — or
+ * any undecided claim of theirs. Where that leaves one claim in a race, the
+ * conflict dissolves and the other goes back to the queue on its own.
+ */
+export async function withdrawMyClaim(formData: FormData): Promise<void> {
+  const actor = await getActor();
+  if (!actor) return;
+  const businessId = String(formData.get("businessId") ?? "");
+  if (!businessId) return;
+  await withdrawClaim(actor, businessId, t("verify.withdraw.reason"));
+  revalidatePath("/onboarding/verify");
+}
+
+/** The claim an ops lead asked for a tenancy contract on, if it is this claimant's. */
+async function tenancyRequestFor(claimantId: string, businessId: string): Promise<boolean> {
+  const claim = await prisma.claimSubmission.findFirst({
+    where: {
+      businessId,
+      claimantId,
+      decidedAt: null,
+      conflict: { resolvedAt: null, dissolvedAt: null, docsRequestedAt: { not: null }, docsReceivedAt: null },
+    },
+    select: { id: true },
+  });
+  return claim !== null;
+}
+
+/**
+ * Board 4c Q4. Signed only for a claimant somebody actually asked: a path under
+ * a listing is not something any signed-in person may write to.
+ */
+export async function signTenancyUpload(formData: FormData): Promise<SignResult> {
+  const actor = await getActor();
+  if (!actor) return { ok: false, error: t("dev.no_seat_title") };
+  const businessId = String(formData.get("businessId") ?? "");
+  if (!(await tenancyRequestFor(actor.id, businessId))) return { ok: false, error: t("verify.tenancy.no_request") };
+
+  const check = checkDocument(String(formData.get("type") ?? ""), Number(formData.get("bytes") ?? 0), MAX_LICENCE_BYTES);
+  if (!check.ok) return { ok: false, error: check.reason };
+
+  const path = documentPath(businessId, "tenancy_contract", String(formData.get("filename") ?? "tenancy.pdf"));
+  try {
+    return { ok: true, ...(await signUpload(DOCUMENT_BUCKET, path)) };
+  } catch {
+    return { ok: false, error: t("media.storage_off") };
+  }
+}
+
+/** The uploaded contract, recorded and attached to the claimant's own claim. */
+export async function recordTenancy(formData: FormData): Promise<RecordResult> {
+  const actor = await getActor();
+  if (!actor) return { ok: false, error: t("dev.no_seat_title") };
+  const businessId = String(formData.get("businessId") ?? "");
+  const path = String(formData.get("path") ?? "");
+  if (!path.startsWith(`${businessId}/tenancy_contract/`)) return { ok: false, error: t("media.storage_off") };
+
+  const outcome = await prisma.$transaction(async (tx) => {
+    await lockListingClaims(tx, businessId);
+    const document = await tx.document.create({
+      data: {
+        businessId,
+        kind: "tenancy_contract",
+        storagePath: path,
+        filename: String(formData.get("filename") ?? "tenancy"),
+        bytes: Number(formData.get("bytes") ?? 0) || null,
+        mimeType: String(formData.get("type") ?? "") || null,
+      },
+      select: { id: true },
+    });
+    const attached = await attachTenancyDocument(tx, { businessId, claimantId: actor.id, documentId: document.id }, new Date());
+    if (!attached.ok) throw new NoRequest();
+    return document.id;
+  }).catch((error) => {
+    if (error instanceof NoRequest) return null;
+    throw error;
+  });
+  if (!outcome) return { ok: false, error: t("verify.tenancy.no_request") };
+  revalidatePath("/onboarding/verify");
+  return { ok: true, documentId: outcome };
+}
+
+class NoRequest extends Error {}
 
 /** `dd/mm/yyyy` arrives from a date input as `yyyy-mm-dd`, or not at all. */
 function dateField(

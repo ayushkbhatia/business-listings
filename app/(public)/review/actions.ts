@@ -20,6 +20,7 @@ import { contactKindWords, listingReviewHref, reviewHref } from "@/lib/reviews/w
 import { MAX_IMAGE_BYTES } from "@/lib/storage/buckets";
 import { resolveBuyerId } from "@/app/(public)/enquiry/_buyer";
 import { PermissionError } from "@/lib/auth/errors";
+import { publiclyClaimed } from "@/lib/claims/status";
 
 /**
  * Board 10f — the five things the review form sends.
@@ -197,7 +198,7 @@ async function landing(
      anchored, not the inbox. Where that page does not exist (the listing is not
      published) they stay on their own copy with the reason said.
   */
-  if (business && business.publishedAt && !business.suspendedAt && business.claimStatus !== "unclaimed") {
+  if (business && business.publishedAt && !business.suspendedAt && publiclyClaimed(business.claimStatus)) {
     return listingReviewHref(business.slug, reviewId);
   }
   return reviewHref(enquiry?.ref ?? enquiryId, token, { [flash]: "1" });

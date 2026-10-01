@@ -80,7 +80,8 @@ export async function landingStats(
        the ranking, verification is what lifts it. Never "claim it and you will
        appear above them".
     */
-    prisma.business.count({ where: { ...where, claimStatus: "unclaimed" } }),
+    // Board 4c B10: a disputed listing is unclaimed to a buyer, so it counts as one.
+    prisma.business.count({ where: { ...where, claimStatus: { not: "claimed" } } }),
     prisma.business.findMany({
       where: { ...where, responseTimeMedianMs: { not: null } },
       select: { responseTimeMedianMs: true },

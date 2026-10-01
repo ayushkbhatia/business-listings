@@ -27,6 +27,7 @@ import { BranchesClient, type ClientBranch } from "./_client";
 import { BranchCall, ContactReveal } from "../ContactReveal";
 import { MaskedNumber } from "@/components/storefront/MaskedNumber";
 import { cachedStorefrontContact, maskedLandlines } from "@/lib/contact/storefront";
+import { publiclyClaimed } from "@/lib/claims/status";
 
 /**
  * Board 1f — branches & hours.
@@ -102,7 +103,7 @@ export default async function BranchesPage({ params }: Params) {
 
   // An unclaimed listing has no subpages. It is a licence record, not a
   // storefront, and there is nothing here for it to show.
-  if (business.claimStatus === "unclaimed") notFound();
+  if (!publiclyClaimed(business.claimStatus)) notFound();
 
   /*
      Board `1f-s`: a firm that sells only work has coverage where branches were.

@@ -120,7 +120,7 @@ export function ConflictWorkspace({ view, actions }: { view: ConflictView; actio
             </Alert>
           ))}
 
-          <section aria-label={t("admin.conflict.title")} className="grid gap-3.5 md:grid-cols-2">
+          <div role="group" aria-label={t("admin.conflict.claims_label")} className="grid gap-3.5 md:grid-cols-2">
             {view.incumbent && (
               <article className="flex flex-col rounded-panel border border-line bg-card">
                 <header className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
@@ -131,10 +131,10 @@ export function ConflictWorkspace({ view, actions }: { view: ConflictView; actio
               </article>
             )}
             {view.cards.map(cardsFor)}
-          </section>
+          </div>
 
           {decide && (
-            <section aria-labelledby={`${noteId}-other`} className="flex flex-col gap-3 rounded-panel border border-line bg-card px-4 py-4">
+            <div className="flex flex-col gap-3 rounded-panel border border-line bg-card px-4 py-4">
               <h2 id={`${noteId}-other`} className="text-body-sm font-medium text-ink">
                 {t("admin.conflict.other.title")}
               </h2>
@@ -180,13 +180,13 @@ export function ConflictWorkspace({ view, actions }: { view: ConflictView; actio
                 </Label>
                 <Textarea id={noteId} rows={2} value={note} onChange={(event) => setNote(event.target.value)} />
               </div>
-            </section>
+            </div>
           )}
 
           {view.mode === "read" && view.open && <AssignPanel view={view} assign={actions.assign} onDone={done} />}
 
           {view.resolved && (
-            <section aria-labelledby={`${noteId}-resolved`} className="flex flex-col gap-2 rounded-panel border border-line bg-card px-4 py-4">
+            <div className="flex flex-col gap-2 rounded-panel border border-line bg-card px-4 py-4">
               <h2 id={`${noteId}-resolved`} className="text-body-sm font-medium text-ink">
                 {t("admin.conflict.resolved.title")}
               </h2>
@@ -204,20 +204,20 @@ export function ConflictWorkspace({ view, actions }: { view: ConflictView; actio
                   {t("admin.conflict.resolved.audit")}
                 </Link>
               </p>
-            </section>
+            </div>
           )}
 
           {view.dissolved && (
-            <section className="flex flex-col gap-2 rounded-panel border border-line bg-card px-4 py-4">
+            <div className="flex flex-col gap-2 rounded-panel border border-line bg-card px-4 py-4">
               <h2 className="text-body-sm font-medium text-ink">{t("admin.conflict.dissolved.title")}</h2>
               <p className="max-w-prose text-body-sm text-body">{view.dissolved}</p>
-            </section>
+            </div>
           )}
         </div>
 
-        <aside aria-label={t("admin.conflict.rail.label")} className="flex min-w-0 flex-col gap-4">
+        <aside aria-label={t("admin.conflict.rail.label", { name: view.rail.name })} className="flex min-w-0 flex-col gap-4">
           <p className="font-mono text-eyebrow uppercase text-body">{t("admin.conflict.rail.eyebrow")}</p>
-          <section className="rounded-panel border border-line bg-card px-4 py-4">
+          <div className="rounded-panel border border-line bg-card px-4 py-4">
             <h2 className="text-body font-medium text-ink">{view.rail.name}</h2>
             <p className="mt-0.5 text-caption text-body">{view.rail.place}</p>
             <dl className="mt-3 flex flex-col gap-2 border-t border-line pt-3">
@@ -231,9 +231,9 @@ export function ConflictWorkspace({ view, actions }: { view: ConflictView; actio
               ))}
             </dl>
             {view.rail.cost && <p className="mt-3 rounded-tag bg-warn-surface px-3 py-2.5 text-caption text-warn-ink">{view.rail.cost}</p>}
-          </section>
+          </div>
 
-          <section className="rounded-panel border border-line bg-card px-4 py-4">
+          <div className="rounded-panel border border-line bg-card px-4 py-4">
             <div className="flex items-center justify-between gap-3">
               <h2 className="font-mono text-eyebrow uppercase text-body">{t("admin.conflict.log.title")}</h2>
               {decide && (
@@ -253,7 +253,7 @@ export function ConflictWorkspace({ view, actions }: { view: ConflictView; actio
                 </li>
               ))}
             </ol>
-          </section>
+          </div>
 
           {(view.rail.award || view.rail.split) && (
             <div className="flex flex-col gap-2">
@@ -842,7 +842,7 @@ function AssignPanel({
   }
 
   return (
-    <section aria-labelledby={ids.title} className="flex flex-col gap-3 rounded-panel border border-line bg-card px-4 py-4">
+    <div className="flex flex-col gap-3 rounded-panel border border-line bg-card px-4 py-4">
       <h2 id={ids.title} className="text-body-sm font-medium text-ink">
         {t("admin.conflict.assign.title")}
       </h2>
@@ -880,6 +880,6 @@ function AssignPanel({
           {error}
         </Alert>
       )}
-    </section>
+    </div>
   );
 }

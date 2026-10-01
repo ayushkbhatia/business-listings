@@ -15,6 +15,7 @@ import {
 } from "@/lib/db/queries";
 import { toSearchParams, withoutFacet, type SearchQuery, pathWithQuery } from "@/lib/search/query";
 import { crawlRel } from "@/lib/seo/crawl-policy";
+import { publiclyClaimed } from "@/lib/claims/status";
 
 /**
  * The results list, shared by the category pages and search.
@@ -212,7 +213,7 @@ export function ResultsList({
               <ListingCard
                 enquireHref={`/rfq/new?to=${business.slug}`}
                 context={
-                  business.claimStatus === "unclaimed"
+                  !publiclyClaimed(business.claimStatus)
                     ? "unclaimed"
                     : query.view === "grid"
                       ? "grid"

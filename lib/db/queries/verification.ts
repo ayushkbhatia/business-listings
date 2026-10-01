@@ -9,6 +9,7 @@ import {
 } from "@/lib/verification/credentials";
 import { daysUntil, licenceStage, type LicenceStage } from "@/lib/verification";
 import type { Authority, DocumentKind } from "@/lib/db/generated/enums";
+import { ownClaimEvidenceOnly } from "@/lib/claims/privacy";
 
 /**
  * Board 3e's page, in one read.
@@ -92,6 +93,8 @@ export interface VerificationView {
 export async function getVerification(
   businessId: string,
   now: Date = new Date(),
+  /** Board 4c: whose screen this is — a claim's evidence shows only to its own claimant until it wins. */
+  viewerId: string | null = null,
 ): Promise<VerificationView | null> {
   const [business, documents] = await Promise.all([
     prisma.business.findUnique({
@@ -106,7 +109,12 @@ export async function getVerification(
       },
     }),
     prisma.document.findMany({
-      where: { businessId, kind: { not: "enquiry_attachment" } },
+      where: {
+        businessId,
+        // Board 4c Q4: a tenancy contract is claim evidence and nothing else; it never lists here.
+        kind: { notIn: ["enquiry_attachment", "tenancy_contract"] },
+        ...ownClaimEvidenceOnly(viewerId),
+      },
       orderBy: [{ createdAt: "desc" }],
       select: {
         id: true,

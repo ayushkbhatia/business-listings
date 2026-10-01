@@ -57,6 +57,11 @@ export interface ClaimCandidate {
   areaName: string | null;
   emirate: string | null;
   claimStatus: string;
+  /**
+   * Board 4c: somebody's claim on this listing is waiting on a person.
+   * Read from the claims, never stored (decided 1 Oct 2026) — and never who.
+   */
+  pendingClaim: boolean;
   /** What claiming would preserve. The number is the reassurance. */
   reviewCount: number;
   enquiryCount: number;
@@ -108,6 +113,7 @@ const CANDIDATE_SELECT = {
     select: { emirate: true, area: { select: { name: true } } },
   },
   _count: { select: { reviews: true, recipients: true } },
+  claimSubmissions: { where: { decidedAt: null }, take: 1, select: { id: true } },
 } as const;
 
 type CandidateRow = {
@@ -122,6 +128,7 @@ type CandidateRow = {
   primaryCategory: { name: string; code: string } | null;
   locations: { emirate: string; area: { name: string } | null }[];
   _count: { reviews: number; recipients: number };
+  claimSubmissions: { id: string }[];
 };
 
 function toCandidate(business: CandidateRow): ClaimCandidate {
@@ -137,6 +144,7 @@ function toCandidate(business: CandidateRow): ClaimCandidate {
     areaName: business.locations[0]?.area?.name ?? null,
     emirate: business.locations[0]?.emirate ?? null,
     claimStatus: business.claimStatus,
+    pendingClaim: business.claimSubmissions.length > 0,
     reviewCount: business._count.reviews,
     enquiryCount: business._count.recipients,
     verificationTier: business.verificationTier,

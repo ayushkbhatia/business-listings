@@ -12,6 +12,7 @@ import {
   type Landlines,
   type LeadPrefill,
 } from "./service";
+import { publiclyClaimed } from "@/lib/claims/status";
 
 /**
  * What a storefront route hands `ContactReveal`, decided once per render.
@@ -92,7 +93,7 @@ export async function cachedStorefrontContact(
      numbers are its locations' landlines, and this render reads no cookie.
      `landlinesFor` answers exactly, on click.
   */
-  const hasLandline = business.claimStatus !== "unclaimed";
+  const hasLandline = publiclyClaimed(business.claimStatus);
   const copy = await pairedCopyFor(business.sellsKind);
   const whatsapp = head?.whatsapp ? (toE164(head.whatsapp) ?? head.whatsapp).replace(/[^\d]/g, "") : null;
 

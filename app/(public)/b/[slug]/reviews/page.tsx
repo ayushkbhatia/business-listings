@@ -25,6 +25,7 @@ import { StorefrontHeader, storefrontCrumbs } from "../_storefront";
 import { ProvenanceCard, RatedOnCard, RatingCard } from "./_summary";
 import { ReviewToolbar } from "./_toolbar";
 import { ReviewRowItem } from "./_row";
+import { publiclyClaimed } from "@/lib/claims/status";
 
 /**
  * Board 1m — reviews and ratings.
@@ -115,7 +116,7 @@ export default async function ReviewsPage({ params, searchParams }: Params) {
 
   // An unclaimed listing has no subpages. It is a licence record, not a
   // storefront, and there is nothing here for it to show.
-  if (business.claimStatus === "unclaimed") notFound();
+  if (!publiclyClaimed(business.claimStatus)) notFound();
 
   /*
      Zero reviews is a 404, not an empty page.

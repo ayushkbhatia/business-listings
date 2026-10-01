@@ -26,6 +26,7 @@ import type {
   ReviewWriteSupplier,
   WrittenReview,
 } from "./write-view";
+import { publiclyClaimed } from "@/lib/claims/status";
 
 /**
  * Board 10f — everything `/review/new` renders, read for one buyer.
@@ -71,7 +72,7 @@ function toSupplier(row: {
     // The conditions `/b/:slug/reviews` renders under. `B10` redirects there on
     // post only when the page will exist; an unpublished listing keeps the
     // review against its record and the buyer stays here.
-    listed: row.publishedAt !== null && row.suspendedAt === null && row.claimStatus !== "unclaimed",
+    listed: row.publishedAt !== null && row.suspendedAt === null && publiclyClaimed(row.claimStatus),
   };
 }
 

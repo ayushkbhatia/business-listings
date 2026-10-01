@@ -10,9 +10,11 @@ import {
   alreadyVerified,
   CLAIM_REVIEW_SLA_HOURS,
   countPublishedReviews,
+  openClaimBusinessFor,
   verifyStateFor,
   type VerifyState,
 } from "@/lib/onboarding/verify";
+import { CONFLICT_SLA_HOURS } from "@/lib/claims/clock";
 import { OnboardingHeader, OnboardingSplit } from "../_chrome";
 import { requireClaimant } from "../_shell";
 import { claimStandingFor, type ClaimStanding } from "@/lib/moderation/seller";
@@ -25,7 +27,11 @@ import {
   saveAndExit,
   scanLicence,
   signLicenceUpload,
+  signTenancyUpload,
+  recordTenancy,
+  withdrawMyClaim,
 } from "../actions";
+import { TenancyUpload } from "./TenancyUpload";
 import { SaveExitButton, VerifyFormProvider } from "./VerifyFormState";
 import { VerifyRoutes } from "./VerifyRoutes";
 import { VerifySidebar } from "./VerifySidebar";
@@ -77,7 +83,8 @@ export default async function VerifyPage({
 
   // An id from 2a, a slug from a link somebody wrote, or the seat's own business
   // on a refresh. `verifyStateFor` resolves the first two to a row.
-  const businessRef = fromQuery ?? actor.businessId;
+  // Board 4c: a contested claim holds no seat, so its own claim brings it back.
+  const businessRef = fromQuery ?? actor.businessId ?? (await openClaimBusinessFor(actor.id));
   if (!businessRef) redirect("/onboarding/claim");
 
   const state = await verifyStateFor(businessRef, actor.id);
@@ -137,7 +144,7 @@ export default async function VerifyPage({
         <OnboardingSplit aside={<VerifySidebar reviewCount={reviewCount} contested={state.contested} />}>
           <Heading state={state} />
           <div className="mt-6">
-            <Submitted state={state} next={next} standing={standing} />
+            <Submitted state={state} next={next} standing={standing} seated={actor.businessId === state.businessId} />
           </div>
         </OnboardingSplit>
       </>
@@ -238,7 +245,18 @@ function Heading({ state }: { state: VerifyState }) {
  * fills in their profile while the queue works, and a screen that made them wait
  * would turn four working hours into four hours of nothing happening.
  */
-function Submitted({ state, next, standing }: { state: VerifyState; next: string; standing: ClaimStanding }) {
+function Submitted({
+  state,
+  next,
+  standing,
+  seated,
+}: {
+  state: VerifyState;
+  next: string;
+  standing: ClaimStanding;
+  /** Board 4c: only an uncontested claim holds a seat, so only it can carry on setting up. */
+  seated: boolean;
+}) {
   const routeLabel =
     state.submittedRoute === "phone_callback"
       ? t("verify.submitted_route.phone_callback")
@@ -292,16 +310,45 @@ function Submitted({ state, next, standing }: { state: VerifyState; next: string
           tone="warn"
           title={t("verify.contested_heading")}
           fix={t("verify.contested_after_fix")}
+          action={
+            <form action={withdrawMyClaim}>
+              <input type="hidden" name="businessId" value={state.businessId} />
+              <Button type="submit" size="sm" variant="secondary">
+                {t("verify.withdraw.action")}
+              </Button>
+            </form>
+          }
         >
-          {t("verify.contested_after")}
+          {t("verify.contested_after", { hours: CONFLICT_SLA_HOURS })}
         </Alert>
       )}
 
-      <div>
-        <Link href={next} className={buttonClassName({ size: "lg" })}>
-          {t("verify.continue")}
-        </Link>
-      </div>
+      {/*
+        Board 4c Q4. The one document an ops lead may ask every side for, and
+        the way to send it is here rather than in an email.
+      */}
+      {state.tenancy &&
+        (state.tenancy.uploadedAt ? (
+          <Alert tone="info">{t("verify.tenancy.received", { when: formatRelative(state.tenancy.uploadedAt) })}</Alert>
+        ) : (
+          <section aria-labelledby="tenancy-heading" className="flex flex-col gap-3 rounded-card-lg border border-warn-line bg-card p-5">
+            <h2 id="tenancy-heading" className="text-h3 text-ink">
+              {t("verify.tenancy.title")}
+            </h2>
+            <p className="max-w-prose text-body-sm text-body">{t("verify.tenancy.body")}</p>
+            <TenancyUpload businessId={state.businessId} sign={signTenancyUpload} record={recordTenancy} />
+          </section>
+        ))}
+
+      {seated ? (
+        <div>
+          <Link href={next} className={buttonClassName({ size: "lg" })}>
+            {t("verify.continue")}
+          </Link>
+        </div>
+      ) : (
+        state.contested && <p className="max-w-prose text-body-sm text-body">{t("verify.contested_seatless")}</p>
+      )}
     </div>
   );
 }

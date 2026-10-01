@@ -63,8 +63,19 @@ export interface VerifyState {
   /** Set only when a number exists; the route is absent otherwise, not disabled. */
   hasPhoneRoute: boolean;
 
-  /** Somebody else already holds it. The submission is still taken. */
+  /**
+   * Somebody else is on this listing — it has an owner, or another claim is
+   * waiting on it — or this claimant's own claim is one side of a conflict.
+   * The submission is still taken; it attaches no seat (board 4c).
+   */
   contested: boolean;
+  /** This claimant's own undecided claim is one side of an open conflict. */
+  inConflict: boolean;
+  /**
+   * Board 4c Q4: an ops lead asked every side for the tenancy contract for
+   * their unit. Null where nothing is being asked of this claimant.
+   */
+  tenancy: { requestedAt: Date; uploadedAt: Date | null } | null;
   /** This claimant's own undecided submission, if they have already sent one. */
   submittedAt: Date | null;
   submittedRoute: string | null;
@@ -122,11 +133,21 @@ export async function verifyStateFor(
   });
   if (!business) return null;
 
-  const mine = await prisma.claimSubmission.findFirst({
-    where: { businessId: business.id, claimantId, decidedAt: null },
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-    select: { createdAt: true, route: true },
-  });
+  const [mine, others] = await Promise.all([
+    prisma.claimSubmission.findFirst({
+      where: { businessId: business.id, claimantId, decidedAt: null },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      select: {
+        createdAt: true,
+        route: true,
+        tenancyDocument: { select: { createdAt: true } },
+        conflict: { select: { resolvedAt: true, dissolvedAt: true, docsRequestedAt: true, docsReceivedAt: true } },
+      },
+    }),
+    // A claim pending is read from the claims, never stored (decided 1 Oct 2026).
+    prisma.claimSubmission.count({ where: { businessId: business.id, decidedAt: null, claimantId: { not: claimantId } } }),
+  ]);
+  const conflict = mine?.conflict && !mine.conflict.resolvedAt && !mine.conflict.dissolvedAt ? mine.conflict : null;
 
   const phone = business.locations[0]?.phone ?? null;
 
@@ -137,13 +158,33 @@ export async function verifyStateFor(
     slug: business.slug,
     maskedPhone: phone ? maskPhone(phone) : null,
     hasPhoneRoute: phone !== null,
-    contested: business.claimStatus === "claimed",
+    contested: business.claimStatus === "claimed" || others > 0 || conflict !== null,
+    inConflict: conflict !== null,
+    tenancy: conflict?.docsRequestedAt
+      ? { requestedAt: conflict.docsRequestedAt, uploadedAt: mine?.tenancyDocument?.createdAt ?? null }
+      : null,
     submittedAt: mine?.createdAt ?? null,
     submittedRoute: mine?.route ?? null,
     licenceNumber: business.licenceNumber,
     licenceExpiry: business.licenceExpiry,
     licenceHasExpired: licenceExpired(business.licenceExpiry, now),
   };
+}
+
+/**
+ * Where a claimant with no seat left off.
+ *
+ * Board 4c: a contested claim attaches no seat, so `actor.businessId` cannot
+ * bring its claimant back to their status card on a refresh or from an emailed
+ * link without a `?business=`. Their latest undecided claim can.
+ */
+export async function openClaimBusinessFor(claimantId: string): Promise<string | null> {
+  const claim = await prisma.claimSubmission.findFirst({
+    where: { claimantId, decidedAt: null },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    select: { businessId: true },
+  });
+  return claim?.businessId ?? null;
 }
 
 /**
