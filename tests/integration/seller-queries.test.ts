@@ -114,6 +114,37 @@ describe("criterion 2 — scoping", () => {
     expect(await getLeadDetail(quotingBusinessId, "cmt00000000000000000000000")).toBeNull();
   });
 
+  it("a lead carries the seller's own quotes and never a competitor's", async () => {
+    // An enquiry several suppliers quoted on, or this proves nothing.
+    const shared = await prisma.quote.groupBy({
+      by: ["enquiryId"],
+      where: { status: { not: "draft" } },
+      _count: { businessId: true },
+      having: { businessId: { _count: { gt: 1 } } },
+      orderBy: { enquiryId: "asc" },
+      take: 1,
+    });
+    expect(shared, "the seed needs an enquiry with quotes from two suppliers").toHaveLength(1);
+    const enquiry = shared[0]!.enquiryId;
+    const quoting = await prisma.quote.findMany({
+      where: { enquiryId: enquiry, status: { not: "draft" } },
+      select: { businessId: true },
+      distinct: ["businessId"],
+      orderBy: { businessId: "asc" },
+    });
+    expect(quoting.length).toBeGreaterThan(1);
+
+    for (const { businessId } of quoting) {
+      const lead = await getLeadDetail(businessId, enquiry);
+      expect(lead, `${businessId} was sent ${enquiry}`).not.toBeNull();
+      expect(lead!.quotes.length).toBeGreaterThan(0);
+      const foreign = await prisma.quote.count({
+        where: { id: { in: lead!.quotes.map((quote) => quote.id) }, businessId: { not: businessId } },
+      });
+      expect(foreign, `${businessId}'s lead holds another supplier's quote`).toBe(0);
+    }
+  });
+
   it("a seller's quotes list contains only their own", async () => {
     const quotes = await getQuotesForBusiness(quotingBusinessId);
     const ids = quotes.map((q) => q.id);
