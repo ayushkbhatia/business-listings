@@ -196,7 +196,7 @@ who receives an enquiry.**
 ### D6 · Editorial attribution — **settled: a named editor now, more names later**
 
 One real name and one real role, entered in the admin. Content, not code — a revalidation
-rather than a deploy. **Still owed by the owner: the name.**
+rather than a deploy. *Answered with #153: Ayush Bhatia, Founder.*
 
 Publish under a real named member of staff entered in the admin; where no name is supplied, leave
 the byline empty so the page credits Business Listings, which the code already does. Needs one
@@ -279,13 +279,25 @@ wrong until somebody updates them — a data change, not a deploy.
 
 ### Phase 2 · Settle the six — your desk, not the keyboard
 
-- [ ] **2.1** Ratify D1, then write the migration nobody wrote: one idempotent migration writing
+*Checked against the tree on 1 Oct 2026: the decisions table above was right and these five
+boxes were not. Four are done; one has a gate left.*
+
+- [~] **2.1** Ratify D1, then write the migration nobody wrote: one idempotent migration writing
   all seven caps onto Free/Basic/Pro; one nullable `publicPhotoLimit` column; photo and category
   rows on the plan grid; branch and category gates moved onto `effectiveFor`.
-- [ ] **2.2** Ratify D4 and redraw `13a` without its counter.
-- [ ] **2.3** Answer D6 with one name and one role.
-- [ ] **2.4** Take D2 and D5.
-- [ ] **2.5** Take D3 and schedule the migration before the catalogue grows.
+  *Done except one gate.* `20260928090000_plan_caps_ratified` writes the seven caps;
+  `publicPhotoLimit` is a column and `lib/storefront/photos.ts` reads it; photos and categories are
+  rows on the plan grid (`lib/billing/plan-grid.ts`); the category gate reads `effectiveFor`
+  (`lib/onboarding/categories.ts`). **The branch gate does not:** `addBranch` in
+  `lib/onboarding/locations.ts` and the dashboard's locations action both read the live plan row,
+  so a grandfathered seller's location cap follows today's plan rather than their snapshot.
+- [x] **2.2** Ratify D4 and redraw `13a` without its counter. D4 settled and deferred to the GTM
+  work; `13a` became `1d-v`, the reveal in place, with nothing counted against anything (3.6).
+- [x] **2.3** Answer D6 with one name and one role. #153.
+- [x] **2.4** Take D2 and D5. D2 shipped (#152); D5 settled in `docs/services-spec.md`.
+- [x] **2.5** Take D3 and schedule the migration before the catalogue grows. D3 came back no, so
+  there is no migration to schedule: the panel was rebuilt on `SellerTemplate.ownFields` (#154)
+  and `spec_field_proposal` dropped (#155).
 
 ### Phase 3 · The enquiry loop, end to end — 8 boards
 
@@ -696,7 +708,42 @@ reader and three levels of tests. **The staff half has nothing at all.**
   gap it named stays open: `check:vocabulary` reads `lib/i18n/en.ts` alone, so prose held in the
   database, such as the template copy `12g` owns, is checked by no scan.
 - [ ] **7.6 `12h`** — split into two boards (see §4), then build the areas half.
-- [ ] **7.7 `4a`** — last, and now small. Twelve of fourteen numbers are honest queries.
+- [x] **7.7 `4a`** — built against the board-level handoff of 1 Oct 2026, with the owner's Phase 0
+  answers the same day. **What this line had wrong.** "Twelve of fourteen numbers are honest
+  queries" counted queries, and by then all thirteen were. The board's own test is different:
+  every number links into the queue that fixes it, and lands there on the same number. By that
+  test nine of the thirteen failed — the edits figure counted pending change requests and opened a
+  six-kind queue; the claims figure counted claims the queue folds into their conflict's row; the
+  Free-account, expiring-licence, no-specs and unclaimed figures opened lists that do not filter to
+  them; the open-calls figure counted every seat's tasks into a screen that shows one seat's; the
+  staged-records figure matched neither number `12a` states; and the unpaid-invoice figure opened a
+  header that counted the two hundred most recent invoices. **Built:** six tiles, each read through
+  its owner (B3) — `4d`'s tree, `4f`'s accounts (`countAccounts`), `4g`'s ledger (`periodFigures`),
+  `lib/quote/quoted-value.ts` (new: nothing summed accepted quote lines) and `4b`'s `loadQueue` — and
+  each a link with the filter that reproduces it (B1). A month picker that moves only the month's
+  figures, the live ones marked *now* (B4). Twelve months of claims, upgrades and RFQs on one scale
+  with churn below the axis and a y-axis (B5, D-CHART). Category health over `4d`'s sectors,
+  labelled from RFQs per claimed listing with the rule printed (B6, B7, D-GAP). *Needs a human
+  today* as per-row links into `4b` and `4h`'s own nine types, not three buckets (B2, the owner's
+  answer). The plan mix on one scale with MRR's composition printed beneath — list price × mix, less
+  annual terms, anything else named — and the same rows under `4g`'s plan mix (D-MRR); the 90-day
+  cohort line, or the stock ratio named as one (D-CONVERSION). Searches with no claimed,
+  licence-verified supplier on the first page, re-run against today's index (D-NOGOOD). The
+  status chip from `13e`'s window (B9). MRR and the plan mix omitted, not blanked, without
+  `revenue.read` (B10). The six figures the render had no place for kept in *Other queues* (the
+  owner's answer). `GET /api/admin/overview` returns the same view; a click log names the figures
+  opened most; where two boards own one figure the tile says so, live and nightly
+  (`overviewReconciliation`). Destination filters built for it: `4f` `status`, `claimed`, `paying`,
+  `licence`; `4b` `overdue`; `4h` `late`; `12d` `category`; and `/admin/quotes` for quoted value,
+  which had no board. **Found on the way and fixed:** `/admin/invoices` called its two hundred most
+  recent invoices the total and summed only those as outstanding; `4h`'s detail screens dropped the
+  `flagged` filter on the way back; `SLA_DAYS` and the queue imported each other once the overview
+  read the queue, so the clocks moved to `lib/console/sla.ts`. **Not built:** a snapshot stored per
+  month — the cache is per deployment, so a closed month is recomputed after a deploy, from a ledger
+  that does not change; and a listing's or a claim's state at a past month's end, which the record
+  does not keep, so *Listings live*, *Claimed* and the plan mix are always now. On the seed the Paid
+  tile warns that 112 claimed businesses carry a paid plan id and 15 pay: fixtures set
+  `Business.planId` without a subscription.
 
 ### Phase 8 · The storefront builder — 8 boards, mostly export
 
@@ -799,11 +846,13 @@ the only large piece and the only one selling something it does not deliver.
   renewals as attempts. Two header counts stopped at `take: 500`. A grandfathered seller's category
   cap followed the live plan, and both grandfathered counts compared six of the twelve frozen
   fields.
-- [ ] **9.7 Standing: reconcile the three registers.** 129 route files, ~100 rows in
-  `docs/routes.md`, 48 in `lib/dev/surfaces.ts`. `/admin/questions` is in both now and has
-  integration and e2e tests (1 Oct 2026), which found two check-then-write races in
-  `lib/questions/service.ts` and a removed badge that read a review's string. Board `12i` exists in
-  the tree and appears zero times in the epic, so the 100-board total is short by at least one.
+- [ ] **9.7 Standing: reconcile the three registers.** *Recounted 1 Oct 2026, with #239's and 4a's
+  routes in:* 195 route files — 168 `page.tsx` (the measure the original 129 used) and 27 route
+  handlers — 224 rows in `docs/routes.md`, 54 in `lib/dev/surfaces.ts`. Fourteen paths in the app
+  have no row in `docs/routes.md`. `/admin/questions` is in both registers now and has integration
+  and e2e tests (1 Oct 2026), which found two check-then-write races in `lib/questions/service.ts`
+  and a removed badge that read a review's string. Board `12i` exists in the tree and appears zero
+  times in the epic, so the 100-board total is short by at least one.
 
 ---
 
@@ -828,14 +877,14 @@ the only large piece and the only one selling something it does not deliver.
 | `4h` | Reports, flags & disputes | built | — | One queue, one taxonomy, a service level per type, and two detectors filling it. | 6.4 |
 | `4g` | Subscriptions & revenue | built | small | One Dubai month from the ledger; every ratio prints its formula, NRR excludes new business, placement stays out of MRR. | 6.2 |
 | `11e` | Sponsored placement | built | large | One trade in one emirate, priced from measured demand in ten bands, frozen at booking, with an editable rate card. | 6.3 |
-| `11i` | Close account | scaffold | large | Terms and privacy publish a closure promise and eight retention windows; nothing implements either. | 6.5 |
+| `11i` | Close account | built | 14 Sep 2026 | #188. Closure is a reversible transition with a 14-day window and a nightly platform half. Two retention halves are not built (`docs/platform-state.md`). | 6.5 |
 | `7a` | Auth — four states | built | 14 Sep 2026 | Password sign-in, reset grants, sign-up fallback, suspension writer. | 3.1 |
-| `7b` | Buyer company account | scaffold | medium | A tenant table with no writer: `User.buyerCompanyId` is null for every non-seeded user. | 3.7 |
+| `7b` | Buyer company account | built | 19 Sep 2026 | #226. The company is a membership with a rule; the gate is on accepting a quote. Q2–Q6 open. | 3.7 |
 | `10e` | Buyer enquiry inbox | built | 14 Sep 2026 | Derived chips and verbs, nudge-all, re-send, saved-search alerts, account menu with sign-out. | 3.2 |
 | `10h` | Negotiation thread | built | — | Built with board `10h`'s handoff (3.3). | 3.3 |
 | `1n` | Compare quotes | **built** | 24 Sep 2026 | Priced per line on `enquiryLineId`; every winner marked; Accept on every row behind a sheet; the cheapest split is computed and not acceptable (one supplier per enquiry); losers told; message all, nudge, closing reminder, CSV. | 1.2 / 3.4 |
 | `1o` | Accept across suppliers | **backend built** | 1 Oct 2026 | D1–D7 confirmed 1 Oct: supplier opt-in per quote, whole lines, one decision, a record and a review per supplier, the company rule once on the parts, added lines go with the part. Services, rules, readers, notifications and tests are in; the selection screen, the composer's opt-in box and the split approval card wait for Claude Design's `1o` handoff. | 1.2 / 3.4 |
-| `7c` | Accepted quote record | **built** | small | Fenced, and rebuilt against its board-level handoff, 14 Sep 2026. Services variant owed (`7c-s`, see `docs/services-build-plan.md` §6). | 3.4 |
+| `7c` | Accepted quote record | **built** | small | Fenced, and rebuilt against its board-level handoff, 14 Sep 2026. Services variant shipped as `7c-s`, the accepted proposal (#195). | 3.4 |
 | `10f` | Write a review — gated | built | small | Board built 15 Sep 2026: window, drafts, photos, edit history, the three label sets made one. Q2–Q5 open. | 3.5 |
 | `13a` → `1d-v` | Contact reveal, in place | built | 15 Sep 2026 | A state of `1d`: masked landline, three-field dialog, `contact_lead` + session-idempotent `contact_reveal`, seller and staff lead lists. Q5 (consent basis, retention) open. | 3.6 |
 | `13b` | WhatsApp hand-off | not started | medium | Must be reconciled with a detector that reports sellers for off-platform steering. | 9.3 |
@@ -854,13 +903,13 @@ the only large piece and the only one selling something it does not deliver.
 | ~~`5g`~~ | ~~Section specimens I~~ | **cut** | — | Cut 15 Sep 2026 with the section catalogue. | ~~8.5~~ |
 | ~~`5h`~~ | ~~Section specimens II~~ | **cut** | — | Cut 15 Sep 2026 with the section catalogue. | ~~8.5~~ |
 | ~~`5d`~~ | ~~Page template editor~~ | **cut** | — | Cut 15 Sep 2026; `/b/:slug/:page` removed. | ~~8.4~~ |
-| `5e` | Domains & publishing | scaffold ↓ | large | No `middleware.ts` — a verified custom domain serves nothing. | 8.1 |
+| `5e` | Domains & publishing | built | 9 Sep 2026 | #151, as subdomains: `proxy.ts` rewrites `<label>.businesslistings.me` to `/b/<label>`. The wildcard DNS and Vercel domain are outside the repo. | 8.1 |
 | ~~`5f`~~ | ~~The published result~~ | **cut** | — | Cut 15 Sep 2026; nothing left to reconcile. | ~~8.2~~ |
 | `12h` | Visits, areas, API | scaffold | large | At least two boards. None of the three routes exist. | 7.6 |
 | `10i` | Campaign landing | partial ↓ | export only | The model exists so content avoids a deploy; a second campaign costs one. | 7.4 |
 | `13e` | Scheduled maintenance | **built** | 14 Sep 2026 | A 503 the proxy serves per system, a window record in Global Config or the environment, and the unplanned error beside it. | 9.2 |
 | `13i` | Verification & review policy | scaffold ↓ | medium | The published policy names a fourth rung the DB CHECK forbids. | 1.5 |
-| `4a` | Platform overview | partial | small | Twelve of fourteen numbers are honest queries. One queries a tier the ladder cannot reach. | 7.7 |
+| `4a` | Platform overview | built | 1 Oct 2026 | Every figure read through its owner and linked with the filter that reproduces it; a month picker over the month's figures only; one-scale chart; derived supply-gap labels; MRR's composition printed; `GET /api/admin/overview`. | 7.7 |
 
 ---
 

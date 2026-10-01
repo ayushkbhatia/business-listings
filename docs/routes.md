@@ -169,9 +169,12 @@ and it is the one that argues back.
 ## Superadmin — /admin
 
 ```
-/admin                                  Platform overview                     [4a]  built h4s0
+/admin                                  Platform overview — the month in progress [4a]  built 4a
+/admin?period=:yyyy-mm&sectors=all      The same, another month; every sector  [4a]  built 4a
+/admin/quotes?period=:yyyy-mm           Quoted value by sector and month, self-reported [4a] built 4a
 /admin/queue                            Approval queue                        [4b]  built board pass
 /admin/queue?kind=:kind&mine=1          The same queue, one kind, assigned    [4b]  built board pass
+/admin/queue?overdue=1                  The same queue, only rows over SLA    [4a]  built 4a
 /admin/queue/rules                      Auto-check rules (ops lead)           [4b]  built board pass
 /admin/queue/:id                        Review a submission (a change request) [4c] built board pass
 /admin/queue/claim/:id                  Decide an uncontested claim           [4b]  built board pass
@@ -203,9 +206,11 @@ and it is the one that argues back.
 /admin/catalogue-imports                Concierge catalogue queue            [12i]  built h8s1
 /admin/attributes                       Attribute dictionary                  later
 /admin/businesses                       Businesses & health — search, filters [4f]  built 4f
+/admin/businesses?status=live&claimed=1&paying=1|0&licence=expiring  4a's populations, as filters [4f] built 4a
 /admin/businesses/:id                   One account: health, signals, decisions [4f] built 4f
 /admin/businesses/export                The filtered list as CSV              [4f]  built 4f
 /admin/crm                              Recruitment & accounts — ?tab=upgrade|renewal [12d]  built 12d
+/admin/crm?category=:sectorId           The call list, one sector — 4a's recruit label [12d]  built 4a
 /admin/users                            Users                                later
 /admin/staff                            Staff, roles, invitations & matrix    [4i]  built 4i
 /admin/subscriptions                    Subscriptions                         [4g]  built h4s5
@@ -216,6 +221,7 @@ and it is the one that argues back.
 /admin/revenue                          Revenue — one Dubai month, ?period=   [4g]  built 4g
 /admin/revenue/export                   The month as CSV, formulas and filter [4g]  built 4g
 /admin/reports                          Reports & flags — one queue, ?type=    [4h]  built 4h
+/admin/reports?late=1                   The same queue, only rows over SLA    [4h]  built 4a
 /admin/reports/:id                      One report: evidence and the decision  [4h]  built 4h
 /admin/reports/disputes/:id             One review dispute, on its own screen  [4h]  built 4h
 /admin/reports/detectors                Detection thresholds, ops lead         [4h]  built 4h
@@ -246,7 +252,20 @@ and it is the one that argues back.
 /admin/jobs                             Scheduled jobs — last run per cron, missed runs [9.5] built 9.5
 /admin/jobs?cron=:cron&after=:cursor    The same, one cron's runs, keyset-paged  [9.5] built 9.5
 /admin/jobs/:id                         One run — every step it planned, recorded or not [9.5] built 9.5
+/api/admin/overview?period=:yyyy-mm     The overview as JSON, every figure with its link (route handler) [4a] built 4a
+/api/admin/overview/opened              A figure followed — the click log's one writer (route handler) [4a] built 4a
 ```
+
+### Board `4a` note — every figure opens the board that owns it, filtered
+
+`/admin` reads each figure through the board that owns it, and links it to that board with the
+filter that reproduces it. Seven of those filters did not exist and were built for it:
+`4f`'s `status=live`, `claimed=1`, `paying=1|0` and `licence=expiring`, `4b`'s `overdue=1`,
+`4h`'s `late=1` and `12d`'s `category=`. Quoted value had no board at all, so
+`/admin/quotes` is its destination — counts and sums only, nobody named. Category rows use
+`4d`'s existing `?c=:id` rather than the handoff's `/admin/categories/:id`: one record, one
+address. `/api/admin/overview` returns the same assembled view the page renders, filtered to
+the seat, and both 404 for anybody who is not staff.
 
 ## Development surfaces
 
