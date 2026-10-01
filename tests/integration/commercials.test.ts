@@ -253,6 +253,15 @@ async function payingListing(name: string) {
   return { businessId: business.id, subscriptionId: subscription.id };
 }
 
+/** A `Plan` row as caps, with its decimals narrowed. */
+function toCapsOf(row: Awaited<ReturnType<typeof prisma.plan.findUniqueOrThrow>>) {
+  return {
+    ...row,
+    monthlyPriceAed: Number(row.monthlyPriceAed),
+    rankingMultiplier: Number(row.rankingMultiplier),
+  };
+}
+
 /** Everything a wrong dunning run could take away. */
 async function census(businessId: string) {
   const business = await prisma.business.findUniqueOrThrow({
@@ -516,11 +525,34 @@ describe("grandfathering, which did not work", () => {
     expect(row.blastUnit).toBe("subscriptions");
   }, 60_000);
 
+  /*
+     This asserted `grandfathered >= 0`, which no count can fail. The count
+     compared six of the twelve frozen fields by hand, so an account kept on its
+     storage, services or categories was "on the plan" — and the confirm step's
+     "N on different numbers" under-stated what the edit would move. Two
+     accounts kept on one field each, neither of them in the old six.
+  */
   it("counts who is grandfathered, so an edit shows its blast radius", async () => {
-    const library = await planLibrary();
-    const mine = library.find((plan) => plan.id === planId)!;
-    expect(mine.subscriptions).toBeGreaterThan(0);
-    expect(mine.grandfathered).toBeGreaterThanOrEqual(0);
+    const count = async () =>
+      (await planLibrary()).find((plan) => plan.id === planId)!.grandfathered;
+    const before = await count();
+
+    const plan = toCapsOf(await prisma.plan.findUniqueOrThrow({ where: { id: planId } }));
+    for (const kept of [
+      { storageMb: (plan.storageMb ?? 0) + 512 },
+      { serviceLimit: (plan.serviceLimit ?? 0) + 4 },
+      { categoryLimit: (plan.categoryLimit ?? 0) + 2 },
+    ]) {
+      const { subscriptionId } = await payingListing("Kept");
+      await prisma.subscription.update({
+        where: { id: subscriptionId },
+        data: { entitlementSnapshot: snapshotOf({ ...plan, ...kept }, new Date()) as unknown as object },
+      });
+    }
+
+    expect(await count()).toBe(before + 3);
+    const preview = await previewPlanConfig([{ planId, values: { photoLimit: 41 } }]);
+    expect(preview.changes[0]?.grandfathered).toBe(before + 3);
   });
 
   it("refuses a moderator — plan.entitlements.write is ops lead or finance", async () => {

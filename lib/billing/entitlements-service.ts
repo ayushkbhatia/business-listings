@@ -5,7 +5,7 @@ import "@/lib/audit/prisma-writer";
 import { staffMutation } from "@/lib/audit/staff-mutation";
 import { assertCan } from "@/lib/auth/can";
 import type { Actor } from "@/lib/auth/roles";
-import { effectiveCaps, snapshotOf, toCaps, type PlanCaps } from "@/lib/plan/entitlements";
+import { effectiveCaps, keptFields, snapshotOf, toCaps, type PlanCaps } from "@/lib/plan/entitlements";
 import {
   PLAN_FIELDS,
   planFieldSpec,
@@ -119,20 +119,16 @@ export async function planLibrary(): Promise<PlanRow[]> {
 
   return plans.map((plan) => {
     const caps = toCaps(plan);
-    let grandfathered = 0;
-    for (const subscription of plan.subscriptions) {
-      const effective = effectiveCaps(caps, subscription.entitlementSnapshot);
-      if (
-        effective.enquiriesPerMonth !== caps.enquiriesPerMonth ||
-        effective.productLimit !== caps.productLimit ||
-        effective.locationLimit !== caps.locationLimit ||
-        effective.photoLimit !== caps.photoLimit ||
-        effective.teamSeats !== caps.teamSeats ||
-        effective.customDomain !== caps.customDomain
-      ) {
-        grandfathered += 1;
-      }
-    }
+    /*
+       Every frozen field, through `keptFields`. This compared six of the
+       twelve by hand, so an account kept on its storage, services, categories
+       or one of three switches counted as on the plan — and the confirm step's
+       "N of them on different numbers" under-stated the blast radius of the
+       edit it was asking an ops lead to commit.
+    */
+    const grandfathered = plan.subscriptions.filter(
+      (subscription) => keptFields(caps, subscription.entitlementSnapshot).length > 0,
+    ).length;
     return {
       ...caps,
       // Not caps, so not in `caps` — carried through for the screen, which has

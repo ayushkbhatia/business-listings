@@ -278,6 +278,31 @@ test.describe("board 12e — failed payments, and criterion 10's negative", () =
   test("states the amount as a VAT-inclusive total (B3)", async ({ page }) => {
     const table = page.getByRole("table", { name: /past due/ });
     await expect(table.getByRole("columnheader", { name: /incl\. VAT/ })).toBeVisible();
+    /*
+       And the figure under it is one. This asserted the header alone, and the
+       header said "incl. VAT" over net figures: every charge path recorded the
+       period ex-VAT. Seeded by board 4g — a Basic month refused, AED 349 and
+       its VAT.
+    */
+    const boatyard = table.getByRole("row", { name: /Umm Al Quwain Boatyard/ });
+    await expect(boatyard).toContainText("AED 366.45");
+    await expect(boatyard).not.toContainText("AED 349.00");
+  });
+
+  test("reads already on Free only on an account that has dropped", async ({ page }) => {
+    /*
+       A missing start date made the drop date null, and the column draws null
+       as "already on Free" — so a seeded account the sequence had not reached
+       yet was shown as one that had finished it.
+    */
+    const table = page.getByRole("table", { name: /past due/ });
+    const onFree = table.getByRole("row").filter({ hasText: "already on Free" });
+    const dropped = table.getByRole("row").filter({ hasText: "Dropped to Free" });
+    await expect(dropped.first()).toBeVisible();
+    await expect(onFree).toHaveCount(await dropped.count());
+    for (const row of await onFree.all()) {
+      await expect(row).toContainText("Dropped to Free");
+    }
   });
 
   test("offers no control that could delete, unpublish or unverify", async ({ page }) => {

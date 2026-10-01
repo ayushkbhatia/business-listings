@@ -211,6 +211,48 @@ export function readSnapshot(value: unknown): EntitlementSnapshot | null {
 }
 
 /**
+ * Every field a snapshot freezes, in the order a screen names them.
+ *
+ * One list, because there were three: `snapshotOf` writes these, `effectiveCaps`
+ * reads them back, and `/admin/subscriptions` compares them to say which
+ * numbers an account keeps. The three disagreed. `snapshotOf` froze
+ * `categoryLimit` and `effectiveCaps` never applied it, so a seller who signed
+ * up on five categories got whatever the plan said today — and an ops lead who
+ * left "apply to existing" unticked on a category edit moved every account
+ * anyway. The subscriptions list compared six of the twelve. A unit test now
+ * holds all three to this list.
+ */
+export const FROZEN_CAPS = [
+  "enquiriesPerMonth",
+  "productLimit",
+  "serviceLimit",
+  "locationLimit",
+  "photoLimit",
+  "categoryLimit",
+  "storageMb",
+  "teamSeats",
+  "customDomain",
+  "analytics",
+  "csvImport",
+  "sponsoredEligible",
+] as const satisfies readonly (keyof PlanCaps)[];
+
+export type FrozenCap = (typeof FROZEN_CAPS)[number];
+
+/**
+ * The frozen fields this account keeps that its plan has since moved.
+ *
+ * What "grandfathered" means, decided once. `/admin/subscriptions` names these
+ * per row and `/admin/plans` counts the accounts with any — and each compared a
+ * hand-written list of six, so an account kept on its storage, services,
+ * categories or a switch counted as on the plan in both places.
+ */
+export function keptFields(plan: PlanCaps, snapshot: unknown): FrozenCap[] {
+  const effective = effectiveCaps(plan, snapshot);
+  return FROZEN_CAPS.filter((field) => effective[field] !== plan[field]);
+}
+
+/**
  * What this subscription is actually entitled to.
  *
  * The snapshot wins where there is one, so an account keeps the caps it signed
@@ -235,6 +277,10 @@ export function effectiveCaps(plan: PlanCaps, snapshot: unknown): PlanCaps {
     // A pre-3i snapshot has no storage key at all. Falling back to the live
     // plan is the honest reading: nothing was frozen, so nothing is owed.
     storageMb: frozen.storageMb === undefined ? plan.storageMb : frozen.storageMb,
+    // Frozen by `snapshotOf` since board 3b and never read back until now. A
+    // snapshot from before 3b has no key, and the live plan is the honest
+    // reading for the reason it is on `storageMb`.
+    categoryLimit: frozen.categoryLimit === undefined ? plan.categoryLimit : frozen.categoryLimit,
     teamSeats: frozen.teamSeats,
     customDomain: frozen.customDomain,
     // Same fallback, same reason: an absent key means nothing was frozen, not

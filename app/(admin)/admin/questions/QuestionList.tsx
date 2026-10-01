@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Alert, StatusBadge } from "@/components/display";
 import { Button, Input, Label } from "@/components/primitives";
-import { remove } from "./actions";
+import type { ActionResult } from "./actions";
 
 /**
  * The moderation list.
@@ -12,6 +12,9 @@ import { remove } from "./actions";
  * removals would make a removal look like the question had never been asked,
  * which is the one thing it must not resemble — the same rule the seller's
  * reviews screen states.
+ *
+ * The removal arrives as a prop, as the review cards' actions do, so the
+ * gallery can draw every state without a staff seat and without writing.
  */
 
 export interface QuestionRow {
@@ -29,9 +32,11 @@ export interface QuestionRow {
 
 export function QuestionList({
   rows,
+  remove,
   labels,
 }: {
   rows: readonly QuestionRow[];
+  remove: (formData: FormData) => Promise<ActionResult>;
   labels: {
     remove: string;
     reasonLabel: string;
@@ -57,52 +62,57 @@ export function QuestionList({
         </Alert>
       )}
 
-      {rows.map((row) => (
-        <article key={row.id} className="rounded-card border border-line bg-card p-4">
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <p className="font-mono text-eyebrow uppercase tracking-eyebrow text-faint">
-              <a href={`/b/${row.businessSlug}/p/${row.productSlug}`} className="hover:underline">
-                {row.business} · {row.product}
-              </a>
-            </p>
-            {row.removedAt && (
-              <StatusBadge tone="bad" size="sm">
-                {labels.removedTone}
-              </StatusBadge>
-            )}
-          </div>
-
-          <p className="mt-2 text-body text-ink">{row.body}</p>
-          {row.answer && <p className="mt-1.5 text-body-sm text-body">{row.answer}</p>}
-          <p className="mt-1 font-mono text-eyebrow uppercase text-faint">{row.askedAt}</p>
-
-          {row.removedAt ? (
-            <p className="mt-2 border-t border-line pt-2 text-caption text-bad-ink">
-              {row.removalReason}
-            </p>
-          ) : (
-            <form
-              className="mt-3 flex flex-wrap items-end gap-2 border-t border-line pt-3"
-              action={async (formData) => {
-                setError(null);
-                setDone(null);
-                const result = await remove(formData);
-                if (result.ok) setDone(result.message);
-                else setError(result.error);
-              }}
-            >
-              <input type="hidden" name="questionId" value={row.id} />
-              <div className="min-w-[18rem] flex-1">
-                <Label htmlFor={`reason-${row.id}`}>{labels.reasonLabel}</Label>
-                <Input id={`reason-${row.id}`} name="reason" required minLength={8} />
+      {/* A list, as a list — CLAUDE.md's axe pass. It was articles in a div. */}
+      <ul className="flex flex-col gap-3">
+        {rows.map((row) => (
+          <li key={row.id}>
+            <article className="rounded-card border border-line bg-card p-4">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <p className="font-mono text-eyebrow uppercase tracking-eyebrow text-faint">
+                  <a href={`/b/${row.businessSlug}/p/${row.productSlug}`} className="hover:underline">
+                    {row.business} · {row.product}
+                  </a>
+                </p>
+                {row.removedAt && (
+                  <StatusBadge tone="bad" size="sm">
+                    {labels.removedTone}
+                  </StatusBadge>
+                )}
               </div>
-              <Button type="submit" variant="danger" size="sm">
-                {labels.remove}
-              </Button>
-            </form>
-          )}
-        </article>
-      ))}
+
+              <p className="mt-2 text-body text-ink">{row.body}</p>
+              {row.answer && <p className="mt-1.5 text-body-sm text-body">{row.answer}</p>}
+              <p className="mt-1 font-mono text-eyebrow uppercase text-faint">{row.askedAt}</p>
+
+              {row.removedAt ? (
+                <p className="mt-2 border-t border-line pt-2 text-caption text-bad-ink">
+                  {row.removalReason}
+                </p>
+              ) : (
+                <form
+                  className="mt-3 flex flex-wrap items-end gap-2 border-t border-line pt-3"
+                  action={async (formData) => {
+                    setError(null);
+                    setDone(null);
+                    const result = await remove(formData);
+                    if (result.ok) setDone(result.message);
+                    else setError(result.error);
+                  }}
+                >
+                  <input type="hidden" name="questionId" value={row.id} />
+                  <div className="min-w-[18rem] flex-1">
+                    <Label htmlFor={`reason-${row.id}`}>{labels.reasonLabel}</Label>
+                    <Input id={`reason-${row.id}`} name="reason" required minLength={8} />
+                  </div>
+                  <Button type="submit" variant="danger" size="sm">
+                    {labels.remove}
+                  </Button>
+                </form>
+              )}
+            </article>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

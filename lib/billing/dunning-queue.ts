@@ -1,14 +1,16 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
-import { FILS_PER_AED, vatOn } from "./proration";
-import { priceForPeriod } from "./pricing";
 import { paymentProvider } from "./provider";
+import { priceRenewal, RENEWAL_SELECT } from "./renewal-job";
 import {
   daysPastDue,
   dropsToFreeAt,
+  episodeAttempts,
   nextAction,
+  summariseQueue,
   type DunningAction,
   type DunningStage,
+  type QueueSummary,
 } from "./dunning";
 
 /**
@@ -38,6 +40,7 @@ export interface DunningRow {
   stage: DunningStage;
   daysPastDue: number;
   next: DunningAction;
+  /** Attempts made since this account went past due. Not its whole history. */
   attempts: number;
   /** What the provider said, where it said anything. `Card expired`. */
   lastAttemptFailed: string | null;
@@ -47,10 +50,18 @@ export interface DunningRow {
    * From the failed attempt where there is one, not from the plan. A dropped
    * account is on Free by the time anybody reads this row — that is what the
    * sequence does — so deriving the figure from the plan would print `AED 0.00`
-   * against the payment that failed. Falling back to the plan covers the case
-   * with no attempt at all, which is every row while no gateway is configured.
+   * against the payment that failed.
+   *
+   * With no attempt yet, what the retry will ask for: `priceRenewal`, the
+   * function the retry itself calls. It used to be a third derivation, the
+   * plan's period with VAT and without the placements, which agreed with
+   * neither of the two charges.
+   *
+   * Null for a dropped account nothing was ever charged on. There is no
+   * payment that failed and none still to come, and the plan it is on now is
+   * Free — so any figure here would be one this row invented.
    */
-  amountFils: number;
+  amountFils: number | null;
   /**
    * When this account's plan changes to Free. Null once it already has.
    *
@@ -64,19 +75,17 @@ export interface DunningRow {
 
 export interface DunningQueue {
   rows: DunningRow[];
+  /** The header's figures, from `summariseQueue` — the card's figures too. */
+  summary: QueueSummary;
   /** False when no gateway is configured, so the screen can say so. */
   gatewayLive: boolean;
 }
 
 const QUEUE_SELECT = {
-  id: true,
-  businessId: true,
-  planId: true,
-  term: true,
+  ...RENEWAL_SELECT,
   dunningStage: true,
   pastDueSince: true,
   business: { select: { displayName: true, slug: true } },
-  plan: { select: { name: true, monthlyPriceAed: true, annualMonthsCharged: true } },
   /*
      One `orderBy` key, not two.
 
@@ -89,7 +98,7 @@ const QUEUE_SELECT = {
   */
   attempts: {
     orderBy: { attemptedAt: "desc" },
-    select: { succeeded: true, providerMessage: true, amountFils: true },
+    select: { succeeded: true, providerMessage: true, amountFils: true, attemptedAt: true },
   },
 } as const;
 
@@ -103,12 +112,22 @@ export async function dunningQueue(now = new Date()): Promise<DunningQueue> {
     select: QUEUE_SELECT,
   });
 
-  return {
-    gatewayLive: paymentProvider().live,
-    rows: subscriptions.map((subscription) => {
-      const since = subscription.pastDueSince;
+  const rows = await Promise.all(
+    subscriptions.map(async (subscription): Promise<DunningRow> => {
       const stage = subscription.dunningStage as DunningStage;
-      const failed = subscription.attempts.find((attempt) => !attempt.succeeded);
+      /*
+         No start date means the sequence starts on the next run — the job's
+         own rule, `pastDueSince ?? now` — so the row is read the way the job
+         will treat it: day zero, a retry due, and a drop date fifteen days out.
+
+         It was read as "already on Free". `dropsToFreeAt` was null for two
+         reasons, dropped and not started, and the column renders null as the
+         first: an account that had not been retried yet was shown as one that
+         had finished the sequence.
+      */
+      const since = subscription.pastDueSince ?? now;
+      const attempts = episodeAttempts(subscription.attempts, subscription.pastDueSince);
+      const failed = attempts.find((attempt) => !attempt.succeeded);
       return {
         subscriptionId: subscription.id,
         businessId: subscription.businessId,
@@ -117,53 +136,23 @@ export async function dunningQueue(now = new Date()): Promise<DunningQueue> {
         planId: subscription.planId,
         planName: subscription.plan.name,
         stage,
-        daysPastDue: since ? daysPastDue(since, now) : 0,
-        // A row with no start date has not begun; the sequence would start it
-        // on the next run, and saying "nothing due" would be wrong.
-        next: since ? nextAction(stage, since, now) : { kind: "retry_silently", stage: "retry" },
-        attempts: subscription.attempts.length,
+        daysPastDue: daysPastDue(since, now),
+        next: nextAction(stage, since, now),
+        attempts: attempts.length,
         lastAttemptFailed: failed?.providerMessage ?? null,
-        amountFils: failed?.amountFils ?? chargeFils(subscription),
-        dropsToFreeAt: since && stage !== "dropped" ? dropsToFreeAt(since) : null,
+        amountFils:
+          failed?.amountFils ??
+          (stage === "dropped" ? null : (await priceRenewal(subscription, now)).chargeFils),
+        dropsToFreeAt: stage === "dropped" ? null : dropsToFreeAt(since),
       };
     }),
-  };
+  );
+
+  return { gatewayLive: paymentProvider().live, rows, summary: summariseQueue(rows, now) };
 }
 
-/** What one past-due subscription owes, in fils, VAT included. */
-function chargeFils(subscription: {
-  term: "monthly" | "annual";
-  plan: { monthlyPriceAed: unknown; annualMonthsCharged: number | null };
-}): number {
-  const net =
-    priceForPeriod(
-      {
-        monthlyPriceAed: Number(subscription.plan.monthlyPriceAed),
-        annualMonthsCharged: subscription.plan.annualMonthsCharged,
-      },
-      subscription.term === "annual" ? "annual" : "monthly",
-    ) ?? 0;
-  const netFils = Math.round(net * FILS_PER_AED);
-  return netFils + vatOn(netFils);
-}
-
-export interface DunningSummary {
-  /** Subscriptions somewhere in the sequence, including the ones that dropped. */
-  count: number;
-  /** Still recoverable: past due and not yet dropped to Free. */
-  inSequence: number;
-  /**
-   * What is still at risk, in fils, VAT included.
-   *
-   * Only the rows that have not dropped. An account already on Free has
-   * finished the sequence — there is nothing left to lose on it, and counting
-   * its failed payment as "at risk" would make the figure a running total of
-   * everything that ever failed rather than what a call today could recover.
-   */
-  atRiskFils: number;
-  /** How many drop to Free inside the next seven days. */
-  droppingSoon: number;
-}
+/** The card's figures. The same object the page's header reads. */
+export type DunningSummary = QueueSummary;
 
 /**
  * The count and the money, for the card on `/admin/plans`.
@@ -179,14 +168,5 @@ export interface DunningSummary {
  * honestly say without restating it.
  */
 export async function dunningSummary(now = new Date()): Promise<DunningSummary> {
-  const queue = await dunningQueue(now);
-  const soon = new Date(now.getTime() + 7 * 86_400_000);
-  const live = queue.rows.filter((row) => row.stage !== "dropped");
-  return {
-    count: queue.rows.length,
-    inSequence: live.length,
-    atRiskFils: live.reduce((total, row) => total + row.amountFils, 0),
-    droppingSoon: queue.rows.filter((row) => row.dropsToFreeAt !== null && row.dropsToFreeAt <= soon)
-      .length,
-  };
+  return (await dunningQueue(now)).summary;
 }

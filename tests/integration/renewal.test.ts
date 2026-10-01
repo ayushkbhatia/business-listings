@@ -1,4 +1,4 @@
-import { afterAll, afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "@/lib/db/client";
 import { runRenewals } from "@/lib/billing/renewal-job";
 import { runDunning } from "@/lib/billing/dunning-job";
@@ -29,6 +29,22 @@ import {
  * dates; leaking any of that into `billing.test.ts` or `revenue.test.ts` is a
  * failure that surfaces only when the runner orders the files a particular way.
  */
+
+/*
+   The receipt, captured. Whether a message reaches anybody is the notification
+   layer's question and its own suites answer it; what this file owns is the
+   figure the renewal hands it.
+*/
+const receipts = vi.hoisted(() => [] as { businessId: string; amountAed: string }[]);
+vi.mock("@/lib/notify/events", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/notify/events")>();
+  return {
+    ...actual,
+    onSubscriptionRenewed: async (input: { businessId: string; amountAed: string }) => {
+      receipts.push({ businessId: input.businessId, amountAed: input.amountAed });
+    },
+  };
+});
 
 const made: string[] = [];
 
@@ -240,12 +256,22 @@ describe("criterion 10 — a renewal that goes through", () => {
     expect(invoice.lines[0]!.periodStart?.getTime()).toBe(fixture.renewsAt.getTime());
     expect(invoice.lines[0]!.periodEnd).not.toBeNull();
 
+    /*
+       What the card was charged is the invoice's total, VAT included.
+
+       This asserted `34_900` here and `36_645` above, eight lines apart, and
+       never compared them: a paid invoice for AED 366.45 against a charge of
+       AED 349.00. Each figure was right about itself. The rule is that they are
+       the same number, so that is the assertion.
+    */
     const attempt = await prisma.paymentAttempt.findFirstOrThrow({
       where: { subscriptionId: fixture.subscriptionId },
       select: { succeeded: true, amountFils: true },
     });
     expect(attempt.succeeded).toBe(true);
-    expect(attempt.amountFils).toBe(34_900);
+    expect(attempt.amountFils).toBe(invoice.totalFils);
+    const charge = provider.charges.find((c) => c.businessId === fixture.businessId);
+    expect(charge?.fils).toBe(invoice.totalFils);
   });
 
   /*
@@ -254,6 +280,28 @@ describe("criterion 10 — a renewal that goes through", () => {
      restated guard — every selection condition repeated on the write — is what
      makes it a no-op rather than a second charge.
   */
+  /*
+     The receipt reads "has been charged {amount}", and it was handed the plan's
+     period ex-VAT without the placements — a smaller figure than the card
+     statement beside it. It says what was taken.
+  */
+  it("tells the owner the amount the card was charged", async () => {
+    const fixture = await paidListing({ planId: "basic", term: "monthly", renewsInDays: -1 });
+    setPaymentProvider(stubProvider("ok"));
+
+    await runRenewals();
+
+    const invoice = await prisma.invoice.findFirstOrThrow({
+      where: { businessId: fixture.businessId },
+      select: { totalFils: true },
+    });
+    // AED 366.45: the period, and its VAT. Not the 349.00 it used to say.
+    expect(invoice.totalFils).toBe(36_645);
+    expect(receipts.filter((r) => r.businessId === fixture.businessId)).toEqual([
+      { businessId: fixture.businessId, amountAed: "366.45" },
+    ]);
+  });
+
   it("does nothing at all the second time", async () => {
     const fixture = await paidListing({ planId: "basic", term: "monthly", renewsInDays: -1 });
     const provider = stubProvider("ok");
@@ -279,8 +327,15 @@ describe("criterion 10 — a renewal that goes through", () => {
     await runRenewals();
 
     const charge = provider.charges.find((c) => c.businessId === fixture.businessId);
-    // Ten months of AED 899, not one.
-    expect(charge?.fils).toBe(899_000);
+    // Ten months of AED 899, not one — and the VAT on it, which is what the
+    // invoice beside it says was taken.
+    const invoice = await prisma.invoice.findFirstOrThrow({
+      where: { businessId: fixture.businessId },
+      select: { subtotalFils: true, totalFils: true },
+    });
+    expect(invoice.subtotalFils).toBe(899_000);
+    expect(charge?.fils).toBe(invoice.totalFils);
+    expect(charge?.fils).toBe(943_950);
     expect(charge?.description).toMatch(/one year/);
 
     const after = await read(fixture.subscriptionId);
@@ -343,6 +398,99 @@ describe("criterion 10 — a renewal that is declined hands over to dunning", ()
     expect(after.status).toBe("past_due");
     expect(after.renewsAt.getTime()).toBe(fixture.renewsAt.getTime());
     expect(second.renewed).toBe(0);
+  });
+});
+
+describe("criterion 10 — a retry that is paid is the renewal, arriving late", () => {
+  /*
+     A provider that takes this fixture's money and declines everybody else's.
+
+     `runDunning` reads every past-due subscription in the database, so a stub
+     that said yes to all of them would renew whatever other suites left past
+     due and write invoices onto their businesses. Declining the rest leaves
+     them where every other dunning test in this run already leaves them.
+  */
+  function paysOnly(businessId: string): PaymentProvider & { charges: ChargeRequest[] } {
+    const provider = stubProvider("ok");
+    return {
+      ...provider,
+      async charge(request) {
+        provider.charges.push(request);
+        return request.businessId === businessId
+          ? { ok: true, providerRef: `stub_${request.reference}` }
+          : { ok: false, error: "The card was declined." };
+      },
+    };
+  }
+
+  async function declinedThenRetried() {
+    const fixture = await paidListing({ planId: "basic", term: "monthly", renewsInDays: -1 });
+    setPaymentProvider(stubProvider("declined"));
+    await runRenewals();
+    const refused = await prisma.paymentAttempt.findFirstOrThrow({
+      where: { subscriptionId: fixture.subscriptionId, succeeded: false },
+      select: { amountFils: true },
+    });
+
+    const provider = paysOnly(fixture.businessId);
+    setPaymentProvider(provider);
+    const result = await runDunning();
+    const retry = provider.charges.filter((c) => c.businessId === fixture.businessId);
+    return { fixture, refused, result, retry };
+  }
+
+  it("asks for what the renewal asked for, VAT included", async () => {
+    const { refused, retry } = await declinedThenRetried();
+
+    // One retry, for the figure the card refused. It charged the plan's period
+    // alone and ex-VAT, which was 5% short of either.
+    expect(retry).toHaveLength(1);
+    expect(retry[0]!.fils).toBe(refused.amountFils);
+    expect(retry[0]!.fils).toBe(36_645);
+  });
+
+  it("opens the period it paid for, and writes the paid invoice for it", async () => {
+    const { fixture, result, retry } = await declinedThenRetried();
+    expect(result.recovered).toBeGreaterThanOrEqual(1);
+
+    const after = await read(fixture.subscriptionId);
+    expect(after.status).toBe("active");
+    expect(after.dunningStage).toBe("none");
+    expect(after.pastDueSince).toBeNull();
+    // The same period the failed renewal was for — from the old renewal date,
+    // not from the day the retry happened to land.
+    expect(after.periodStartedAt.getTime()).toBe(fixture.renewsAt.getTime());
+    expect(after.renewsAt.getTime()).toBe(
+      advance(fixture.renewsAt, "monthly", fixture.renewsAt.getUTCDate()).getTime(),
+    );
+
+    const invoices = await prisma.invoice.findMany({
+      where: { businessId: fixture.businessId },
+      select: { status: true, totalFils: true },
+    });
+    expect(invoices).toEqual([{ status: "paid", totalFils: retry[0]!.fils }]);
+  });
+
+  /*
+     The defect, end to end. The retry marked the account active and left
+     `renewsAt` a day behind it, so the next morning's renewal run charged the
+     same period again — and only that second charge got an invoice.
+  */
+  it("is not charged a second time by the next renewal run", async () => {
+    const { fixture } = await declinedThenRetried();
+
+    const next = stubProvider("ok");
+    setPaymentProvider(next);
+    await runRenewals(new Date(Date.now() + 86_400_000));
+
+    expect(next.charges.filter((c) => c.businessId === fixture.businessId)).toHaveLength(0);
+    expect(await prisma.invoice.count({ where: { businessId: fixture.businessId } })).toBe(1);
+    const attempts = await prisma.paymentAttempt.findMany({
+      where: { subscriptionId: fixture.subscriptionId },
+      orderBy: [{ attemptedAt: "asc" }, { id: "asc" }],
+      select: { succeeded: true },
+    });
+    expect(attempts).toEqual([{ succeeded: false }, { succeeded: true }]);
   });
 });
 

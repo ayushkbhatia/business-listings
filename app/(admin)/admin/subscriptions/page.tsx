@@ -23,12 +23,9 @@ export default async function SubscriptionsPage() {
   const seat = await requireStaff();
   if (!can(seat.actor, "revenue.read")) notFound();
 
-  const [subscriptions, badges] = await Promise.all([
-    subscriptionList(),
-    getAdminNavBadges(seat),
-  ]);
+  const [list, badges] = await Promise.all([subscriptionList(), getAdminNavBadges(seat)]);
 
-  const rows: SubscriptionRowView[] = subscriptions.map((subscription) => ({
+  const rows: SubscriptionRowView[] = list.rows.map((subscription) => ({
     id: subscription.id,
     businessName: subscription.businessName,
     href: `/admin/businesses/${subscription.businessId}`,
@@ -46,8 +43,6 @@ export default async function SubscriptionsPage() {
     grandfathered: subscription.grandfatheredFields,
   }));
 
-  const grandfathered = rows.filter((row) => row.grandfathered.length > 0).length;
-
   return (
     <AdminPage
       seat={seat}
@@ -57,13 +52,27 @@ export default async function SubscriptionsPage() {
       eyebrow={t("admin.subscriptions.eyebrow")}
       meta={
         <span className="text-caption text-muted">
+          {/*
+             Both counts are queries over every subscription. They were
+             `rows.length` and a filter over the same rows, behind a `take` of
+             500 — a count of the page that read as a count of the business.
+          */}
           {t("admin.subscriptions.meta", {
-            count: formatCount(rows.length),
-            grandfathered: formatCount(grandfathered),
+            count: formatCount(list.total),
+            grandfathered: formatCount(list.grandfathered),
           })}
         </span>
       }
     >
+      {list.total > rows.length && (
+        <p className="mb-[var(--gutter)] text-caption text-muted">
+          {t("admin.subscriptions.truncated", {
+            shown: formatCount(rows.length),
+            count: formatCount(list.total),
+          })}
+        </p>
+      )}
+
       <SubscriptionTable rows={rows} />
 
       <p className="mt-[var(--gutter)] max-w-prose text-caption text-muted">

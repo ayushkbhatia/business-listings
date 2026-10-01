@@ -8,8 +8,9 @@ import {
 import { prisma } from "@/lib/db/client";
 import { paymentProvider } from "./provider";
 import { nextAction, SCHEDULE, type DunningStage } from "./dunning";
-import { aedToFils, recordMovement } from "./mrr";
-import { monthlyValueFils, periodPriceAed } from "./period";
+import { recordMovement } from "./mrr";
+import { monthlyValueFils } from "./period";
+import { priceRenewal, RENEWAL_SELECT, settleRenewal } from "./renewal-job";
 
 /**
  * The dunning runner.
@@ -36,6 +37,15 @@ export interface DunningResult {
   retried: number;
   notified: number;
   dropped: number;
+  /**
+   * Retries the card paid. Each is a renewal: a new period and a paid invoice.
+   *
+   * Counted because it was not — a retry that succeeded fell through every
+   * counter, so a run that recovered a dozen accounts reported doing nothing.
+   */
+  recovered: number;
+  /** Recovered accounts whose invoice PDF did not write. See `RenewalResult`. */
+  pdfsFailed: number;
   /** Sponsored slots ended with the accounts that lapsed. D2. */
   placementsEnded: number;
   ranAt: Date;
@@ -47,18 +57,12 @@ export async function runDunning(now: Date = new Date()): Promise<DunningResult>
       OR: [{ status: "past_due" }, { dunningStage: { not: "none" } }],
       NOT: { dunningStage: "dropped" },
     },
-    select: {
-      id: true,
-      businessId: true,
-      planId: true,
-      dunningStage: true,
-      pastDueSince: true,
-      term: true,
-      plan: { select: { monthlyPriceAed: true, annualMonthsCharged: true } },
-    },
+    select: { ...RENEWAL_SELECT, dunningStage: true, pastDueSince: true },
   });
 
   let retried = 0;
+  let recovered = 0;
+  let pdfsFailed = 0;
   let notified = 0;
   let dropped = 0;
   let placementsEnded = 0;
@@ -75,30 +79,23 @@ export async function runDunning(now: Date = new Date()): Promise<DunningResult>
      * date is `now`, so day zero is due and the retry fires on this same pass.
      */
     const pastDueSince = subscription.pastDueSince ?? now;
-    /*
-       The **period** price, not the month's.
-
-       A retry is a second attempt at the payment that failed, and on an annual
-       subscription that payment was a year. Charging a month instead would take
-       a twelfth of what is owed, mark the account active, and leave eleven
-       months unpaid with nothing to notice it. Whole fils, as everywhere else
-       in billing; never a float.
-    */
-    const periodFils = aedToFils(
-      periodPriceAed(
-        {
-          monthlyPriceAed: Number(subscription.plan.monthlyPriceAed),
-          annualMonthsCharged: subscription.plan.annualMonthsCharged,
-        },
-        subscription.term,
-      ),
-    );
-
     const action = nextAction(subscription.dunningStage as DunningStage, pastDueSince, now);
     if (action.kind === "wait") continue;
 
     if (action.kind === "retry_silently") {
       const provider = paymentProvider();
+      /*
+         What the renewal that failed asked for, priced by the function that
+         asked: the **period** price rather than the month's, the placements
+         held, and VAT on the lot.
+
+         A retry is a second attempt at the payment that failed. On an annual
+         subscription that payment was a year — charging a month would take a
+         twelfth of what is owed and mark the account active. And it was VAT
+         included: this charged the plan's period alone, ex-VAT, which is 5%
+         short of the invoice a paid renewal writes.
+      */
+      const price = await priceRenewal(subscription, now);
 
       /*
        * A provider that cannot take money cannot report that it took money.
@@ -116,7 +113,7 @@ export async function runDunning(now: Date = new Date()): Promise<DunningResult>
        * past due, but if one is, there is no card to retry and a zero-fils
        * attempt row would fail `payment_attempt_amount_is_positive` anyway.
        */
-      if (!provider.live || periodFils <= 0) {
+      if (!provider.live || price.chargeFils <= 0) {
         await prisma.subscription.update({
           where: { id: subscription.id },
           data: { dunningStage: "retry", pastDueSince, dunningAdvancedAt: now },
@@ -125,38 +122,50 @@ export async function runDunning(now: Date = new Date()): Promise<DunningResult>
         continue;
       }
 
+      const reference = `DUNNING-${subscription.id}-${pastDueSince.getTime()}`;
       const charge = await provider.charge({
         businessId: subscription.businessId,
-        fils: periodFils,
+        fils: price.chargeFils,
         description: "Subscription retry",
-        reference: `DUNNING-${subscription.id}-${pastDueSince.getTime()}`,
+        reference,
       });
+
+      if (charge.ok) {
+        /*
+           Paid, which makes this the renewal that failed, arriving late.
+
+           It used to stop at `status: "active"`. The period never moved, so the
+           next morning `runRenewals` found an active subscription with
+           `renewsAt` behind it and charged the same period again — and the
+           payment taken here had no invoice. `settleRenewal` is the renewal's
+           own success path: the period opens from `renewsAt`, a paid invoice
+           records what was taken, and dunning ends with it.
+
+           The guard is what this pass read. A second pass that got here first
+           has moved `renewsAt`, so this one writes nothing.
+        */
+        const settled = await settleRenewal(subscription, price, {
+          reference,
+          providerRef: charge.providerRef ?? null,
+          guard: { dunningStage: "none", status: "past_due" },
+          now,
+        });
+        if (settled) {
+          recovered += 1;
+          if (!settled.pdfWritten) pdfsFailed += 1;
+        }
+        continue;
+      }
 
       await prisma.paymentAttempt.create({
         data: {
           subscriptionId: subscription.id,
-          amountFils: periodFils,
-          succeeded: charge.ok,
-          providerMessage: charge.ok ? null : (charge.error ?? null),
+          amountFils: price.chargeFils,
+          succeeded: false,
+          providerMessage: charge.error ?? null,
           attemptedAt: now,
         },
       });
-
-      if (charge.ok) {
-        // Paid. Out of dunning entirely, and the columns move together or the
-        // check constraint refuses the row.
-        await prisma.subscription.update({
-          where: { id: subscription.id },
-          data: {
-            status: "active",
-            dunningStage: "none",
-            pastDueSince: null,
-            dunningAdvancedAt: now,
-          },
-        });
-        continue;
-      }
-
       await prisma.subscription.update({
         where: { id: subscription.id },
         data: { dunningStage: "retry", pastDueSince, dunningAdvancedAt: now },
@@ -264,5 +273,14 @@ export async function runDunning(now: Date = new Date()): Promise<DunningResult>
     await announceFreedPlacements(row.ended);
   }
 
-  return { considered: overdue.length, retried, notified, dropped, placementsEnded, ranAt: now };
+  return {
+    considered: overdue.length,
+    retried,
+    recovered,
+    notified,
+    dropped,
+    pdfsFailed,
+    placementsEnded,
+    ranAt: now,
+  };
 }

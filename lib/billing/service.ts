@@ -652,6 +652,7 @@ export async function changeTerm(
   actor: Actor,
   businessId: string,
   toTerm: BillingTerm,
+  expectedDueFils: number | null = null,
   now = new Date(),
 ): Promise<ChangeResult> {
   assertCanChangePlan(actor);
@@ -659,6 +660,19 @@ export async function changeTerm(
   const quoted = await quoteTermChange(actor, businessId, toTerm, now);
   if (!quoted.ok) return quoted;
   const { quote } = quoted;
+
+  /*
+     What was on the button, checked against what it costs now — criterion 7,
+     which `changePlan` has always kept and this did not.
+
+     The button reads "Switch to annual · AED 8,841.66". The credit counts the
+     whole days left in the period, so a quote opened before midnight and
+     confirmed after it is a day's credit smaller, and the card was charged the
+     new figure under the old one. Null is a caller with no screen.
+  */
+  if (expectedDueFils !== null && expectedDueFils !== quote.proration.dueFils) {
+    return { ok: false, error: t("change.quote_moved"), code: "quote_moved" };
+  }
 
   const plan = await prisma.plan.findFirstOrThrow({
     where: { businesses: { some: { id: businessId } } },
@@ -671,10 +685,15 @@ export async function changeTerm(
 
   const reference = `TERM-${businessId.slice(-6)}-${toTerm}-${now.getTime()}`;
 
+  /*
+     VAT included, as `changePlan` charges and for its reason: the invoice below
+     puts 5% on every line, and this took the net — 5% less than the paid
+     invoice it wrote said it took.
+  */
   if (quote.proration.netFils > 0) {
     const charge = await paymentProvider().charge({
       businessId,
-      fils: quote.proration.netFils,
+      fils: quote.proration.dueFils,
       description: `${quote.planName} plan, ${toTerm === "annual" ? "one year" : "one month"}`,
       reference,
     });

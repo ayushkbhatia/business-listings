@@ -129,3 +129,67 @@ export const FORBIDDEN_EFFECTS = [
   "delete_products",
   "delete_reviews",
 ] as const;
+
+/**
+ * The attempts that belong to the failure the queue is showing.
+ *
+ * A subscription keeps every `PaymentAttempt` it ever made — every renewal that
+ * went through as well as every one that did not. The failed-payments queue
+ * read all of them: its `ATTEMPTS` column counted a year of paid renewals as
+ * "12 tried" against an account that had failed once, and its reason and amount
+ * came from whichever failure was newest, which on an account with no attempt
+ * yet in this episode was one from a previous lapse it had recovered from.
+ *
+ * So: made at or after the date this episode started. The renewal that fails
+ * stamps its attempt with the same instant it writes to `pastDueSince`, which
+ * is what makes "at or after" exact. No start date, no episode yet, no attempts.
+ */
+export function episodeAttempts<T extends { attemptedAt: Date }>(
+  attempts: readonly T[],
+  pastDueSince: Date | null,
+): T[] {
+  if (pastDueSince === null) return [];
+  return attempts.filter((attempt) => attempt.attemptedAt.getTime() >= pastDueSince.getTime());
+}
+
+export interface QueueSummary {
+  /** Subscriptions somewhere in the sequence, including the ones that dropped. */
+  count: number;
+  /** Still recoverable: past due and not yet dropped to Free. */
+  inSequence: number;
+  /**
+   * What is still at risk, in fils, VAT included.
+   *
+   * Only the rows that have not dropped. An account already on Free has
+   * finished the sequence — there is nothing left to lose on it, and counting
+   * its failed payment as "at risk" would make the figure a running total of
+   * everything that ever failed rather than what a call today could recover.
+   */
+  atRiskFils: number;
+  /** How many drop to Free inside the next seven days, or are overdue to. */
+  droppingSoon: number;
+}
+
+/**
+ * The figures the queue's header and the card on `/admin/plans` both state.
+ *
+ * One function, because they were two: the card summed in `dunningSummary` and
+ * the page re-derived the same two numbers inline, under a comment saying a
+ * third copy of these failed payments "will drift again". Two copies of the
+ * arithmetic is the same risk one level down.
+ */
+export function summariseQueue(
+  rows: readonly { stage: DunningStage; amountFils: number | null; dropsToFreeAt: Date | null }[],
+  now: Date,
+): QueueSummary {
+  const soon = now.getTime() + 7 * DAY_MS;
+  const live = rows.filter((row) => row.stage !== "dropped");
+  return {
+    count: rows.length,
+    inSequence: live.length,
+    atRiskFils: live.reduce((total, row) => total + (row.amountFils ?? 0), 0),
+    droppingSoon: live.filter(
+      (row) => row.dropsToFreeAt !== null && row.dropsToFreeAt.getTime() <= soon,
+    ).length,
+  };
+}

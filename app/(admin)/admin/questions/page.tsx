@@ -5,6 +5,7 @@ import { questionsForModeration } from "@/lib/questions/service";
 import { formatDate } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { AdminPage, getAdminNavBadges } from "../../_shell";
+import { remove } from "./actions";
 import { QuestionList, type QuestionRow } from "./QuestionList";
 
 /**
@@ -50,10 +51,16 @@ export default async function AdminQuestionsPage() {
     >
       <QuestionList
         rows={rows}
+        remove={remove}
         labels={{
           remove: t("admin.questions.remove"),
           reasonLabel: t("admin.questions.reason_label"),
-          removedTone: t("admin.reviews.removed"),
+          /*
+             Its own string. This borrowed the review screen's, which reads
+             "Removed. The rating average is recalculated without it." — on a
+             question, which has no rating and moves no average.
+          */
+          removedTone: t("admin.questions.removed_tone"),
           empty: t("admin.questions.none"),
         }}
       />

@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
+import { effectiveCaps, PLAN_CAPS_SELECT, toCaps } from "@/lib/plan/entitlements";
 import { COUNTABLE_SELECT, countCounting } from "@/lib/services/setup-sheet";
 import { profileStrength, strengthItems, type StrengthItem } from "@/lib/metrics/profile-strength";
 import { VERIFIED_TIER } from "@/lib/verification";
@@ -91,7 +92,8 @@ export async function profileStateFor(businessId: string): Promise<ProfileState 
       updatedAt: true,
       primaryCategoryId: true,
       primaryCategory: { select: { name: true, code: true, parent: { select: { name: true } } } },
-      plan: { select: { id: true, name: true, categoryLimit: true } },
+      plan: { select: PLAN_CAPS_SELECT },
+      subscription: { select: { entitlementSnapshot: true } },
       categories: {
         orderBy: { createdAt: "asc" },
         select: {
@@ -139,7 +141,10 @@ export async function profileStateFor(businessId: string): Promise<ProfileState 
       unverifiedActivity: row.unverifiedActivityAt !== null,
     })),
 
-    categoryLimit: business.plan?.categoryLimit ?? null,
+    // Snapshot and all, the cap `addCategory` refuses on — see `effectiveFor`.
+    categoryLimit: business.plan
+      ? effectiveCaps(toCaps(business.plan), business.subscription?.entitlementSnapshot).categoryLimit
+      : null,
     planId: business.plan?.id ?? business.planId ?? "free",
     planName: business.plan?.name ?? "Free",
 

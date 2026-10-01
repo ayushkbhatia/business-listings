@@ -8604,6 +8604,18 @@ async function seedProductDetail(db: Db) {
           businessId: seller.id,
           body: "Do you hold DN200 in the same range?",
         },
+        /*
+           The one `tests/e2e/admin-questions.spec.ts` removes, and nobody else
+           reads. Unanswered, so it never reaches the public card, and the kind
+           of question staff take down: an invitation to move the deal
+           off-platform. Removing a seeded row any other spec counts would eat
+           that spec's fixture.
+        */
+        {
+          productId: flagship.id,
+          businessId: seller.id,
+          body: "Can we agree the price on WhatsApp instead and leave the enquiry out of it?",
+        },
       ],
     });
   }

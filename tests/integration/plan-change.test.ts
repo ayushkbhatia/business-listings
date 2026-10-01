@@ -13,6 +13,12 @@ import {
 } from "@/lib/billing/schedule";
 import { changePlan, changeTerm, quoteTermChange } from "@/lib/billing/service";
 import { creditNoteFor, issueInvoice, storedTotals } from "@/lib/billing/invoice";
+import {
+  consoleProvider,
+  setPaymentProvider,
+  type ChargeRequest,
+  type PaymentProvider,
+} from "@/lib/billing/provider";
 
 /**
  * Board 11f's downgrade model, against a real database.
@@ -640,6 +646,80 @@ describe("changing term", () => {
     const mine = list.rows.find((row) => row.id === result.invoiceId);
     expect(mine, "the term-change invoice is on the console list").toBeDefined();
     expect(mine!.status).not.toBe("issued");
+  });
+
+  /*
+     The card is charged what the button said, and the button said the total.
+
+     `changePlan` has charged VAT included since board 3m — *"charging the net
+     would take 5% less than the button said and leave an invoice that does not
+     reconcile with the card statement"* — and `changeTerm` charged the net
+     anyway, under a "due today" figure that included the VAT. No test watched
+     the charge, because the console provider records nothing.
+  */
+  it("charges the total the quote showed, which is the invoice's total", async () => {
+    const charges: ChargeRequest[] = [];
+    const recording: PaymentProvider = {
+      name: "recording",
+      live: true,
+      async charge(request) {
+        charges.push(request);
+        return { ok: true, providerRef: `rec_${request.reference}` };
+      },
+      async cancel() {
+        return { ok: true };
+      },
+    };
+
+    await onPlan("pro");
+    /*
+       Six hours off a whole day, on purpose. The credit counts whole days left,
+       floored, and a renewal exactly twenty days out is twenty days for a quote
+       read in the same millisecond and nineteen for the charge a moment later —
+       a local round trip is fast enough to land on the boundary, and did.
+    */
+    await prisma.subscription.updateMany({
+      where: { businessId },
+      data: {
+        term: "monthly",
+        periodStartedAt: new Date(Date.now() - 10 * 86_400_000),
+        renewsAt: new Date(Date.now() + 20 * 86_400_000 + 6 * 3_600_000),
+      },
+    });
+    const quoted = await quoteTermChange(actor, businessId, "annual");
+    if (!quoted.ok) throw new Error("unreachable");
+
+    setPaymentProvider(recording);
+    try {
+      /*
+         First with a figure the button did not show. Refused before the card is
+         touched — the figure on a button is a promise, and a term change did not
+         re-check it until this file asked.
+      */
+      const moved = await changeTerm(
+        actor,
+        businessId,
+        "annual",
+        quoted.quote.proration.dueFils - 3_146,
+      );
+      expect(moved).toMatchObject({ ok: false, code: "quote_moved" });
+      expect(charges).toHaveLength(0);
+
+      const result = await changeTerm(actor, businessId, "annual", quoted.quote.proration.dueFils);
+      if (!result.ok || !result.invoiceId) throw new Error("the switch should have invoiced");
+      raisedInvoices.push(result.invoiceId);
+
+      const invoice = await prisma.invoice.findUniqueOrThrow({
+        where: { id: result.invoiceId },
+        select: { totalFils: true },
+      });
+      expect(charges).toHaveLength(1);
+      expect(charges[0]!.fils).toBe(quoted.quote.proration.dueFils);
+      expect(charges[0]!.fils).toBe(invoice.totalFils);
+      expect(quoted.quote.proration.dueFils).toBeGreaterThan(quoted.quote.proration.netFils);
+    } finally {
+      setPaymentProvider(consoleProvider);
+    }
   });
 
   it("stores the totals the screen reads, rather than recomputing them", async () => {
