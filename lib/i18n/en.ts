@@ -3237,6 +3237,59 @@ export const en = {
   "listing.claim_cta": "Claim this listing",
   "listing.report": "Report this listing",
 
+  /* ── Board 10g · the unclaimed composition of /b/:slug ───────────────────
+     Two readers on one record: a buyer this business cannot help, and an owner
+     finding out what the internet says about them. Every sentence here is true
+     of every unclaimed page, which is the only kind of copy 30,000 pages can
+     carry. */
+  "unclaimed.banner.lead": "This listing has not been claimed.",
+  "unclaimed.banner.body": "Everything below comes from public trade licence records — we have not spoken to this business, and nothing here is verified.",
+  "unclaimed.banner.body_checked": "Everything below comes from public trade licence records — we have checked the licence against the register, but we have not spoken to this business.",
+  "unclaimed.banner.cta": "Claim this listing free",
+  "unclaimed.no_logo": "no logo",
+  "unclaimed.rail_label": "Claiming and reporting this listing",
+  "unclaimed.record.title": "What the public record says",
+  /* The import month, e.g. "Imported Jan 2026". Rendered in capitals as a kicker. */
+  "unclaimed.record.imported": "Imported {month}",
+  "unclaimed.record.legal_name": "Legal name",
+  "unclaimed.record.licence": "Trade licence",
+  "unclaimed.record.status": "Status on record",
+  "unclaimed.record.status_active": "Active until {date} · not verified by us",
+  "unclaimed.record.status_checked": "Active until {date} · licence checked by us {checked}",
+  "unclaimed.record.status_expired": "Expired on record · {date}",
+  "unclaimed.record.activity": "Licensed activity",
+  "unclaimed.record.area": "Area",
+  "unclaimed.record.phone": "Phone",
+  /* Never the digits: a number on a licence record has not been checked against the business. */
+  "unclaimed.record.phone_on_record": "On record",
+  "unclaimed.record.not_on_record": "Not on record",
+  "unclaimed.record.provided": "Hours, photos, products",
+  "unclaimed.suggestions.title": "Claimed suppliers in the same trade",
+  /* D-LINE: the board's "published specs" is not a condition of the query, so it is not promised. */
+  "unclaimed.suggestions.body": "These have verified licences and measured reply times — which is what you probably came here for.",
+  "unclaimed.suggestions.footer": "Nearest matches by trade and area, not paid placements.",
+  "unclaimed.suggestions.products": { one: "{formatted} product listed", other: "{formatted} products listed" },
+  "unclaimed.suggestions.services": { one: "{formatted} service listed", other: "{formatted} services listed" },
+  "unclaimed.suggestions.view": "View",
+  "unclaimed.suggestions.view_named": "View {name}",
+  "unclaimed.claim.title": "Is this your business?",
+  /* {minutes} is CLAIM_MINUTES_WITH_LICENCE — the same value 2a's add-new card reads. */
+  /* B11: the badge is where claiming leads, not what it grants — 2a's next
+     screen says "the green mark is earned at the next step", and this card
+     cannot promise it sooner. */
+  "unclaimed.claim.body": "Claiming is free and takes about {minutes} minutes with your trade licence to hand. You get control of the page and the enquiries that come through it, and the green badge once we have checked the licence.",
+  // A licence we have already checked: the badge is on the listing, so it is not promised.
+  "unclaimed.claim.body_checked": "Claiming is free and takes about {minutes} minutes with your trade licence to hand. You get control of the page and the enquiries that come through it.",
+  /* Q2: pending or disputed. Names nobody, and still takes a claim (2b's rule). */
+  "unclaimed.claim.under_review": "A claim on this listing is being reviewed. If it is your business, you can still submit yours.",
+  "unclaimed.claim.tick_content": "Add hours, photos and products",
+  "unclaimed.claim.tick_fanout": "Appear in RFQ fan-outs",
+  "unclaimed.claim.tick_reply": "Reply to enquiries and reviews",
+  "unclaimed.report.title": "Something wrong here?",
+  "unclaimed.report.body": "Closed down, wrong trade, or the details belong to someone else — tell us and we will check the record.",
+  "unclaimed.why.eyebrow": "Why we publish these",
+  "unclaimed.why.body": "An unclaimed page is honest about being thin, links to suppliers who can actually help, and is how most businesses find out they are listed at all. It never fakes ratings or hours to look complete.",
+
   /* ── Board 4h · /report/:slug, the form behind that link ────────────────── */
   "report_listing.meta_title": "Report {business}",
   "report_listing.meta_title_generic": "Report a listing",
@@ -3364,10 +3417,6 @@ export const en = {
   "report_hub.kind.accepted_quote": "The supplier behind an accepted quote",
 
   "listing.view": "View supplier",
-  "listing.similar.category": "Verified suppliers in the same trade",
-  "listing.similar.parent": "Verified suppliers in a related trade",
-  "listing.similar.emirate": "Verified suppliers in the same emirate",
-  "listing.licence_expiry": "Licence expires",
 
   // ── Product card ──
   "product.enquire": "Send enquiry",
@@ -3428,10 +3477,17 @@ export const en = {
   "seo.product_description": "{product} from {supplier} in {area}. Availability, full specification and a direct enquiry — no account needed.",
   "seo.spec_caption": "Specification for {product}",
   "seo.business_description": "{name} — {category} supplier in {area}, {emirate}. {verification} Contact details, branches and catalogue.",
+  "seo.business_description_no_place": "{name} — {category} supplier. {verification} Contact details, branches and catalogue.",
   "seo.catalogue_description": "{count} products from {name}, a {category} supplier. Availability and full specifications, with no account needed.",
   "seo.branches_description": "All {count} branches of {name}, with addresses, trading hours and Ramadan hours.",
   "seo.reviews_description": "Reviews of {name}, written only by buyers who sent an enquiry through us and had it answered.",
-  "seo.unclaimed_description": "{name} holds a {authority} trade licence in {area}, {emirate}. This listing is unclaimed and nothing on it has been verified.",
+  // The unclaimed description is two sentences: where the licence is, then what
+  // we have checked — the second differs for a licence verified without a claim.
+  "seo.unclaimed_description": "{name} holds a {authority} trade licence in {area}, {emirate}.",
+  // A record the importer could not place — no branch rather than a guessed one.
+  "seo.unclaimed_description_no_place": "{name} holds a {authority} trade licence.",
+  "seo.unclaimed_state": "This listing is unclaimed and nothing on it has been verified.",
+  "seo.unclaimed_state_checked": "This listing is unclaimed. We have checked its licence against the register.",
 
   // ── Product page ──
   "product.supplied_by": "Supplied by",
@@ -3547,8 +3603,6 @@ export const en = {
   "storefront.products": "Products",
   "storefront.branches": "Branches",
   "storefront.reviews": "Reviews",
-  "storefront.about": "About this supplier",
-  "storefront.at_a_glance": "At a glance",
   "storefront.details_title": "Business details",
   "storefront.last_updated": "LAST UPDATED {date}",
   /* The legal name, and the fact that the seller cannot edit it. */
@@ -9315,7 +9369,8 @@ export const en = {
   // without their licence abandons at the next step, and an abandoned claim is
   // harder to recover than one that never started.
   "claim.add_heading": "Not in the list?",
-  "claim.add_body": "Add your business from scratch. Takes about six minutes with your trade licence to hand.",
+  /* {minutes} is CLAIM_MINUTES_WITH_LICENCE, shared with 10g's claim card. */
+  "claim.add_body": "Add your business from scratch. Takes about {minutes} minutes with your trade licence to hand.",
   "claim.add_action": "Add a new business",
 
   // The dispute route. Never a closed door, and never the incumbent's name.

@@ -76,6 +76,7 @@ function ladderRungs(current: number) {
 const BUSINESS: ListingCardBusiness = {
   slug: "al-marwan-trading",
   displayName: "Al Marwan Trading",
+  claimStatus: "claimed",
   categoryName: "Valves & fittings",
   categoryCode: "VF",
   areaName: "Al Quoz Industrial 1",
@@ -90,15 +91,26 @@ const BUSINESS: ListingCardBusiness = {
   branchCount: 3,
 };
 
+/**
+ * A licence import nobody has claimed — what the register holds and nothing
+ * else. The claim link's prefill and its lapsed-licence test read the two
+ * licence fields; `CARD_NOW` pins the test so the specimen does not change on
+ * the day the expiry passes.
+ */
 const UNCLAIMED: ListingCardBusiness = {
   slug: "northbay-technical-services",
   displayName: "Northbay Technical Services",
+  claimStatus: "unclaimed",
+  licenceNumber: "DED-441908",
+  licenceExpiry: "2027-03-14T00:00:00+04:00",
   categoryName: "Electrical & cable",
   categoryCode: "EC",
   areaName: "Jebel Ali Free Zone",
   emirateName: "Dubai",
   verificationTier: 0,
 };
+
+const CARD_NOW = new Date("2026-10-01T09:00:00+04:00");
 
 const AVAILABILITIES: Availability[] = ["in_stock", "made_to_order", "indent", "out_of_stock"];
 
@@ -331,7 +343,7 @@ export function Domain() {
       <Section
         id="listing-card"
         title="ListingCard"
-        note="five contexts, one component — a context prop, never five components"
+        note="four layouts, one component — the caller picks the layout, the business says whether it is claimed"
       >
         {(["search", "grid", "map", "ranked"] as ListingContext[]).map((context) => (
           <States key={context} label={context} stack>
@@ -340,6 +352,63 @@ export function Domain() {
             </div>
           </States>
         ))}
+        {/*
+           Build plan 4.6. The unclaimed state is read off `claimStatus`, so it
+           has a specimen in every layout rather than one context of its own —
+           the one the gallery used to show was the only place it rendered.
+        */}
+        {(["search", "grid", "map", "ranked"] as ListingContext[]).map((context) => (
+          <States key={`unclaimed-${context}`} label={`unclaimed · ${context}`} stack>
+            <div className={context === "map" ? "w-80" : "w-full max-w-2xl"}>
+              <ListingCard
+                business={context === "map" || context === "ranked" ? { ...UNCLAIMED, rank: 9 } : UNCLAIMED}
+                context={context}
+                now={CARD_NOW}
+                enquireHref="/rfq/new?to=example"
+              />
+            </div>
+          </States>
+        ))}
+        {/*
+           Board 4c `B10`: while two claims are open the listing renders exactly
+           as unclaimed. Fed a claimed record's facts on purpose — the rating,
+           the counts and the words a claimant may have added are all in the
+           props, and none of them reaches the card.
+        */}
+        <States label="disputed — renders as unclaimed" stack>
+          <div className="w-full max-w-2xl">
+            <ListingCard
+              business={{
+                ...BUSINESS,
+                claimStatus: "disputed",
+                licenceNumber: "DED-552190",
+                licenceExpiry: "2027-03-14T00:00:00+04:00",
+                // A race on an import: tier 0, as the importer wrote it —
+                // submitting a claim moves no tier.
+                verificationTier: 0,
+                verifiedAt: null,
+                description: "Stockist of gate, globe and check valves for MEP contractors.",
+                ratingOverall: 4.6,
+              }}
+              context="search"
+              now={CARD_NOW}
+              enquireHref="/rfq/new?to=example"
+            />
+          </div>
+        </States>
+        {/*
+           10g `B4`: a lapsed licence is not one we invite a claim on, on the
+           listing page or on its card. The report link stays.
+        */}
+        <States label="unclaimed, licence lapsed — no claim link" stack>
+          <div className="w-full max-w-2xl">
+            <ListingCard
+              business={{ ...UNCLAIMED, licenceExpiry: "2026-02-02T00:00:00+04:00" }}
+              context="grid"
+              now={CARD_NOW}
+            />
+          </div>
+        </States>
         <States label="sponsored" stack>
           <div className="w-full max-w-2xl">
             <ListingCard
@@ -347,11 +416,6 @@ export function Domain() {
               context="search"
               sponsoredLabel={t("gallery.sponsored")}
             />
-          </div>
-        </States>
-        <States label="unclaimed" stack>
-          <div className="w-full max-w-2xl">
-            <ListingCard business={UNCLAIMED} context="unclaimed" />
           </div>
         </States>
         <States label="selected" stack>

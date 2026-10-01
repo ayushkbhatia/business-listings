@@ -543,8 +543,25 @@ the screen is permanently empty above copy reading "Run the matcher after an imp
   where the account decisions now live. **Not built:** the appeal path the terms page promises
   (§11, "You may appeal once, to a person") — it needs a seller-side request and a queue, and is
   its own board.
-- [ ] **4.6 `10g`** — the composition is keyed on a caller-supplied `context` string rather than
-  claim status, and two of three call sites never pass it.
+- [x] **4.6 `10g`** — built 1 Oct 2026 with the 10g design handoff. The card reads `claimStatus`;
+  `context` names the layout and nothing else, and every layout has the unclaimed state — the panel
+  in `search` and `grid`, a line and *View listing* in `map` and `ranked`, no enquiry and no contact
+  anywhere. `/search`'s blended supplier row, a sixth surface the card never covered, says the same.
+  One test, `publiclyClaimed` (`lib/claims/status.ts`, shared with 4.4), for the card, the
+  storefront's composition selector, its tabs, the sitemap, the report form, the review flow and the
+  contact reveal, so `disputed` reads as unclaimed on every public surface (4c `B10`). The page is
+  rebuilt to the render: banner, record card with absent rows muted, 13d's suggestion query as its
+  own module (never reads a placement, asserted on the source), the claim card with an under-review
+  variant (Q2), lapsed licences withdrawing both claim controls (`B4`), and one claim route,
+  `/onboarding/claim?licence=`, which 2a now reads. Q4: lapsed or reported-closed pages are
+  `noindex` and out of the sitemap, held equal as sets. Owner's answers: displayName h1 (`B2` lost
+  to CLAUDE.md), the index rule, the under-review copy, held enquiries later. **Found on the way and
+  fixed:** the search row's container query never fired (every category row stacked, photo slot
+  zero-height); 23 production listings are unclaimed at tier 2, so the banner, status row, meta
+  description and claim card each gained a licence-checked variant rather than saying "not verified
+  by us"; the place-less meta description read "in , ."; `/onboarding/claim?` joined `/report` in
+  robots.txt. **Not built:** held enquiries (Q1 — undrawn, and a migration); `B15`'s four anonymous
+  events (a telemetry §4 consent question); 13d's `/claim?licence=` redirect (13d is not built).
 
 ### Phase 5 · Taxonomy, facets and comparison — 4 boards
 
@@ -793,7 +810,7 @@ the only large piece and the only one selling something it does not deliver.
 | `4b` | Approval queue | built | medium | Six kinds, checks computed from tunable rules, bounded bulk bar, claims decided. Closed by 4.3. | 4.3 |
 | `4c` | Review a submission | built | 1 Oct 2026 | N claims on one listing scored on the same rows; one resolve call; conflicts open from the product; contested claims hold no seat; moderators read and assign. | 4.4 |
 | `4f` | Businesses & health | built | small | Health derived from measured reply rate, search, filters, segments, export, detail route. The suspension appeal path is not built. | 4.5 |
-| `10g` | Unclaimed listing | partial | small | Both calls to action render `disabled`; the claim destination exists and only the href is absent. | 1.1 / 4.6 |
+| `10g` | Unclaimed listing | built | small | Composition rebuilt to the handoff; the card reads claim status in every layout. Held enquiries and `B15` wait. | 1.1 / 4.6 |
 | `10a` | Subcategory page | partial ↓ | export only | Two definitions of "suppliers in this trade" render on one page. | 5.2 |
 | `13c` | Report a listing | built | — | Modal over the storefront and the page it degrades to; value capture, reference, one-shot email, three-source flag, claim door. | 9.1 |
 | `4h` | Reports, flags & disputes | built | — | One queue, one taxonomy, a service level per type, and two detectors filling it. | 6.4 |

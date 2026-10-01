@@ -107,6 +107,13 @@ describe("isDisallowedPath", () => {
     expect(isDisallowedPath("")).toBe(false);
   });
 
+  it("takes the per-listing claim links out, and leaves 2a's own page", () => {
+    // Board 10g: one parameterised claim URL per unclaimed listing.
+    expect(isDisallowedPath("/onboarding/claim?licence=DED-118904")).toBe(true);
+    expect(isDisallowedPath("/onboarding/claim?q=Al+Wadi")).toBe(true);
+    expect(isDisallowedPath("/onboarding/claim")).toBe(false);
+  });
+
   it("leaves the public directory alone", () => {
     expect(isDisallowedPath("/c/valves-and-fittings")).toBe(false);
     expect(isDisallowedPath("/b/al-marwan-industrial-supplies-llc")).toBe(false);

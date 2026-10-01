@@ -8,7 +8,10 @@ import { expect, test } from "@playwright/test";
  */
 
 const CLAIMED = "al-marwan-industrial-supplies-llc";
-const UNCLAIMED = "al-wadi-technical-services-llc";
+// Board 10g's fixed fixture (prisma/seed-unclaimed-listing.mts). Since Q4 a
+// lapsed unclaimed licence is out of the sitemap, so the kept-in case needs a
+// licence that is current by construction rather than by the PRNG's draw.
+const UNCLAIMED = "deira-cooling-house-llc";
 
 test.describe("robots.txt", () => {
   test("disallows the four surfaces that must not be indexed", async ({ request }) => {
@@ -76,6 +79,14 @@ test.describe("sitemap.xml", () => {
     expect(xml).toContain(`/b/${UNCLAIMED}`);
     // But it has no catalogue, branches or reviews tab to submit.
     expect(xml).not.toContain(`/b/${UNCLAIMED}/products`);
+  });
+
+  test("leaves out an unclaimed listing whose licence has lapsed", async ({ request }) => {
+    // Board 10g Q4: the page is `noindex`, so the sitemap does not ask for it.
+    // `tests/integration/unclaimed-listing.test.ts` holds the two equal as sets.
+    const xml = await (await request.get("/sitemap.xml")).text();
+    expect(xml).not.toContain("/b/naif-ventilation-trading-llc<");
+    expect(xml).toContain(`/b/${UNCLAIMED}<`);
   });
 });
 

@@ -33,7 +33,7 @@ and it is the one that argues back.
 /b/:slug/p/:product                     Product + spec table                  [1g]
 /b/:slug/services                       Services list — rows, not a grid    [1e-s] built h1es
 /b/:slug/s/:service                     Service detail — the scope table    [1g-s] built h3gs
-/b/:slug (unclaimed variant)            Unclaimed listing                    [10g]
+/b/:slug (unclaimed variant)            Unclaimed listing — every status but claimed [10g] built 10g
 /b/:slug?report=1                       Report a listing — modal over the storefront [13c] built 13c · noindex
 /rfq/new                                RFQ fan-out                           [1h]  built h2s3
 /rfq/new (trade sold by the job)        Brief — five questions, no quantity [1h-s] built h1hs
@@ -102,6 +102,7 @@ and it is the one that argues back.
 
 ```
 /onboarding/claim                       Find or add the business              [2a]  built h6s1 · public
+/onboarding/claim?licence=:number       The claim link on an unclaimed listing — one exact match [10g] built 10g
 /onboarding/verify                      Prove ownership                       [2b]  built h6s2
 /onboarding/kind                        Claim result — how it sells         [2b-s] built h2bs
 /onboarding/profile                     Profile basics                        [2c]  built h6s3

@@ -6,6 +6,7 @@ import { CONFLICT_SLA_HOURS } from "@/lib/claims/clock";
 import { EMIRATES } from "@/lib/uae";
 import { findClaimMatches, VISIBLE_MATCHES, type ClaimCandidate } from "@/lib/onboarding/claim";
 import { recordClaimSearch } from "@/lib/onboarding/search-log";
+import { CLAIM_MINUTES_WITH_LICENCE } from "@/lib/onboarding/claim-time";
 import { ClaimMatchList, type ClaimMatchRow } from "./ClaimMatchList";
 
 /**
@@ -218,7 +219,14 @@ export function AddBusinessCard({
     <div className="mt-4 flex flex-wrap items-center gap-4 rounded-card-lg border border-dashed border-line-strong bg-card p-5">
       <div className="min-w-0 flex-1 basis-[16rem]">
         <p className="text-body-sm font-medium text-ink">{t("claim.add_heading")}</p>
-        <p className="mt-1.5 text-body-sm text-body">{t("claim.add_body")}</p>
+        {/*
+           The time from the one value 10g's claim card also reads, so the
+           page that makes the promise and the page that keeps it cannot drift
+           — 10g was drawn saying four minutes against 2b's six.
+        */}
+        <p className="mt-1.5 text-body-sm text-body">
+          {t("claim.add_body", { minutes: CLAIM_MINUTES_WITH_LICENCE })}
+        </p>
       </div>
       <Link
         href={funnelHref("/onboarding/profile?new=1", signedIn)}

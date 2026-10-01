@@ -301,6 +301,9 @@ export default async function SearchPage({ searchParams }: Props) {
                   business={{
                     slug: business.slug,
                     displayName: business.displayName,
+                    claimStatus: business.claimStatus,
+                    licenceNumber: business.licenceNumber,
+                    licenceExpiry: business.licenceExpiry,
                     categoryName: business.primaryCategory.name,
                     categoryCode: business.primaryCategory.code,
                     areaName: business.locations[0]?.area.name ?? "",

@@ -66,6 +66,7 @@ import { seedAccountHealth } from "./seed-account-health.mjs";
 import { seedRevenue } from "./seed-revenue.mjs";
 import { seedCrmCalls } from "./seed-crm.mjs";
 import { seedReportDetectors, seedReports } from "./seed-reports.mjs";
+import { seedUnclaimedListing } from "./seed-unclaimed-listing.mjs";
 import { monthlyValueFils } from "../lib/billing/period.js";
 import { TEMPLATES } from "./seed-notification-templates.mjs";
 import { seedNotificationDeliveries } from "./seed-notification-deliveries.mjs";
@@ -1175,6 +1176,10 @@ async function main() {
      half of it. The real job, not a copy of what it produces.
   */
   await seedReportDetectors(prisma, new Date(NOW.getTime() - 8 * 3_600_000));
+  // Board 10g: the drawn record and its lapsed sibling. New listings, PRNG-free,
+  // and after the sweep above so neither is reported — one has lapsed, and a
+  // report would take it out of the index for a reason the spec is not about.
+  await seedUnclaimedListing(prisma, NOW);
   // Last, because everything above it can create a recipient row.
   await onlyOneSellerAtCap(prisma);
   await recomputeDerived(prisma);

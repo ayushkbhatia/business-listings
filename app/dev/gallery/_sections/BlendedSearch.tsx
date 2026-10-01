@@ -82,6 +82,7 @@ const THIN_SERVICE: ServiceResultView = {
 const SUPPLIER: SupplierResultView = {
   kind: "supplier",
   id: "gallery-supplier-1",
+  claimed: true,
   businessSlug: "ardent-audit-and-advisory",
   businessName: "Ardent Audit & Advisory",
   place: "Deira · Dubai",
@@ -101,6 +102,7 @@ const SUPPLIER: SupplierResultView = {
 const NAME_ONLY: SupplierResultView = {
   kind: "supplier",
   id: "gallery-supplier-2",
+  claimed: true,
   businessSlug: "emirates-software-trading",
   businessName: "Emirates Software Trading",
   place: "Deira · Dubai",
@@ -116,6 +118,32 @@ const NAME_ONLY: SupplierResultView = {
   checkedCredentials: [],
   verificationTier: 2,
   verifiedAt: "2026-03-01T08:00:00.000Z",
+  rating: null,
+};
+
+/**
+ * Board 10g on the row that links to it: a licence import nobody has claimed.
+ * The loader hands it only what the record holds, and the row offers no quote.
+ */
+const UNCLAIMED_SUPPLIER: SupplierResultView = {
+  kind: "supplier",
+  id: "gallery-supplier-3",
+  claimed: false,
+  businessSlug: "northbay-technical-services",
+  businessName: "Northbay Technical Services",
+  place: "Jebel Ali Free Zone · Dubai",
+  replyMs: null,
+  summary: null,
+  sellsWork: false,
+  trade: "Electrical & cable",
+  teamLabel: null,
+  services: null,
+  matchedOnService: false,
+  productCount: 0,
+  matched: { products: 0, services: 0 },
+  checkedCredentials: [],
+  verificationTier: 0,
+  verifiedAt: null,
   rating: null,
 };
 
@@ -353,7 +381,7 @@ export function BlendedSearchGallery() {
 
       <States label="supplier row" stack>
         <div className="w-full">
-          <BlendedResultList copy={CODE_COPIES} rows={[SUPPLIER, NAME_ONLY]} />
+          <BlendedResultList copy={CODE_COPIES} rows={[SUPPLIER, NAME_ONLY, UNCLAIMED_SUPPLIER]} />
         </div>
       </States>
 
