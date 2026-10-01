@@ -49,7 +49,9 @@ and it is the one that argues back.
 /account/enquiries/:id/compare          Redirect → /enquiry/:id/compare       [1n]  next.config.ts, temporary
 /account/enquiries/:id/accepted         Redirect → /enquiry/:id/accepted      [1n]  next.config.ts, temporary
 /enquiry/:id/accepted                   Accepted quote record · accepted proposal [7c · 7c-s] built h7c, 7c-s
+                                        ?supplier=<slug>: one supplier's record after a split [1o] built 1 Oct 2026
 /enquiry/:id/accepted/pdf               Accepted quote or proposal as a PDF (route handler) [7c · 7c-s] built h7c, 7c-s
+                                        ?supplier=<slug>, as the page [1o]
 /enquiry/:id/thread/:seller             Negotiation thread                   [10h]  built h2s4
 /pricing                                Plans                                 [1l]  built h1s1l
 /guides                                 Guide index                          [10b]  built h5s3

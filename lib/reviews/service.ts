@@ -14,6 +14,7 @@ import { actorFor } from "@/lib/auth/actor";
 import { assertCanWriteReview } from "@/lib/auth/guards";
 import type { Actor } from "@/lib/auth/roles";
 import {
+  acceptedAcrossSuppliers,
   canRequestReview,
   canReview,
   editableUntil,
@@ -21,6 +22,7 @@ import {
   isRemovalGround,
   ratingsAreValid,
   replyWindowOpen,
+  reviewedForRequest,
   type EnquiryForReview,
   type Provenance,
   type Ratings,
@@ -240,8 +242,15 @@ export async function createReview(
           })),
         });
       }
-      // `B9`: the draft becomes the review, in the same commit.
-      await tx.reviewDraft.deleteMany({ where: { enquiryId: input.enquiryId } });
+      // `B9`: the draft becomes the review, in the same commit. After a split
+      // (board `1o` D6) the draft may be about another supplier still to review,
+      // and that one stays.
+      await tx.reviewDraft.deleteMany({
+        where: {
+          enquiryId: input.enquiryId,
+          ...(enquiry && acceptedAcrossSuppliers(enquiry) ? { businessId: verdict.businessId } : {}),
+        },
+      });
       return created;
     });
   } catch (error) {
@@ -297,10 +306,13 @@ export const ENQUIRY_FOR_REVIEW_SELECT = {
   // The team the buyer sits on. No supplier reviews itself — see `canReview`.
   buyer: { select: { businessId: true } },
   ...CONTRACT_FACTS_SELECT,
-  review: { select: { id: true } },
+  reviews: { select: { businessId: true }, orderBy: [{ businessId: "asc" }, { id: "asc" }] },
+  // Who replied (the enquiry rung) and who the buyer's contact went to (board
+  // `1o` D4) — one relation, so one read, split below.
   recipients: {
-    where: { firstReplyAt: { not: null } },
-    select: { businessId: true, firstReplyAt: true },
+    where: { OR: [{ firstReplyAt: { not: null } }, { contactReleasedAt: { not: null } }] },
+    select: { businessId: true, firstReplyAt: true, contactReleasedAt: true },
+    orderBy: { businessId: "asc" },
   },
 } satisfies Prisma.EnquirySelect;
 
@@ -308,6 +320,7 @@ export function toEnquiryForReview(
   enquiry: Prisma.EnquiryGetPayload<{ select: typeof ENQUIRY_FOR_REVIEW_SELECT }>,
 ): EnquiryForReview {
   const facts = toContractFacts(enquiry);
+  const replied = enquiry.recipients.filter((recipient) => recipient.firstReplyAt !== null);
   return {
     // Board `7c-s`: the same rule the record page prints the day from.
     reviewOpensOn: reviewOpensOn(facts),
@@ -317,11 +330,12 @@ export function toEnquiryForReview(
     buyerBusinessId: enquiry.buyer.businessId,
     contactReleasedToBusinessId: enquiry.contactReleasedToBusinessId,
     contactReleasedAt: enquiry.contactReleasedAt,
-    repliedBusinessIds: enquiry.recipients.map((recipient) => recipient.businessId),
-    repliedAt: Object.fromEntries(
-      enquiry.recipients.map((recipient) => [recipient.businessId, recipient.firstReplyAt!]),
-    ),
-    alreadyReviewed: enquiry.review !== null,
+    accepted: enquiry.recipients
+      .filter((recipient) => recipient.contactReleasedAt !== null)
+      .map((recipient) => ({ businessId: recipient.businessId, contactReleasedAt: recipient.contactReleasedAt })),
+    repliedBusinessIds: replied.map((recipient) => recipient.businessId),
+    repliedAt: Object.fromEntries(replied.map((recipient) => [recipient.businessId, recipient.firstReplyAt!])),
+    reviewedBusinessIds: enquiry.reviews.map((review) => review.businessId),
   };
 }
 
@@ -436,8 +450,17 @@ export async function writableSubject(
   businessId?: string,
   now: Date = new Date(),
 ): Promise<WritableSubject> {
-  const existing = await prisma.review.findUnique({
-    where: { enquiryId },
+  const gate = await enquiryForReview(enquiryId);
+  /*
+     The review this would join, where the buyer already wrote it: the enquiry's
+     one review — or, on an enquiry accepted across suppliers (board `1o` D6),
+     the one about the supplier named. Naming none there is a new review, which
+     the gate below resolves or refuses.
+  */
+  const split = gate !== null && acceptedAcrossSuppliers(gate);
+  const existing = split && !businessId ? null : await prisma.review.findFirst({
+    where: { enquiryId, ...(split ? { businessId } : {}) },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     select: {
       id: true,
       buyerId: true,
@@ -454,7 +477,7 @@ export async function writableSubject(
     return { ok: true, mode: "edit", businessId: existing.businessId, reviewId: existing.id };
   }
   await writerOf(buyerId);
-  const verdict = canReview(buyerId, await enquiryForReview(enquiryId), businessId, now);
+  const verdict = canReview(buyerId, gate, businessId, now);
   if (!verdict.ok) {
     return { ok: false, error: verdict.reason === "already_reviewed" ? "frozen" : verdict.reason };
   }
@@ -1095,11 +1118,19 @@ export async function requestReview(input: {
     select: {
       buyerId: true,
       ...CONTRACT_FACTS_SELECT,
-      review: { select: { id: true } },
+      reviews: { select: { businessId: true }, orderBy: [{ businessId: "asc" }, { id: "asc" }] },
+      // Board `1o` D4: whether the buyer's contact went to this supplier is a
+      // question for its own row. After a split the enquiry's column names one.
+      recipients: {
+        where: { contactReleasedAt: { not: null } },
+        select: { businessId: true, contactReleasedAt: true },
+        orderBy: { businessId: "asc" },
+      },
       buyer: { select: { phone: true, email: true } },
     },
   });
-  if (!enquiry || enquiry.contactReleasedToBusinessId !== input.businessId) {
+  const release = enquiry?.recipients.find((recipient) => recipient.businessId === input.businessId);
+  if (!enquiry || !release) {
     return { ok: false, error: "no_accepted_quote" };
   }
 
@@ -1110,10 +1141,13 @@ export async function requestReview(input: {
 
   const verdict = canRequestReview(
     {
-      acceptedAt: enquiry.contactReleasedAt,
+      acceptedAt: release.contactReleasedAt,
       reviewOpensOn: reviewOpensOn(toContractFacts(enquiry)),
       alreadyAsked: alreadyAsked !== null,
-      alreadyReviewed: enquiry.review !== null,
+      alreadyReviewed: reviewedForRequest(
+        { reviewedBusinessIds: enquiry.reviews.map((review) => review.businessId), acceptedCount: enquiry.recipients.length },
+        input.businessId,
+      ),
     },
     now,
   );

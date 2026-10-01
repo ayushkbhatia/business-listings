@@ -23,7 +23,7 @@ export function RecipientRow({
   closesAt,
   now,
   accepted,
-  acceptedBusinessId,
+  acceptedBusinessIds,
   isFirstQuoted,
   quoteHref,
   threadHref,
@@ -34,7 +34,8 @@ export function RecipientRow({
   closesAt: Date;
   now: Date;
   accepted: boolean;
-  acceptedBusinessId: string | null;
+  /** Board `1o` D4: every supplier accepted from — several after a split. */
+  acceptedBusinessIds: readonly string[];
   /** Only the first quoted row gets a primary action. One primary per view. */
   isFirstQuoted: boolean;
   quoteHref: string;
@@ -44,7 +45,7 @@ export function RecipientRow({
   token: string | null;
 }) {
   const state = effectiveState(row, closesAt, now);
-  const chosen = accepted && acceptedBusinessId === row.businessId;
+  const chosen = accepted && acceptedBusinessIds.includes(row.businessId);
   /*
      Once a quote is accepted the other rows say why they ended, rather than
      leaving a buyer to wonder whether four suppliers went quiet on them.

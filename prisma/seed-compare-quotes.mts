@@ -34,6 +34,14 @@ import { MARINA } from "./seed-buyer-company.mjs";
  * written against their lines' ids — `QuoteLine.enquiryLineId`, which is what
  * the comparison keys on — and before any release, as `acceptQuote` does.
  *
+ * Board `1o` D1: Delta Valve and Northgate let their prices hold for part of a
+ * quote; Rawabi and Flowline quote all or nothing. So `ENQ-8864`'s 13,560 split
+ * — Delta's valve, Northgate's couplings and gaskets — is one a buyer can
+ * accept. `ENQ-8867` was accepted that way: two suppliers, each with a record
+ * of its own at `/enquiry/ENQ-8867/accepted?supplier=<slug>`, Delta the main one
+ * as the larger share — 7,320 against Northgate's 6,240. Written as the commit
+ * writes it, with no notifications, like every accepted fixture.
+ *
  * The wall clock, so *quoted in 1 h 40 min* and *closes in 3 days* read as
  * drawn whenever the seed runs. PRNG-free.
  */
@@ -44,6 +52,7 @@ export const COMPARE_CLAIM_TOKEN = "seed-0000-4000-8000-provisional06";
 export const COMPARE_ENQUIRY_ID = "seedenquirycompare0001";
 export const COMPARE_ACCEPT_ENQUIRY_ID = "seedenquirycompare0002";
 export const COMPARE_COMPANY_ENQUIRY_ID = "seedenquirycompare0003";
+export const COMPARE_SPLIT_ENQUIRY_ID = "seedenquirycompare0004";
 
 const BUYER_ID = "00000000-0000-4000-8000-00000000c1a0";
 
@@ -81,12 +90,23 @@ type LineKey = (typeof LINES)[number]["key"];
  * line total being qty × unit (7,920 = 40 × 198). No entry is *not quoted*.
  */
 const QUOTES: Partial<
-  Record<Key, { minutes: number; lead: number; terms: "net_30" | "net_60" | "advance"; delivery: "included" | "charged_separately" | "collection"; prices: Partial<Record<LineKey, string>> }>
+  Record<
+    Key,
+    {
+      minutes: number;
+      lead: number;
+      terms: "net_30" | "net_60" | "advance";
+      delivery: "included" | "charged_separately" | "collection";
+      /** Board `1o` D1. */
+      allowsPartial: boolean;
+      prices: Partial<Record<LineKey, string>>;
+    }
+  >
 > = {
-  alwaha: { minutes: 100, lead: 0, terms: "net_30", delivery: "included", prices: { valve: "198.00", coupling: "46.00", gasket: "12.00" } },
-  emirates: { minutes: 175, lead: 0, terms: "advance", delivery: "charged_separately", prices: { valve: "183.00", coupling: "50.00" } },
-  northern: { minutes: 370, lead: 12, terms: "net_60", delivery: "included", prices: { valve: "268.00", coupling: "41.00", gasket: "11.00" } },
-  technopump: { minutes: 560, lead: 10, terms: "net_30", delivery: "collection", prices: { valve: "236.00", coupling: "48.00", gasket: "13.00" } },
+  alwaha: { minutes: 100, lead: 0, terms: "net_30", delivery: "included", allowsPartial: false, prices: { valve: "198.00", coupling: "46.00", gasket: "12.00" } },
+  emirates: { minutes: 175, lead: 0, terms: "advance", delivery: "charged_separately", allowsPartial: true, prices: { valve: "183.00", coupling: "50.00" } },
+  northern: { minutes: 370, lead: 12, terms: "net_60", delivery: "included", allowsPartial: true, prices: { valve: "268.00", coupling: "41.00", gasket: "11.00" } },
+  technopump: { minutes: 560, lead: 10, terms: "net_30", delivery: "collection", allowsPartial: false, prices: { valve: "236.00", coupling: "48.00", gasket: "13.00" } },
 };
 
 /** The same mark `nextQuoteRef` puts in a reference: the enquiry number and the seller's code. */
@@ -200,6 +220,32 @@ export async function seedCompareQuotes(db: Db, now: Date) {
     business,
   });
 
+  /* ── ENQ-8867: accepted across two suppliers (board 1o) ─────────────────── */
+  const split = await rfq(db, {
+    id: COMPARE_SPLIT_ENQUIRY_ID,
+    ref: "ENQ-8867",
+    buyerId: BUYER_ID,
+    createdAt: at(-6 * DAY),
+    closesAt: at(1 * DAY),
+    neededBy: at(14 * DAY),
+    quoted: ["alwaha", "emirates", "northern", "technopump"],
+    waiting: {},
+    business,
+  });
+  await acceptAcross(db, {
+    enquiryId: COMPARE_SPLIT_ENQUIRY_ID,
+    at: at(-2 * DAY),
+    // Northgate's 6,240 (120 × 41 + 120 × 11) against Delta's 7,320 (40 × 183):
+    // Delta's is the larger share, so Delta is the main supplier.
+    primary: "emirates",
+    parts: [
+      { key: "emirates", lines: ["valve"] },
+      { key: "northern", lines: ["coupling", "gasket"] },
+    ],
+    business,
+    ...split,
+  });
+
   /* ── ENQ-8866: Priya, buying for Marina Facilities ──────────────────────── */
   if (marina) {
     await rfq(db, {
@@ -274,6 +320,7 @@ async function rfq(
   });
 
   const lineIds = new Map<LineKey, string>();
+  const quoteIds = new Map<Key, string>();
   for (const [index, line] of LINES.entries()) {
     const row = await db.enquiryLine.create({
       data: {
@@ -303,7 +350,7 @@ async function rfq(
         createdAt: input.createdAt,
       },
     });
-    await db.quote.create({
+    const created = await db.quote.create({
       data: {
         ref: quoteRef(input.ref, supplier.slug, 1),
         enquiryId: enquiry.id,
@@ -313,6 +360,7 @@ async function rfq(
         status: "sent",
         paymentTerms: quote.terms,
         delivery: quote.delivery,
+        allowsPartial: quote.allowsPartial,
         sentAt,
         expiresAt: new Date(sentAt.getTime() + 14 * DAY),
         createdAt: sentAt,
@@ -327,7 +375,9 @@ async function rfq(
           })),
         },
       },
+      select: { id: true },
     });
+    quoteIds.set(key, created.id);
   }
 
   for (const [key, waiting] of Object.entries(input.waiting) as [Key, { openedAt: Date | null }][]) {
@@ -341,4 +391,50 @@ async function rfq(
       },
     });
   }
+  return { lineIds, quoteIds };
+}
+
+/**
+ * Board `1o` — the columns an acceptance across suppliers writes, as
+ * `commitAcceptance` writes them: the decided marker naming the main supplier,
+ * each chosen quote accepted with the lines it covers, each supplier's own
+ * release, and everybody else declined with their quote lost. No other row.
+ */
+async function acceptAcross(
+  db: Db,
+  input: {
+    enquiryId: string;
+    at: Date;
+    primary: Key;
+    parts: { key: Key; lines: LineKey[] }[];
+    business: Map<Key, { id: string; slug: string }>;
+    lineIds: Map<LineKey, string>;
+    quoteIds: Map<Key, string>;
+  },
+) {
+  const accepted = input.parts.map((part) => input.business.get(part.key)!.id);
+  await db.enquiry.update({
+    where: { id: input.enquiryId },
+    data: { contactReleasedToBusinessId: input.business.get(input.primary)!.id, contactReleasedAt: input.at },
+  });
+  for (const part of input.parts) {
+    const quoteId = input.quoteIds.get(part.key)!;
+    await db.quote.update({ where: { id: quoteId }, data: { status: "accepted", acceptedAt: input.at } });
+    await db.quoteLine.updateMany({
+      where: { quoteId, OR: [{ enquiryLineId: { in: part.lines.map((line) => input.lineIds.get(line)!) } }, { enquiryLineId: null }] },
+      data: { acceptedAt: input.at },
+    });
+  }
+  await db.enquiryRecipient.updateMany({
+    where: { enquiryId: input.enquiryId, businessId: { in: accepted } },
+    data: { state: "quoted", contactReleasedAt: input.at },
+  });
+  await db.enquiryRecipient.updateMany({
+    where: { enquiryId: input.enquiryId, businessId: { notIn: accepted } },
+    data: { state: "declined" },
+  });
+  await db.quote.updateMany({
+    where: { enquiryId: input.enquiryId, businessId: { notIn: accepted }, status: { in: ["sent", "read"] } },
+    data: { status: "lost", lostReason: "buyer_accepted_another" },
+  });
 }

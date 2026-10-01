@@ -43,11 +43,17 @@ export interface ReviewWriteEnquiry {
   /** When the reviewed supplier's quote was accepted. Null on the enquiry rung. */
   acceptedAt: Date | null;
   value: { kind: "goods"; fils: bigint } | { kind: "proposal"; feeAed: string; feeBasisLabel: string } | null;
+  /**
+   * Board `1o` D6: accepted from several suppliers, each of which carries its
+   * own review — so the page cannot say *one review per enquiry*. Absent: no.
+   */
+  split?: boolean;
 }
 
 export type OtherEnquiryState =
   | { kind: "open"; closesOn: Date | null; supplierName: string; draft: boolean }
-  | { kind: "choose"; count: number }
+  /** `split`: accepted from several suppliers, each still to review (board `1o` D6). */
+  | { kind: "choose"; count: number; split: boolean }
   | { kind: "not_yet_open"; opensOn: Date; supplierName: string }
   | { kind: "reviewed"; on: Date; supplierName: string }
   | { kind: "closed"; closedOn: Date; supplierName: string }
@@ -107,6 +113,11 @@ export type ReviewWriteData =
       kind: "choose";
       enquiry: ReviewWriteEnquiry;
       suppliers: ReviewWriteSupplier[];
+      /**
+       * Board `1o` D6: accepted from several suppliers, each of which carries its
+       * own review — so the choice is which to write first, not which one of them.
+       */
+      split: boolean;
       others: OtherEnquiries;
     }
   | {
@@ -306,7 +317,7 @@ function otherView(row: OtherEnquiry, token: string | null, now: Date): OtherEnq
     case "choose":
       return {
         ...base,
-        meta: meta(t("reviewwrite.other.replied_count", { count: state.count })),
+        meta: meta(t(state.split ? "reviewwrite.other.split_count" : "reviewwrite.other.replied_count", { count: state.count })),
         state: t("reviewwrite.other.choose"),
         tone: "open",
       };
@@ -349,10 +360,10 @@ function otherView(row: OtherEnquiry, token: string | null, now: Date): OtherEnq
   }
 }
 
-export function reviewRules(): RailRule[] {
+export function reviewRules(split = false): RailRule[] {
   return [
     { holds: true, text: t("reviewwrite.rule.gate") },
-    { holds: true, text: t("reviewwrite.rule.one", { days: EDITABLE_DAYS }) },
+    { holds: true, text: t(split ? "reviewwrite.rule.one_split" : "reviewwrite.rule.one", { days: EDITABLE_DAYS }) },
     { holds: false, text: t("reviewwrite.rule.traceable") },
     { holds: false, text: t("reviewwrite.rule.own") },
     { holds: false, text: t("reviewwrite.rule.seller") },
@@ -422,6 +433,9 @@ export function buildReviewWrite(data: ReviewWriteData, options: BuildOptions): 
     { label: last },
   ];
 
+  // Board `1o` D6: the rule as it holds for this enquiry.
+  const split = data.enquiry !== null && "split" in data.enquiry && data.enquiry.split === true;
+
   switch (data.kind) {
     case "refused": {
       const ref = data.enquiry?.ref ?? "";
@@ -435,7 +449,7 @@ export function buildReviewWrite(data: ReviewWriteData, options: BuildOptions): 
         crumbs: crumbs(data.enquiry, t("reviewwrite.crumb.write")),
         band: null,
         job: null,
-        rules: reviewRules(),
+        rules: reviewRules(split),
         steps: null,
         others,
         body: {
@@ -460,7 +474,7 @@ export function buildReviewWrite(data: ReviewWriteData, options: BuildOptions): 
         crumbs: crumbs(enquiry, t("reviewwrite.crumb.write")),
         band: null,
         job: null,
-        rules: reviewRules(),
+        rules: reviewRules(split),
         steps: null,
         others,
         body: {
@@ -479,12 +493,15 @@ export function buildReviewWrite(data: ReviewWriteData, options: BuildOptions): 
         crumbs: crumbs(data.enquiry, t("reviewwrite.crumb.write")),
         band: null,
         job: null,
-        rules: reviewRules(),
+        rules: reviewRules(split),
         steps: null,
         others,
         body: {
           kind: "choose",
-          body: t("reviewwrite.choose.body", { ref: data.enquiry.ref, count: data.suppliers.length }),
+          body: t(data.split ? "reviewwrite.choose.body_split" : "reviewwrite.choose.body", {
+            ref: data.enquiry.ref,
+            count: data.suppliers.length,
+          }),
           options: data.suppliers.map((supplier) => ({
             id: supplier.id,
             label: supplier.displayName,
@@ -500,7 +517,7 @@ export function buildReviewWrite(data: ReviewWriteData, options: BuildOptions): 
         crumbs: crumbs(data.enquiry, t("reviewwrite.crumb.write")),
         band: t("reviewwrite.band.opens", { date: formatDate(data.opensOn) }),
         job: job(data.enquiry, data.supplier, "accepted_quote"),
-        rules: reviewRules(),
+        rules: reviewRules(split),
         steps: null,
         others,
         body: {
@@ -518,7 +535,7 @@ export function buildReviewWrite(data: ReviewWriteData, options: BuildOptions): 
         crumbs: crumbs(data.enquiry, t("reviewwrite.crumb.write")),
         band: t("reviewwrite.band.closed", { date: formatDate(data.window.closesOn) }),
         job: job(data.enquiry, data.supplier, data.enquiry.acceptedAt ? "accepted_quote" : "verified_enquiry"),
-        rules: reviewRules(),
+        rules: reviewRules(split),
         steps: null,
         others,
         // The form is absent, not disabled (§States): the rule and the day, and a way out.
@@ -543,7 +560,16 @@ export function buildReviewWrite(data: ReviewWriteData, options: BuildOptions): 
         lede:
           data.mode === "edit"
             ? t("reviewwrite.lede.edit")
-            : t(data.company ? "reviewwrite.lede.company" : "reviewwrite.lede.anonymous", { days: EDITABLE_DAYS }),
+            : t(
+                split
+                  ? data.company
+                    ? "reviewwrite.lede.company_split"
+                    : "reviewwrite.lede.anonymous_split"
+                  : data.company
+                    ? "reviewwrite.lede.company"
+                    : "reviewwrite.lede.anonymous",
+                { days: EDITABLE_DAYS },
+              ),
         crumbs: crumbs(data.enquiry, t(data.mode === "edit" ? "reviewwrite.crumb.edit" : "reviewwrite.crumb.write")),
         band:
           data.mode === "edit" && data.editableUntil
@@ -552,7 +578,7 @@ export function buildReviewWrite(data: ReviewWriteData, options: BuildOptions): 
               ? windowWords(data.window, data.supplier.displayName)
               : null,
         job: job(data.enquiry, data.supplier, data.provenance),
-        rules: reviewRules(),
+        rules: reviewRules(split),
         steps: data.mode === "edit" ? null : reviewSteps(data.supplier, data.provenance),
         others,
         body: { kind: "form" },
@@ -572,7 +598,7 @@ export function buildReviewWrite(data: ReviewWriteData, options: BuildOptions): 
             ? null
             : t("reviewwrite.band.fixed", { date: formatDate(fixedSince(review)) }),
         job: job(data.enquiry, supplier, data.provenance),
-        rules: reviewRules(),
+        rules: reviewRules(split),
         steps: null,
         others,
         body: {

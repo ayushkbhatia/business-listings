@@ -107,6 +107,7 @@ async function writeAccess(
       firstReplyAt: true,
       business: { select: { closureRequestedAt: true } },
       state: true,
+      contactReleasedAt: true,
       enquiry: {
         select: { id: true, buyerId: true, closesAt: true, contactReleasedToBusinessId: true },
       },
@@ -135,7 +136,8 @@ async function writeAccess(
    * onto WhatsApp. Everybody else is done talking.
    */
   const closed = enquiry.closesAt.getTime() < now.getTime();
-  const isAcceptedPair = enquiry.contactReleasedToBusinessId === input.businessId;
+  // Board `1o` D4: accepted from this supplier — one of several after a split.
+  const isAcceptedPair = recipient.contactReleasedAt !== null;
   /*
      Board `10h`'s states: *enquiry accepted elsewhere — this thread becomes
      read-only*, and `7c` is that nothing more is sent on an accepted enquiry.
@@ -163,7 +165,7 @@ export async function postMessage(
 
   const access = await writeAccess(input, new Date());
   if (!access.ok) return { ok: false, error: access.error };
-  const { recipient, enquiry } = access;
+  const { recipient } = access;
 
   /*
      Board `10h` Q5. Every file is read back from storage under a path only this
@@ -197,7 +199,8 @@ export async function postMessage(
   }
 
   const verdict = detectOffPlatform(body, {
-    contactReleased: enquiry.contactReleasedToBusinessId === input.businessId,
+    // Board `1o` D4: released to this supplier — one of several after a split.
+    contactReleased: recipient.contactReleasedAt !== null,
   });
 
   const result = await prisma.$transaction(async (tx) => {

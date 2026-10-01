@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
 import { CONTRACT_FACTS_SELECT, reviewOpensOn, toContractFacts } from "@/lib/enquiry/accepted-proposal";
+import { RELEASED_RECIPIENT, releasedToBusiness } from "@/lib/enquiry/release";
 import { firstNameOf } from "@/lib/db/queries/seller-visibility";
 import { mayReplyToReviews, mayRequestReviews, mayDisputeReviews } from "@/lib/auth/guards";
 import type { Actor } from "@/lib/auth/roles";
@@ -8,10 +9,12 @@ import {
   canRequestReview,
   cardStateOf,
   isRemovalGround,
+  PROVENANCE_ENQUIRY_SELECT,
   provenanceOf,
   replyWindowEnds,
   replyWindowOpen,
   REQUEST_WINDOW_DAYS,
+  reviewedForRequest,
   DIMENSIONS,
   type Dimension,
   type DisputeGround,
@@ -238,7 +241,7 @@ export async function reviewsBoard(
         heldAt: true,
         createdAt: true,
         businessId: true,
-        enquiry: { select: { contactReleasedToBusinessId: true } },
+        enquiry: { select: PROVENANCE_ENQUIRY_SELECT },
         buyer: { select: { fullName: true, buyerCompany: { select: { name: true } } } },
       },
     }),
@@ -252,11 +255,14 @@ export async function reviewsBoard(
     */
     prisma.enquiry.findMany({
       where: {
-        contactReleasedToBusinessId: businessId,
-        review: null,
+        // Board `1o` D4: released to this supplier — their own row, which after a
+        // split is not the one the enquiry's column names.
         OR: [
-          { contactReleasedAt: { gte: windowStart } },
-          { quotes: { some: { businessId, status: "accepted", proposal: { isNot: null } } } },
+          { recipients: { some: { businessId, contactReleasedAt: { gte: windowStart } } } },
+          {
+            ...releasedToBusiness(businessId),
+            quotes: { some: { businessId, status: "accepted", proposal: { isNot: null } } },
+          },
         ],
       },
       orderBy: [{ contactReleasedAt: "desc" }, { id: "desc" }],
@@ -265,6 +271,9 @@ export async function reviewsBoard(
         ref: true,
         buyerId: true,
         ...CONTRACT_FACTS_SELECT,
+        // Whether it is reviewed is `reviewedForRequest`'s to say, below.
+        reviews: { select: { businessId: true } },
+        recipients: { where: RELEASED_RECIPIENT, select: { businessId: true, contactReleasedAt: true } },
         buyer: { select: { fullName: true, phone: true, email: true } },
       },
     }),
@@ -278,7 +287,7 @@ export async function reviewsBoard(
        two to different places.
     */
     prisma.enquiry.findFirst({
-      where: { contactReleasedToBusinessId: businessId },
+      where: releasedToBusiness(businessId),
       select: { id: true },
     }),
     liveRequestChannels(),
@@ -419,7 +428,7 @@ export async function reviewsBoard(
     if (askedIds.has(enquiry.buyerId)) return [];
     // Narrowed rather than asserted, so a future change to the filter fails
     // here instead of at render.
-    const acceptedAt = enquiry.contactReleasedAt;
+    const acceptedAt = enquiry.recipients.find((recipient) => recipient.businessId === businessId)?.contactReleasedAt ?? null;
     if (acceptedAt === null) return [];
     // The rule `requestReview` refuses on, asked rather than restated.
     const verdict = canRequestReview(
@@ -427,7 +436,10 @@ export async function reviewsBoard(
         acceptedAt,
         reviewOpensOn: reviewOpensOn(toContractFacts(enquiry)),
         alreadyAsked: false,
-        alreadyReviewed: false,
+        alreadyReviewed: reviewedForRequest(
+          { reviewedBusinessIds: enquiry.reviews.map((review) => review.businessId), acceptedCount: enquiry.recipients.length },
+          businessId,
+        ),
       },
       now,
     );

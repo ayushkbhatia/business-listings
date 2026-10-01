@@ -74,7 +74,15 @@ export async function getBuyerInbox(
         select: { ref: true },
       },
       recipients: {
-        select: { state: true, buyerNudgedAt: true, createdAt: true, firstReplyAt: true, declinedAt: true },
+        select: {
+          businessId: true,
+          state: true,
+          buyerNudgedAt: true,
+          createdAt: true,
+          firstReplyAt: true,
+          declinedAt: true,
+          contactReleasedAt: true,
+        },
       },
       quotes: {
         where: { status: { not: "draft" } },
@@ -130,7 +138,10 @@ export async function getBuyerInbox(
       return {
         createdAt: enquiry.createdAt,
         firstQuoteAt: sentAts.length ? new Date(Math.min(...sentAts.map((at) => at.getTime()))) : null,
-        acceptedBusinessId: enquiry.contactReleasedToBusinessId,
+        // Board `1o` D4: every supplier accepted from, off their own rows.
+        acceptedBusinessIds: enquiry.recipients
+          .filter((recipient) => recipient.contactReleasedAt !== null)
+          .map((recipient) => recipient.businessId),
       };
     }),
     historySince,

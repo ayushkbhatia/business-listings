@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/client";
 // `lib/billing/proration` has a same-named helper over `number` for the fils
 // the billing side counts in; they are different units and both are right.
 import { filsToAed, quoteTotalFils } from "@/lib/quote/money";
+import { coveredLines } from "@/lib/enquiry/release";
 
 /**
  * What the last sponsored slot actually did. Board `11e`'s measurement rail.
@@ -111,7 +112,7 @@ export async function lastRunImpact(
     */
     prisma.quote.findMany({
       where: { businessId, status: "accepted", acceptedAt: { gte: ranFrom, lt: ranTo } },
-      select: { lines: { select: { unitPrice: true, qty: true } } },
+      select: { lines: { select: { unitPrice: true, qty: true, acceptedAt: true } } },
     }),
   ]);
 
@@ -123,8 +124,9 @@ export async function lastRunImpact(
   const wonFils = accepted.reduce(
     (total, quote) =>
       total +
+      // Board `1o`: what the acceptance covered — part of a quote is worth that part.
       quoteTotalFils(
-        quote.lines.map((line) => ({ unitPrice: String(line.unitPrice), qty: line.qty })),
+        coveredLines(quote.lines).map((line) => ({ unitPrice: String(line.unitPrice), qty: line.qty })),
       ),
     0n,
   );

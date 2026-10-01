@@ -96,9 +96,10 @@ export async function replySpeed(input: {
       firstReplyAt: true,
       outcome: true,
       state: true,
+      // Board `1o` D4: accepted from this supplier, which a split may say of several.
+      contactReleasedAt: true,
       enquiry: {
         select: {
-          contactReleasedToBusinessId: true,
           quotes: {
             where: { businessId: input.businessId, status: { not: "draft" } },
             orderBy: { revision: "desc" },
@@ -122,7 +123,7 @@ export async function replySpeed(input: {
     if (!r.firstReplyAt) continue;
     const hours = hoursToReply(r.createdAt, r.firstReplyAt);
 
-    const observedWin = r.enquiry.contactReleasedToBusinessId === input.businessId;
+    const observedWin = r.contactReleasedAt !== null;
     const won = r.outcome === "won" || (r.outcome === null && observedWin);
     const lost = r.outcome === "lost" || (r.outcome === null && r.state === "declined");
     const expiry = r.enquiry.quotes[0]?.expiresAt ?? null;

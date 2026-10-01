@@ -5,7 +5,7 @@ import { assertReason, staffMutation } from "@/lib/audit";
 import { can } from "@/lib/auth/can";
 import type { Actor } from "@/lib/auth/roles";
 import type { $Enums } from "@/lib/db/generated/client";
-import { canDisputeReview, isDisputeGround, type DisputeGround } from "./eligibility";
+import { canDisputeReview, isDisputeGround, PROVENANCE_ENQUIRY_SELECT, provenanceOf, type DisputeGround } from "./eligibility";
 import { removeReview } from "./service";
 import { onReviewDisputeDecided } from "@/lib/notify/events";
 
@@ -198,7 +198,7 @@ export async function openDisputes(limit = 100, now = new Date()): Promise<Queue
           createdAt: true,
           businessId: true,
           buyer: { select: { fullName: true } },
-          enquiry: { select: { contactReleasedToBusinessId: true } },
+          enquiry: { select: PROVENANCE_ENQUIRY_SELECT },
         },
       },
     },
@@ -215,8 +215,7 @@ export async function openDisputes(limit = 100, now = new Date()): Promise<Queue
     reviewOverall: row.review.overall,
     reviewCreatedAt: row.review.createdAt,
     buyerName: row.review.buyer.fullName,
-    fromAcceptedQuote:
-      row.review.enquiry.contactReleasedToBusinessId === row.review.businessId,
+    fromAcceptedQuote: provenanceOf(row.review) === "accepted_quote",
     createdAt: row.createdAt,
     ageDays: Math.floor((now.getTime() - row.createdAt.getTime()) / 86_400_000),
   }));

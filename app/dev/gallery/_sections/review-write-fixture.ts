@@ -244,7 +244,30 @@ export function chooseSupplier(): ReviewWriteData {
     kind: "choose",
     enquiry: { ...amc, ref: "ENQ-8790", headline: "Pallet racking, 2 bays", acceptedAt: null, value: null },
     suppliers: [alWaha, { ...sparkle, id: "biz-gulf", displayName: "Northern Gulf Trading" }],
+    split: false,
     others,
+  };
+}
+
+/** Board `1o` D6: lines accepted from two suppliers, neither reviewed yet — one review each. */
+export function chooseAcceptedSupplier(): ReviewWriteData {
+  return {
+    kind: "choose",
+    enquiry: { ...amc, ref: "ENQ-8795", headline: "Gate valves and strainers, 3 lines", acceptedAt: null, value: null },
+    suppliers: [alWaha, { ...sparkle, id: "biz-gulf", displayName: "Northern Gulf Trading" }],
+    split: true,
+    others: {
+      rows: [
+        ...others.rows,
+        {
+          id: "enq-8796",
+          ref: "ENQ-8796",
+          headline: "Butterfly valves DN200, 2 lines",
+          state: { kind: "choose", count: 2, split: true },
+        },
+      ],
+      more: 0,
+    },
   };
 }
 

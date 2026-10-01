@@ -38,6 +38,9 @@ function record(overrides: Partial<AcceptedRecord["quote"]> = {}): AcceptedRecor
     acceptedAt: new Date("2026-08-21T08:00:00Z"),
     isBrief: false,
     declinedCount: 3,
+    acceptedFrom: [{ businessId: "b1", slug: "al-waha-industrial-supplies", displayName: "Al Waha Industrial Supplies" }],
+    partOfQuote: false,
+    linesNotAccepted: [],
     quote: {
       id: "q1",
       ref: "QT-8841-R2",

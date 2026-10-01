@@ -284,7 +284,8 @@ export function acceptedQuotePdf(record: AcceptedRecord, now: Date): RenderedQuo
     y += 4;
   } else {
     /* ── What was quoted ─────────────────────────────────────────────────────── */
-    text(t("accepted.quoted.title"), MARGIN.x, 10.5, "bold");
+    // Board `1o`: the page's heading, so a forwarded PDF says what the page says.
+    text(t(record.partOfQuote ? "accepted.quoted.title_part" : "accepted.quoted.title"), MARGIN.x, 10.5, "bold");
     text(windowLine(record, now).toUpperCase(), A4.width - MARGIN.x, 7, "mono", { align: "right", grey: MUTED });
     y += 12;
     tableHead();

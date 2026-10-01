@@ -358,7 +358,9 @@ carries a price, a total or a supplier's figure.**
   accept screen) or `approval` (a colleague approving). The comparison, a thread
   and an approval all reach an acceptance through that one function, so a split
   by `source` is complete. It is recorded on the winning supplier's `businessId`,
-  because the acceptance is their fact too.
+  because the acceptance is their fact too. Board `1o` adds `split`: an
+  acceptance across suppliers records one event per supplier accepted from, each
+  with `split: true` and the number of lines it covers.
 - **`suppliers_nudged`** carries `source` (`compare` or `tracking` for one
   supplier, `inbox` for `10e`'s nudge-all) and the number of rows the
   conditional write actually changed, which is not the number of buttons shown.

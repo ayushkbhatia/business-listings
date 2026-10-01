@@ -243,7 +243,7 @@ model Enquiry {
   attachments    Document[]
   recipients     EnquiryRecipient[]    // 1..8 businesses
   closesAt       DateTime
-  contactReleasedToBusinessId String?  // set only on acceptance
+  contactReleasedToBusinessId String?  // set only on acceptance: the enquiry is decided. After a split, the main supplier
   buyerReference String?               // board 7c — the buyer's PO or job code, ≤ 40, set after acceptance
 }
 
@@ -252,6 +252,7 @@ model EnquiryRecipient {
   businessId String
   state      RecipientState  // delivered | opened | quoted | declined | no_response
   openedAt   DateTime?
+  contactReleasedAt DateTime?  // board 1o — the buyer's contact went to this supplier; one per supplier accepted from
 }
 
 model Quote {
@@ -266,6 +267,8 @@ model Quote {
   delivery     DeliveryTerms? // board 7c — included | charged_separately | collection
   status       QuoteStatus  // draft | sent | read | accepted | lost | expired
   lostReason   String?
+  allowsPartial  Boolean @default(false)  // board 1o D1 — the prices hold for part of the quote; fixed once sent
+  buyerReference String?                  // board 1o D5 — the PO number issued to this supplier
   lines        QuoteLine[]
 }
 
@@ -277,6 +280,7 @@ model QuoteLine {
   qty          Int
   unitPrice    Decimal          // a price — private to one buyer and one seller
   leadTimeDays Int?
+  acceptedAt   DateTime?        // board 1o — on the lines an acceptance covers; none marked before 1o = all
 }
 
 model QuoteProposal {           // board 3j-s — a quote for work, in place of lines
@@ -331,6 +335,30 @@ change to an accepted quote's payment terms, window, revision or parties, and
 
 Accepting a quote sets `Enquiry.contactReleasedToBusinessId`, marks the other recipients
 `declined`, and creates nothing else. There is no order, no fulfilment record, no payment.
+
+**An enquiry can be accepted across suppliers** (board `1o`, D1–D7 confirmed 1 Oct 2026) — and
+it still creates nothing else. A supplier opts in per quote (`Quote.allowsPartial`, off by
+default; `quote_allows_partial_fixed` refuses a change once sent), and an all-or-nothing quote
+can be taken whole but never in part. The buyer takes whole lines at the quantity asked, one
+supplier per line, in one decision; a line nobody was chosen for is not accepted, and the
+enquiry is decided. `lib/quote/split.ts` plans a selection against the comparison model and
+`lib/enquiry/accept.ts` commits it through the one transaction `acceptQuote` uses:
+
+- `Enquiry.contactReleasedToBusinessId` stays the **decided** marker every "is this decided"
+  check reads, naming the main supplier — the largest share.
+- **Who the buyer's contact went to is each supplier's own row**,
+  `EnquiryRecipient.contactReleasedAt` (`lib/enquiry/release.ts`). Every "released to this
+  business" question reads it. Two triggers keep it in step with the enquiry's column for
+  anything written the older way, in either order: `enquiry_release_reaches_recipient` and
+  `recipient_arrives_released`.
+- `QuoteLine.acceptedAt` marks the lines each acceptance covers, with a supplier's added lines
+  going with any part (D7). `coveredLines()` reads it, and reads every line of a quote
+  accepted before `1o`.
+- The record is one per supplier (D4) — its lines, its PO number (`Quote.buyerReference`), its
+  report (`supplier_report` is unique per enquiry and supplier) and its review (D6:
+  `review` is unique per enquiry and supplier; the gate allows a second only after a split).
+- A company's rule is checked once, on the parts together (D5): `QuoteApproval.split` holds
+  the parts as asked, and `quote_approval_is_the_request` fixes them with the rest.
 
 **Nothing is written to a quote after acceptance** (board `7c`). `lib/quote/fence.ts` is the one
 rule every writer of a quote reads — send, autosave, extend and the lead screen — and a send

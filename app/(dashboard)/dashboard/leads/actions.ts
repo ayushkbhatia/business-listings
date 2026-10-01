@@ -129,6 +129,8 @@ export async function saveDraftAction(input: {
   validityDays: number;
   paymentTerms: string | null;
   delivery: string | null;
+  /** Board `1o` D1. Absent from a composer that does not offer it yet: off. */
+  allowsPartial?: boolean;
   lines: DraftLineInput[];
 }): Promise<{ ok: boolean; savedAt?: number; error?: string }> {
   const seat = await getSellerSeat();

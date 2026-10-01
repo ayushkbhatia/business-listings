@@ -16,6 +16,7 @@ import {
   type Seat,
 } from "./authority";
 import { assessGate, readPolicy, type CompanyPolicy } from "./gate";
+import { readSplit, type AskPart } from "./split-request";
 import { inviteState, type InviteState } from "./team";
 import { activeMembership, companySeats, type MonthSpend } from "./store";
 import { constraintPhrases, placeLine, type RuleFacts } from "./words";
@@ -99,14 +100,17 @@ export function requestState(
 export async function approversFor(approvalId: string, now: Date = new Date()): Promise<string[]> {
   const request = await prisma.quoteApproval.findUnique({
     where: { id: approvalId },
-    select: { companyId: true, raisedById: true, quoteId: true, status: true },
+    select: { companyId: true, raisedById: true, quoteId: true, status: true, split: true },
   });
   if (!request || request.status !== "pending") return [];
+  // Board `1o` D5: a split is judged on its parts together, as it was asked.
+  const parts = readSplit(request.split);
   const gate = await assessGate(prisma, {
     companyId: request.companyId,
     raiserId: request.raisedById,
     quoteId: request.quoteId,
     now,
+    ...(parts ? { parts } : {}),
   });
   if (!gate || !gate.need.required) {
     // The rule was relaxed while it waited: any admin may still approve it.
@@ -189,6 +193,24 @@ export interface RequestCard {
   approverNames: string[];
   viewerMayApprove: boolean;
   viewerIsRaiser: boolean;
+  /**
+   * Board `1o` D5: a request to accept lines from several suppliers — each
+   * supplier's share as it was asked, with the PO number issued to them. Null
+   * for one quote. `quoteRef`, `supplierName` and `lineCount` above are the main
+   * supplier's; `valueAed` is the shares together, which is what the rule read.
+   */
+  split: RequestSplitPart[] | null;
+}
+
+export interface RequestSplitPart {
+  quoteId: string;
+  quoteRef: string;
+  supplierName: string;
+  /** The buyer's lines taken from this quote. */
+  lineCount: number;
+  /** All of what this supplier priced. */
+  whole: boolean;
+  poNumber: string | null;
 }
 
 export interface CompanyHistoryLine {
@@ -252,7 +274,31 @@ const REQUEST_SELECT = {
       proposal: { select: PROPOSAL_FIGURE_SELECT },
     },
   },
+  split: true,
 } as const;
+
+const PART_QUOTE_SELECT = {
+  ...REQUEST_QUOTE_SELECT,
+  business: { select: { closureRequestedAt: true, displayName: true, verificationTier: true } },
+  _count: { select: { lines: true } },
+} as const;
+
+/**
+ * Board `1o` D5: a split request lapses when any of its quotes does — the
+ * approver would be approving lines one of the suppliers no longer offers.
+ */
+function splitRequestState(
+  status: RequestRow["status"],
+  quotes: readonly RequestQuote[],
+  revised: ReadonlySet<string>,
+  now: Date,
+): RequestState {
+  for (const quote of quotes) {
+    const state = requestState(status, quote, revised.has(quote.id), now);
+    if (state.kind === "lapsed") return state;
+  }
+  return requestState(status, quotes[0]!, revised.has(quotes[0]!.id), now);
+}
 
 type RequestRow = Prisma.QuoteApprovalGetPayload<{ select: typeof REQUEST_SELECT }>;
 
@@ -266,17 +312,31 @@ async function toCards(
   names: Map<string, string>,
   now: Date,
 ): Promise<RequestCard[]> {
-  const revised = await laterRevisions(
-    db,
-    rows.map((r) => r.quote),
-  );
+  // Board `1o` D5: a split request's quotes, every one of them, in one read.
+  const splits = new Map<string, AskPart[]>();
+  for (const row of rows) {
+    const parts = readSplit(row.split);
+    if (parts) splits.set(row.id, parts);
+  }
+  const partIds = [...new Set([...splits.values()].flatMap((parts) => parts.map((part) => part.quoteId)))];
+  const partQuotes = partIds.length === 0
+    ? []
+    : await db.quote.findMany({ where: { id: { in: partIds } }, select: PART_QUOTE_SELECT });
+  const partQuote = new Map(partQuotes.map((quote) => [quote.id, quote]));
+  const revised = await laterRevisions(db, [...rows.map((r) => r.quote), ...partQuotes]);
   return rows.map((row) => {
-    const state = requestState(row.status, row.quote, revised.has(row.quote.id), now);
+    const parts = splits.get(row.id) ?? null;
+    const quotes = parts ? parts.flatMap((part) => partQuote.get(part.quoteId) ?? []) : [row.quote];
+    const state =
+      parts && quotes.length > 0
+        ? splitRequestState(row.status, quotes, revised, now)
+        : requestState(row.status, row.quote, revised.has(row.quote.id), now);
     const raiser = seats.find((s) => s.userId === row.raisedById);
     const need: ApprovalNeed = raiser
       ? approvalNeed(policy, raiser, {
           valueFils: row.valueFils,
-          supplierVerified: isVerified(row.quote.business.verificationTier),
+          // Verified only if every supplier in it is — the rule's own reading of a split.
+          supplierVerified: quotes.every((quote) => isVerified(quote.business.verificationTier)),
         })
       : { required: false };
     const open = state.kind === "pending";
@@ -318,6 +378,23 @@ async function toCards(
       approverNames: approvers.map((s) => names.get(s.userId) ?? "—"),
       viewerMayApprove,
       viewerIsRaiser: row.raisedById === viewerId,
+      split: parts
+        ? parts.flatMap((part) => {
+            const quote = partQuote.get(part.quoteId);
+            return quote
+              ? [
+                  {
+                    quoteId: quote.id,
+                    quoteRef: quote.ref,
+                    supplierName: quote.business.displayName,
+                    lineCount: part.enquiryLineIds?.length ?? quote._count.lines,
+                    whole: part.enquiryLineIds === null,
+                    poNumber: part.poNumber,
+                  },
+                ]
+              : [];
+          })
+        : null,
     };
   });
 }
@@ -791,12 +868,14 @@ export async function acceptanceOutlook(
   enquiry: { id: string; buyerCompanyId: string | null },
   quoteId: string,
   now: Date = new Date(),
+  /** Board `1o` D5: a split's parts, which the rule reads together. `quoteId` is the main supplier's. */
+  parts?: readonly AskPart[],
 ): Promise<AcceptanceOutlook> {
   if (!enquiry.buyerCompanyId) return { kind: "personal" };
   const companyId = enquiry.buyerCompanyId;
   const [company, gate, names] = await Promise.all([
     prisma.buyerCompany.findUniqueOrThrow({ where: { id: companyId }, select: { name: true, approvalThresholdAed: true } }),
-    assessGate(prisma, { companyId, raiserId: buyerId, quoteId, now }),
+    assessGate(prisma, { companyId, raiserId: buyerId, quoteId, now, ...(parts ? { parts } : {}) }),
     memberNames(prisma, companyId),
   ]);
   if (!gate) return { kind: "not_member", companyName: company.name };

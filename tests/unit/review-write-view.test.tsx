@@ -25,6 +25,7 @@ import {
 import { ReviewWriteForm } from "@/app/(public)/review/new/ReviewWriteForm";
 import {
   REVIEW_WRITE_NOW,
+  chooseAcceptedSupplier,
   chooseSupplier,
   drawnReview,
   emptyReview,
@@ -268,6 +269,28 @@ describe("the other states", () => {
       "/review/new?enq=ENQ-8790&about=biz-alwaha&t=tok",
       "/review/new?enq=ENQ-8790&about=biz-gulf&t=tok",
     ]);
+  });
+
+  it("accepted from two suppliers: one review each, said as such, and each linked with its subject", async () => {
+    const { container } = renderPage(chooseAcceptedSupplier());
+    expect(screen.getByText(t("reviewwrite.choose.body_split", { ref: "ENQ-8795", count: 2 }))).toBeInTheDocument();
+    expect(screen.queryByText(/An enquiry carries one review/)).toBeNull();
+    const hrefs = screen.getAllByRole("link", { name: /Review this supplier/ }).map((link) => link.getAttribute("href"));
+    expect(hrefs).toEqual([
+      "/review/new?enq=ENQ-8795&about=biz-alwaha&t=tok",
+      "/review/new?enq=ENQ-8795&about=biz-gulf&t=tok",
+    ]);
+    // The rail counts what is left to write, not who replied.
+    expect(screen.getByText(t("reviewwrite.other.split_count", { count: 2 }), { exact: false })).toBeInTheDocument();
+    await expectNoAxeViolations(container);
+  });
+
+  it("board 1o: a split's form says one review for each supplier, never one per enquiry", () => {
+    const drawn = drawnReview();
+    const view = buildReviewWrite({ ...drawn, enquiry: { ...drawn.enquiry, split: true } }, { now: REVIEW_WRITE_NOW, token: "tok" });
+    expect(view.lede).toBe(t("reviewwrite.lede.company_split", { days: 14 }));
+    expect(view.rules.map((rule) => rule.text)).toContain(t("reviewwrite.rule.one_split", { days: 14 }));
+    expect(view.rules.map((rule) => rule.text)).not.toContain(t("reviewwrite.rule.one", { days: 14 }));
   });
 
   it("seller replied: read-only, the reply shown, no Edit, no counter-reply", async () => {

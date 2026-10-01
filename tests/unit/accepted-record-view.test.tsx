@@ -39,6 +39,9 @@ function fixture(overrides: Partial<AcceptedRecord> = {}): AcceptedRecord {
     acceptedAt: new Date("2026-08-21T08:00:00Z"),
     isBrief: false,
     declinedCount: 3,
+    acceptedFrom: [{ businessId: "b1", slug: "al-waha-industrial-supplies", displayName: "Al Waha Industrial Supplies" }],
+    partOfQuote: false,
+    linesNotAccepted: [],
     quote: {
       id: "q1",
       ref: "QT-8841-R2",
@@ -166,6 +169,26 @@ describe("the other documented states", () => {
     renderRecord(fixture({ declinedCount: 0 }));
     expect(screen.getByText(t("accepted.released_only"))).toBeInTheDocument();
     expect(screen.queryByText(/declined for you/)).not.toBeInTheDocument();
+  });
+
+  it("board 1o: after a split, never says the contact went only to this supplier", () => {
+    renderRecord(
+      fixture({
+        acceptedFrom: [
+          { businessId: "b1", slug: "al-waha", displayName: "Al Waha Industrial Supplies" },
+          { businessId: "b2", slug: "northern-gulf", displayName: "Northern Gulf Trading" },
+        ],
+        partOfQuote: true,
+        declinedCount: 2,
+      }),
+    );
+    expect(
+      screen.getByText(t("accepted.released_split_declined", { others: "Northern Gulf Trading", count: 2 })),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Only to this supplier/)).not.toBeInTheDocument();
+    // Part of a quote is said as the part.
+    expect(screen.getByRole("heading", { name: t("accepted.quoted.title_part") })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: t("accepted.quoted.title") })).not.toBeInTheDocument();
   });
 
   it("window ended: the record stands and the held line reads as ended", () => {

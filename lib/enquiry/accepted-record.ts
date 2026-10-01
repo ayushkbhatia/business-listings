@@ -123,6 +123,19 @@ export interface AcceptedRecord {
   isBrief: boolean;
   /** Suppliers declined by this acceptance. Zero on a single-supplier enquiry, and then unsaid. */
   declinedCount: number;
+  /**
+   * Board `1o` D4: every supplier the enquiry was accepted from, this record's
+   * among them — one, or several after a split, each with a record of its own.
+   */
+  acceptedFrom: { businessId: string; slug: string; displayName: string }[];
+  /** Board `1o`: this record covers part of the supplier's quote — the lines taken from them, with their added lines (D7). */
+  partOfQuote: boolean;
+  /**
+   * Board `1o` D3 and AC6: the buyer's lines no supplier was accepted for, as
+   * the enquiry words them. Nobody is asked to supply them. Empty on any record
+   * that covers the whole enquiry, and on every acceptance made before `1o`.
+   */
+  linesNotAccepted: string[];
   quote: {
     id: string;
     ref: string;
@@ -241,4 +254,13 @@ export function chooseContactLocation<
         a.id.localeCompare(b.id),
     )[0] ?? null
   );
+}
+
+/**
+ * Board `1o` D4 — the query that names this record's supplier, for links that
+ * must land on this record rather than the main one: empty unless the enquiry
+ * was accepted across suppliers.
+ */
+export function recordSupplierQuery(record: Pick<AcceptedRecord, "acceptedFrom" | "supplier">): string {
+  return record.acceptedFrom.length > 1 ? `?${new URLSearchParams({ supplier: record.supplier.slug })}` : "";
 }

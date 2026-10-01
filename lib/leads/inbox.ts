@@ -16,7 +16,8 @@ import { PROPOSAL_FIGURE_SELECT, toProposalFigure, type ProposalFigure } from "@
  * seller marking anything**, because the buyer accepted somebody. That is not a
  * claim, it is a fact the platform observed:
  *
- *   - the buyer accepted this supplier → `Enquiry.contactReleasedToBusinessId`
+ *   - the buyer accepted this supplier → its own `EnquiryRecipient.contactReleasedAt`
+ *     (board `1o` D4: one of several after a split)
  *   - the buyer accepted another → `EnquiryRecipient.state = declined`
  *
  * If the tabs read only the seller's own `outcome` column, every lead the buyer
@@ -163,17 +164,13 @@ export function tabWhere(
      Every comparison below is either an equality or an explicit `IS NULL`, and
      the four are mutually exclusive by construction rather than by subtraction.
   */
-  const acceptedByUs: Prisma.EnquiryRecipientWhereInput = {
-    enquiry: { contactReleasedToBusinessId: businessId },
-  };
-  const notAcceptedByUs: Prisma.EnquiryRecipientWhereInput = {
-    enquiry: {
-      OR: [
-        { contactReleasedToBusinessId: null },
-        { contactReleasedToBusinessId: { not: businessId } },
-      ],
-    },
-  };
+  /*
+     Board `1o` D4: accepted by us is on our own recipient row, which a split
+     sets for each supplier it releases to. An equality and an explicit
+     `IS NULL`, as above — never a negation.
+  */
+  const acceptedByUs: Prisma.EnquiryRecipientWhereInput = { contactReleasedAt: { not: null } };
+  const notAcceptedByUs: Prisma.EnquiryRecipientWhereInput = { contactReleasedAt: null };
   /**
    * Nobody has decided this one.
    *
@@ -358,6 +355,7 @@ export async function getInbox(input: {
         firstReplyAt: true,
         buyerNudgedAt: true,
         outcome: true,
+        contactReleasedAt: true,
         assignedTo: { select: { id: true, fullName: true } },
         enquiry: {
           select: {
@@ -365,7 +363,6 @@ export async function getInbox(input: {
             requirement: true,
             deliverToArea: true,
             closesAt: true,
-            contactReleasedToBusinessId: true,
             // Masked by construction: the name column only, for a first name.
             buyer: { select: { fullName: true } },
             lines: { select: { qty: true, targetUnitPriceAed: true } },
@@ -400,7 +397,7 @@ export async function getInbox(input: {
     const e = r.enquiry;
     const quote = e.quotes[0];
     const band = bandOf(r, escalationMinutes, now);
-    const observedWin = e.contactReleasedToBusinessId === input.businessId;
+    const observedWin = r.contactReleasedAt !== null;
     const observedLoss = r.state === "declined";
 
     return {
@@ -436,7 +433,7 @@ export async function getInbox(input: {
       answeredInMs: r.firstReplyAt
         ? Math.max(0, r.firstReplyAt.getTime() - r.createdAt.getTime())
         : null,
-      buyer: buyerForSeller(e.buyer, e.contactReleasedToBusinessId, input.businessId),
+      buyer: buyerForSeller(e.buyer, observedWin ? input.businessId : null, input.businessId),
       lineCount: e.lines.length,
       buyerBudgetAed: budgetOf(e.lines),
       competing: e._count.recipients,

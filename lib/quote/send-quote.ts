@@ -50,6 +50,14 @@ export interface SendQuoteInput {
   paymentTerms?: string | null;
   /** How the goods reach the buyer, or null for *not stated*. Same rule. */
   delivery?: string | null;
+  /**
+   * Board `1o` D1: the supplier's prices hold for any part of the quote, so a
+   * buyer may accept some lines from them and others elsewhere. Off unless the
+   * supplier ticks it; an all-or-nothing quote can be accepted whole, never in
+   * part. Fixed once sent (`quote_allows_partial_fixed`): a supplier who wants
+   * it the other way sends a revision.
+   */
+  allowsPartial?: boolean;
   lines: SendQuoteLineInput[];
 }
 
@@ -240,6 +248,7 @@ export async function sendQuoteForBusiness(
           note: input.note || null,
           paymentTerms,
           delivery,
+          allowsPartial: input.allowsPartial === true,
           status: "sent",
           sentAt: now,
           expiresAt,
@@ -285,6 +294,7 @@ export async function sendQuoteForBusiness(
         note: input.note || null,
         paymentTerms,
         delivery,
+        allowsPartial: input.allowsPartial === true,
         status: "sent",
         sentAt: now,
         expiresAt,

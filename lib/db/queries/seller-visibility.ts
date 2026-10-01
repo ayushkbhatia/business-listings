@@ -82,22 +82,34 @@ interface RawBuyer {
 }
 
 /**
+ * Who the buyer's contact went to: the businesses whose recipient rows carry
+ * `contactReleasedAt` (board `1o` D4) — several after a split. A single id is
+ * still accepted, from callers that read one supplier's release.
+ */
+export type ReleasedTo = string | readonly string[] | null | undefined;
+
+function releasedToThis(releasedTo: ReleasedTo, businessId: string): boolean {
+  if (!releasedTo) return false;
+  return typeof releasedTo === "string" ? releasedTo === businessId : releasedTo.includes(businessId);
+}
+
+/**
  * Narrow a buyer row to what this business is allowed to see.
  *
- * `releasedTo` is `Enquiry.contactReleasedToBusinessId`. It is compared here
- * rather than trusted from a caller's boolean, because a boolean is the kind
- * of argument that gets passed the wrong way round exactly once.
+ * `releasedTo` is who the buyer's contact went to. It is compared here rather
+ * than trusted from a caller's boolean, because a boolean is the kind of
+ * argument that gets passed the wrong way round exactly once.
  */
 export function buyerForSeller(
   buyer: RawBuyer | null | undefined,
-  releasedTo: string | null | undefined,
+  releasedTo: ReleasedTo,
   businessId: string,
   /** The enquiry's company, where the caller read it. Wins over the buyer's current one. */
   enquiryCompany?: ReleasedCompany | null,
 ): SellerVisibleBuyer {
   const firstName = firstNameOf(buyer?.fullName);
 
-  if (!releasedTo || releasedTo !== businessId) {
+  if (!releasedToThis(releasedTo, businessId)) {
     return { released: false, firstName };
   }
 
@@ -112,10 +124,8 @@ export function buyerForSeller(
 }
 
 /** Which select to use. Kept beside the narrowing so the two cannot diverge. */
-export function buyerSelectFor(releasedTo: string | null | undefined, businessId: string) {
-  return !releasedTo || releasedTo !== businessId
-    ? MASKED_BUYER_SELECT
-    : RELEASED_BUYER_SELECT;
+export function buyerSelectFor(releasedTo: ReleasedTo, businessId: string) {
+  return releasedToThis(releasedTo, businessId) ? RELEASED_BUYER_SELECT : MASKED_BUYER_SELECT;
 }
 
 function releasedCompany(company: ReleasedCompany | null) {

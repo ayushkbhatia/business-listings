@@ -8,11 +8,10 @@ import { assertCanAcceptQuote, assertCanCreateEnquiry } from "@/lib/auth/guards"
 import { normaliseIdentifier } from "@/lib/auth/identity";
 import { routeLead } from "@/lib/leads/router";
 import { sendAutoReplies } from "@/lib/messaging/auto-reply";
-import { onEnquiryDelivered, onQuoteAccepted, onQuotesDeclined } from "@/lib/notify/events";
-import { recordEvent } from "@/lib/telemetry/record";
-import { quoteTotalAed } from "@/lib/quote/money";
+import { onEnquiryDelivered } from "@/lib/notify/events";
 import { resolveEnquiryArea } from "./area";
-import { gateCompanyAcceptance, GateRefused, readReference, type GateRefusal } from "@/lib/buyer-company/gate";
+import type { GateRefusal } from "@/lib/buyer-company/gate";
+import { announceAcceptance, commitAcceptance, type AcceptOptions } from "./accept";
 import { activeMembership } from "@/lib/buyer-company/store";
 import { snapshotOf } from "@/lib/buyer-company/address";
 import { PLAN_CAPS_SELECT, effectiveCaps, toCaps } from "@/lib/plan/entitlements";
@@ -1000,22 +999,7 @@ export type AcceptQuoteResult =
         | GateRefusal;
     };
 
-/**
- * Board `7b`. What a company acceptance carries, and — from the approval
- * queue — which request it is the approval of.
- */
-export interface AcceptOptions {
-  /** Written to `Enquiry.buyerReference` with the acceptance. */
-  poNumber?: string | null;
-  costCode?: string | null;
-  approval?: { id: string; approverId: string } | null;
-  /**
-   * Which screen the acceptance was pressed on, for the `quote_accepted` event
-   * only — board `1n`'s telemetry asks whether buyers decide on the comparison
-   * or in a thread. It changes nothing about what accepting does (`10h` B6).
-   */
-  source?: "compare" | "thread" | "company" | "approval";
-}
+export type { AcceptOptions } from "./accept";
 
 /**
  * Accepting a quote. The terminal state of the whole product.
@@ -1031,12 +1015,6 @@ export interface AcceptOptions {
  * leave four sellers holding a live enquiry that is already lost, and a decline
  * without the release would lose the buyer the number they just earned.
  */
-/** A refusal found under the lock, thrown so the claim rolls back with it. */
-class AcceptRefused extends Error {
-  constructor(readonly code: "not_open" | "revised" | "enquiry_closed" | GateRefusal) {
-    super(code);
-  }
-}
 
 export async function acceptQuote(
   buyerId: string,
@@ -1086,183 +1064,37 @@ export async function acceptQuote(
   */
   if (quote.business.closureRequestedAt) return { ok: false, error: "supplier_closed" };
 
-  const accepted = await prisma.$transaction(async (tx) => {
-    /*
-       Board `7c`: the claim is conditional, and it is the lock.
-
-       This was an unconditional update after a read made outside the
-       transaction, so two accepts a second apart — two tabs, a double tap on a
-       slow connection — both passed the read and both committed: contact
-       released to one supplier, then to the other, and two quotes marked
-       accepted on one enquiry. The terminal state of the product, reached twice.
-
-       `updateMany` with the null in its `where` takes the row lock and re-reads
-       the column under it, so the second accept waits for the first and then
-       matches nothing. It is also the lock `lockQuoteFence` waits on, which is
-       what stops a supplier's send landing between the two.
-    */
-    const claimed = await tx.enquiry.updateMany({
-      where: { id: quote.enquiry.id, contactReleasedToBusinessId: null },
-      data: {
-        contactReleasedToBusinessId: quote.businessId,
-        contactReleasedAt: now,
-      },
-    });
-    if (claimed.count === 0) return { ok: false as const, error: "already_accepted" as const };
-
-    /*
-       Read again under the lock. A sweep can expire the quote, and a supplier
-       can send revision 3, between the page the buyer pressed on and this
-       instant — and accepting revision 2 once revision 3 exists would fix as
-       the record a price the supplier has already replaced. Throwing rolls the
-       claim back with it; the caller turns the code into the refusal.
-    */
-    const current = await tx.quote.findUniqueOrThrow({
-      where: { id: quote.id },
-      select: { status: true, enquiry: { select: { closesAt: true } } },
-    });
-    if (current.status !== "sent" && current.status !== "read") {
-      throw new AcceptRefused("not_open");
-    }
-    // A revision of the requirement can move the close; read it where the claim holds.
-    if (current.enquiry.closesAt.getTime() <= now.getTime()) throw new AcceptRefused("enquiry_closed");
-    const later = await tx.quote.count({
-      where: {
-        enquiryId: quote.enquiry.id,
-        businessId: quote.businessId,
-        revision: { gt: quote.revision },
-        status: { not: "draft" },
-      },
-    });
-    if (later > 0) throw new AcceptRefused("revised");
-
-    /*
-       Board `7b`: an enquiry raised for a buying company passes its rule here,
-       under the claim — the threshold, the person's authority and the month's
-       spend are read under the company's lock, so the gate and the claim are
-       one decision. A refusal throws and the claim rolls back with it.
-
-       The company is the enquiry's, not the buyer's today: an enquiry raised
-       for Marina Facilities is Marina's to approve even if the person who sent
-       it has since moved on — and then nobody accepts it in Marina's name.
-    */
-    if (quote.enquiry.buyerCompanyId) {
-      const po = readReference(options.poNumber);
-      const cost = readReference(options.costCode);
-      if (po === "too_long" || po === "invalid" || cost === "too_long" || cost === "invalid") {
-        throw new AcceptRefused("reference_invalid");
-      }
-      const gated = await gateCompanyAcceptance(tx, {
-        companyId: quote.enquiry.buyerCompanyId,
-        enquiryId: quote.enquiry.id,
+  /*
+     Board `7c`: the claim is conditional, and it is the lock; board `1o`: the
+     same commit as a split, so the terminal state has one code path. See
+     `commitAcceptance` in ./accept.ts for what runs under the claim.
+  */
+  const committed = await commitAcceptance({
+    buyerId,
+    enquiry: { id: quote.enquiry.id, buyerCompanyId: quote.enquiry.buyerCompanyId },
+    parts: [
+      {
         quoteId: quote.id,
         quoteRef: quote.ref,
-        raiserId: buyerId,
-        now,
-        poNumber: po,
-        costCode: cost,
-        approval: options.approval ?? null,
-      }).catch((error: unknown) => {
-        if (error instanceof GateRefused) throw new AcceptRefused(error.code);
-        throw error;
-      });
-      await tx.enquiry.update({
-        where: { id: quote.enquiry.id },
-        data: {
-          ...(gated.poNumber ? { buyerReference: gated.poNumber } : {}),
-          ...(gated.costCode ? { costCode: gated.costCode } : {}),
-        },
-      });
-    }
-
-    await tx.quote.update({
-      where: { id: quote.id },
-      data: { status: "accepted", acceptedAt: now },
-    });
-
-    // Every other recipient is out. Told plainly, and told now rather than
-    // left to wonder — the enquiry is closed to them either way.
-    const declined = await tx.enquiryRecipient.updateMany({
-      where: { enquiryId: quote.enquiry.id, businessId: { not: quote.businessId } },
-      data: { state: "declined" },
-    });
-
-    await tx.enquiryRecipient.updateMany({
-      where: { enquiryId: quote.enquiry.id, businessId: quote.businessId },
-      data: { state: "quoted" },
-    });
-
-    /*
-     * Every other supplier's quote is lost, with the reason on the row.
-     *
-     * Not the accepted supplier's own earlier revisions: those were superseded
-     * by their own r2, which the revision number already says, and calling
-     * them lost would tell that seller they lost an enquiry they won.
-     *
-     * `lostReason` holds a stable code rather than a sentence. It is rendered
-     * through t() like everything else — English in a database column is a
-     * translation that can never happen.
-     */
-    await tx.quote.updateMany({
-      where: {
-        enquiryId: quote.enquiry.id,
-        businessId: { not: quote.businessId },
-        status: { in: ["sent", "read"] },
+        businessId: quote.businessId,
+        revision: quote.revision,
+        enquiryLineIds: null,
       },
-      data: { status: "lost", lostReason: "buyer_accepted_another" },
-    });
+    ],
+    primaryBusinessId: quote.businessId,
+    now,
+    options,
+  });
+  if (!committed.ok) return { ok: false, error: committed.error };
 
-    return {
-      ok: true as const,
-      enquiryId: quote.enquiry.id,
-      businessId: quote.businessId,
-      declined: declined.count,
-    };
-  }).catch((error: unknown) => {
-    if (error instanceof AcceptRefused) return { ok: false as const, error: error.code };
-    throw error;
+  await announceAcceptance({
+    enquiryId: committed.enquiryId,
+    parts: committed.parts,
+    actorId: options.approval?.approverId ?? buyerId,
+    source: options.source ?? "compare",
   });
 
-  if (accepted.ok) {
-    const [total, proposal] = await Promise.all([
-      prisma.quoteLine.findMany({
-        where: { quoteId: quote.id },
-        select: { qty: true, unitPrice: true },
-      }),
-      prisma.quoteProposal.findUnique({
-        where: { quoteId: quote.id },
-        select: { feeAed: true, feeBasisLabel: true },
-      }),
-    ]);
-    await onQuoteAccepted({
-      enquiryId: accepted.enquiryId,
-      businessId: accepted.businessId,
-      quoteRef: quote.ref,
-      totalAed: quoteTotalAed(total.map((l) => ({ qty: l.qty, unitPrice: l.unitPrice.toString() }))),
-      /*
-         Board `3j-s`: an accepted proposal's figure is its fee on its basis. The
-         line sum is `0.00` and would tell the supplier they won nothing.
-      */
-      ...(proposal?.feeAed && proposal.feeBasisLabel
-        ? { proposal: { feeAed: proposal.feeAed.toString(), feeBasisLabel: proposal.feeBasisLabel } }
-        : {}),
-    });
-    /*
-       Board `1n` `B8`: the quotes that lost are declined out loud, not by a
-       status change nobody reads. Here rather than in any one screen's action,
-       because this is the only way to an acceptance — the comparison, the
-       thread and an approval all arrive through it.
-    */
-    await onQuotesDeclined({ enquiryId: accepted.enquiryId, acceptedBusinessId: accepted.businessId });
-    await recordEvent({
-      name: "quote_accepted",
-      businessId: accepted.businessId,
-      actorId: options.approval?.approverId ?? buyerId,
-      props: { source: options.source ?? "compare", lines: total.length, proposal: proposal !== null },
-    });
-  }
-
-  return accepted;
+  return { ok: true, enquiryId: committed.enquiryId, businessId: quote.businessId, declined: committed.declined };
 }
 
 export { CLOSES_IN_DAYS_CHOICES, MAX_RECIPIENTS };

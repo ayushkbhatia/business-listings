@@ -720,5 +720,35 @@ export const TEMPLATES: TemplateSeed[] = [
     actionPath: "/enquiry/{enquiryId}/compare",
     status: "live",
   },
+  /*
+     Board `1o` — part of a quote accepted. The buyer took some of this
+     supplier's lines and the rest from others, in one decision. It says which
+     lines and what they come to, that the buyer's contact details are now on
+     the lead, and nothing at all about who supplies the rest (AC3).
+
+     Goods only: a brief is answered with one proposal, which has no lines to
+     take a part of.
+  */
+  {
+    event: "quote_partly_accepted",
+    channel: "email",
+    kind: "goods",
+    subject: "Part of your quote {quoteRef} was accepted — {amount}",
+    body:
+      "The buyer on enquiry {ref} accepted {lines}, at {amount}. Your other lines on this quote were not accepted. " +
+      "Their contact details are on the lead. Payment and delivery are between you and the buyer.",
+    actionLabel: "Open the accepted lines",
+    actionPath: "/dashboard/leads/{enquiryId}",
+    status: "live",
+  },
+  {
+    event: "quote_partly_accepted",
+    channel: "in_app",
+    kind: "goods",
+    body: "The buyer on {ref} accepted {lines} from {quoteRef}, at {amount}.",
+    actionLabel: "Open the accepted lines",
+    actionPath: "/dashboard/leads/{enquiryId}",
+    status: "live",
+  },
 ];
 

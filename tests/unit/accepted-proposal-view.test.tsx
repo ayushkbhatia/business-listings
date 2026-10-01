@@ -44,6 +44,9 @@ function fixture(overrides: Partial<AcceptedRecord> = {}): AcceptedRecord {
     acceptedAt: new Date("2026-09-12T08:00:00Z"),
     isBrief: true,
     declinedCount: 3,
+    acceptedFrom: [],
+    partOfQuote: false,
+    linesNotAccepted: [],
     quote: {
       id: "q1",
       ref: "PR-40812-R1",

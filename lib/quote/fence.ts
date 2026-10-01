@@ -47,8 +47,15 @@ export type QuoteFenceReason =
 export interface QuoteFenceState {
   /** The business asking. */
   businessId: string;
-  /** `Enquiry.contactReleasedToBusinessId` — set only by acceptance. */
+  /** `Enquiry.contactReleasedToBusinessId` — set only by acceptance: the enquiry is decided. */
   contactReleasedToBusinessId: string | null;
+  /**
+   * Board `1o` D4: whether the buyer's contact went to this business — its own
+   * `EnquiryRecipient.contactReleasedAt`, which a split sets for several. The
+   * enquiry's column names one supplier only. Optional for callers that read
+   * no recipient row; absent, the enquiry's column is compared, as before `1o`.
+   */
+  releasedToThis?: boolean;
   /** `EnquiryRecipient.state`. */
   recipientState: string;
   /** `EnquiryRecipient.outcome`, the seller's own mark. */
@@ -97,14 +104,15 @@ export function quoteFence(state: QuoteFenceState, now: Date): QuoteFenceReason 
 export function decidedReason(
   state: Pick<
     QuoteFenceState,
-    "businessId" | "contactReleasedToBusinessId" | "recipientState" | "outcome" | "declinedBySeller"
+    "businessId" | "contactReleasedToBusinessId" | "releasedToThis" | "recipientState" | "outcome" | "declinedBySeller"
   >,
 ): Extract<
   QuoteFenceReason,
   "accepted_yours" | "accepted_elsewhere" | "declined" | "declined_by_you" | "marked"
 > | null {
   if (state.contactReleasedToBusinessId !== null) {
-    return state.contactReleasedToBusinessId === state.businessId ? "accepted_yours" : "accepted_elsewhere";
+    const ours = state.releasedToThis ?? state.contactReleasedToBusinessId === state.businessId;
+    return ours ? "accepted_yours" : "accepted_elsewhere";
   }
   if (state.recipientState === "declined") return state.declinedBySeller ? "declined_by_you" : "declined";
   if (state.outcome !== null) return "marked";

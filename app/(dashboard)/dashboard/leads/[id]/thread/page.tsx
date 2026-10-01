@@ -60,6 +60,8 @@ export default async function LeadThreadPage({ params }: { params: Promise<{ id:
         sellerNudgedAt: true,
         nudgeDueAt: true,
         outcome: true,
+        // Board `1o` D4: accepted from this supplier — one of several after a split.
+        contactReleasedAt: true,
         enquiry: {
           select: {
             contactReleasedToBusinessId: true,
@@ -101,7 +103,8 @@ export default async function LeadThreadPage({ params }: { params: Promise<{ id:
   const closed = lead.closesAt.getTime() < now.getTime();
   const readOnly = !canWrite({
     businessId: seat.businessId,
-    releasedTo: recipient.enquiry.contactReleasedToBusinessId,
+    // The pair `postMessage` lets write: this supplier if the buyer's contact went to them.
+    releasedTo: recipient.contactReleasedAt ? seat.businessId : recipient.enquiry.contactReleasedToBusinessId,
     closesAt: lead.closesAt,
     // A closing business has no seat left to be on this page.
     supplierClosed: false,

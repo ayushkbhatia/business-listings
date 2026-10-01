@@ -169,9 +169,10 @@ async function bucket(
       enquiryId: true,
       state: true,
       outcome: true,
+      // Board `1o` D4: accepted from this supplier, which a split may say of several.
+      contactReleasedAt: true,
       enquiry: {
         select: {
-          contactReleasedToBusinessId: true,
           quotes: {
             where: { businessId, status: { not: "draft" } },
             orderBy: { revision: "desc" },
@@ -191,7 +192,7 @@ async function bucket(
     // narrowing that breaks the day somebody changes the filter.
     if (!quote) return [];
 
-    const observedWin = r.enquiry.contactReleasedToBusinessId === businessId;
+    const observedWin = r.contactReleasedAt !== null;
     const observedLoss = r.state === "declined";
 
     let state: PipelineState;
@@ -384,7 +385,6 @@ async function hydrate(
           requirement: true,
           deliverToArea: true,
           closesAt: true,
-          contactReleasedToBusinessId: true,
           buyer: { select: { fullName: true } },
         },
       },
@@ -393,7 +393,7 @@ async function hydrate(
 
   const recipients = await prisma.enquiryRecipient.findMany({
     where: { businessId, enquiryId: { in: slice.map((row) => row.enquiryId) } },
-    select: { enquiryId: true, sellerNudgedAt: true, outcomeReason: true },
+    select: { enquiryId: true, sellerNudgedAt: true, outcomeReason: true, contactReleasedAt: true },
   });
   const byEnquiry = new Map(recipients.map((r) => [r.enquiryId, r]));
   const byQuote = new Map(quotes.map((q) => [q.id, q]));
@@ -410,11 +410,7 @@ async function hydrate(
         revision: quote.revision,
         enquiryId: quote.enquiryId,
         enquiryRef: quote.enquiry.ref,
-        buyer: buyerForSeller(
-          quote.enquiry.buyer,
-          quote.enquiry.contactReleasedToBusinessId,
-          businessId,
-        ),
+        buyer: buyerForSeller(quote.enquiry.buyer, recipient?.contactReleasedAt ? businessId : null, businessId),
         summary: summarise(quote.enquiry.requirement),
         deliverToArea: quote.enquiry.deliverToArea,
         lineCount: quote.lines.length,

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ReviewDisputeGround } from "@/lib/db/generated/enums";
 import {
+  acceptedAcrossSuppliers,
   DISPUTE_GROUNDS,
   EDITABLE_DAYS,
   PROVENANCE,
@@ -21,6 +22,8 @@ import {
   replyWindowEnds,
   replyWindowOpen,
   reviewableReplies,
+  reviewableSubjects,
+  reviewedForRequest,
   reviewWindowFor,
   type EnquiryForReview,
 } from "./eligibility";
@@ -39,7 +42,7 @@ function enquiry(over: Partial<EnquiryForReview> = {}): EnquiryForReview {
     contactReleasedToBusinessId: BUSINESS,
     contactReleasedAt: new Date("2026-08-20T10:00:00+04:00"),
     repliedBusinessIds: [BUSINESS],
-    alreadyReviewed: false,
+    reviewedBusinessIds: [],
     reviewOpensOn: new Date("2026-08-20T00:00:00Z"),
     ...over,
   };
@@ -146,7 +149,7 @@ describe("board 1m criterion 3 — the gate, and the two rungs it admits", () =>
   });
 
   it("allows one per enquiry, and no more", () => {
-    expect(canReview(BUYER, enquiry({ alreadyReviewed: true }))).toEqual({
+    expect(canReview(BUYER, enquiry({ reviewedBusinessIds: [BUSINESS] }))).toEqual({
       ok: false,
       reason: "already_reviewed",
     });
@@ -210,7 +213,7 @@ describe("no supplier reviews itself — the buyer's own business is never a sub
   it("answers whose enquiry it is, and whether it was reviewed, before whose business it is", () => {
     // Somebody else's enquiry says nothing about which supplier their seat is on.
     expect(canReview("user_other", seat(), BUSINESS, NOW)).toEqual({ ok: false, reason: "not_your_enquiry" });
-    expect(canReview(BUYER, seat({ alreadyReviewed: true }), BUSINESS, NOW)).toEqual({
+    expect(canReview(BUYER, seat({ reviewedBusinessIds: [REPLIED] }), BUSINESS, NOW)).toEqual({
       ok: false,
       reason: "already_reviewed",
     });
@@ -235,6 +238,98 @@ describe("board 1m criterion 1 — the provenance ladder", () => {
 
   it("has exactly two rungs — there is no unverified review", () => {
     expect(PROVENANCE).toEqual(["accepted_quote", "verified_enquiry"]);
+  });
+
+  it("board 1o: after a split, reads the supplier's own release, not the enquiry's column", () => {
+    const released = new Date("2026-08-20T10:00:00+04:00");
+    const recipients = [
+      { businessId: BUSINESS, contactReleasedAt: released },
+      { businessId: REPLIED, contactReleasedAt: released },
+    ];
+    // The column names the main supplier only; the other was accepted from too.
+    expect(provenanceOf({ businessId: REPLIED, enquiry: { contactReleasedToBusinessId: BUSINESS, recipients } })).toBe(
+      "accepted_quote",
+    );
+    expect(provenanceOf({ businessId: SILENT, enquiry: { contactReleasedToBusinessId: BUSINESS, recipients } })).toBe(
+      "verified_enquiry",
+    );
+  });
+});
+
+describe("board 1o D6 — one review per supplier accepted from", () => {
+  const released = new Date("2026-08-20T10:00:00+04:00");
+  const OTHER = "biz_second_accepted";
+  // Lines accepted from BUSINESS (the main share) and OTHER; REPLIED quoted and was not chosen.
+  const split = (over: Partial<EnquiryForReview> = {}) =>
+    enquiry({
+      repliedBusinessIds: [BUSINESS, OTHER, REPLIED],
+      accepted: [
+        { businessId: BUSINESS, contactReleasedAt: released },
+        { businessId: OTHER, contactReleasedAt: released },
+      ],
+      ...over,
+    });
+
+  it("asks which supplier while two are unreviewed, and offers only the ones accepted from", () => {
+    expect(acceptedAcrossSuppliers(split())).toBe(true);
+    expect(reviewableSubjects(split())).toEqual([BUSINESS, OTHER]);
+    expect(canReview(BUYER, split(), undefined, NOW)).toEqual({ ok: false, reason: "ambiguous_subject" });
+  });
+
+  it("puts every supplier accepted from on the accepted-quote rung, the main one or not", () => {
+    expect(canReview(BUYER, split(), BUSINESS, NOW)).toEqual({ ok: true, businessId: BUSINESS, provenance: "accepted_quote" });
+    expect(canReview(BUYER, split(), OTHER, NOW)).toEqual({ ok: true, businessId: OTHER, provenance: "accepted_quote" });
+  });
+
+  it("takes a second review about the other supplier once the first is written, and a third about nobody", () => {
+    const one = split({ reviewedBusinessIds: [BUSINESS] });
+    expect(reviewableSubjects(one)).toEqual([OTHER]);
+    // Nobody named: the one left is the subject.
+    expect(canReview(BUYER, one, undefined, NOW)).toEqual({ ok: true, businessId: OTHER, provenance: "accepted_quote" });
+    expect(canReview(BUYER, one, BUSINESS, NOW)).toEqual({ ok: false, reason: "already_reviewed" });
+
+    const both = split({ reviewedBusinessIds: [BUSINESS, OTHER] });
+    expect(reviewableSubjects(both)).toEqual([]);
+    expect(canReview(BUYER, both, undefined, NOW)).toEqual({ ok: false, reason: "already_reviewed" });
+    expect(canReview(BUYER, both, OTHER, NOW)).toEqual({ ok: false, reason: "already_reviewed" });
+  });
+
+  it("does not spend the extra reviews on a supplier nothing was accepted from", () => {
+    expect(canReview(BUYER, split(), REPLIED, NOW)).toEqual({ ok: false, reason: "no_confirmed_enquiry" });
+  });
+
+  it("keeps one review per enquiry when one supplier was accepted from — whoever it was about", () => {
+    const ordinary = enquiry({ repliedBusinessIds: [BUSINESS, REPLIED], accepted: [{ businessId: BUSINESS, contactReleasedAt: released }] });
+    expect(acceptedAcrossSuppliers(ordinary)).toBe(false);
+    expect(canReview(BUYER, { ...ordinary, reviewedBusinessIds: [REPLIED] }, BUSINESS, NOW)).toEqual({
+      ok: false,
+      reason: "already_reviewed",
+    });
+  });
+
+  it("runs each supplier's window from their own release", () => {
+    const later = new Date("2026-08-22T10:00:00+04:00");
+    const gate = split({ accepted: [{ businessId: BUSINESS, contactReleasedAt: released }, { businessId: OTHER, contactReleasedAt: later }] });
+    // The Dubai calendar day, held as UTC midnight (`dubaiDayStart`).
+    expect(reviewWindowFor(gate, OTHER)!.from).toEqual(new Date("2026-08-22T00:00:00Z"));
+    expect(reviewWindowFor(gate, BUSINESS)!.from).toEqual(new Date("2026-08-20T00:00:00Z"));
+  });
+
+  it("refuses its own business by name, even inside a split", () => {
+    expect(canReview(BUYER, split({ buyerBusinessId: OTHER }), OTHER, NOW)).toEqual({
+      ok: false,
+      reason: "own_business",
+      businessId: OTHER,
+    });
+    // And it is not among the ones to choose from.
+    expect(reviewableSubjects(split({ buyerBusinessId: OTHER }))).toEqual([BUSINESS]);
+  });
+
+  it("a request asks about this supplier's review after a split, and about the enquiry's one otherwise", () => {
+    expect(reviewedForRequest({ reviewedBusinessIds: [BUSINESS], acceptedCount: 2 }, OTHER)).toBe(false);
+    expect(reviewedForRequest({ reviewedBusinessIds: [BUSINESS], acceptedCount: 2 }, BUSINESS)).toBe(true);
+    expect(reviewedForRequest({ reviewedBusinessIds: [REPLIED], acceptedCount: 1 }, BUSINESS)).toBe(true);
+    expect(reviewedForRequest({ reviewedBusinessIds: [], acceptedCount: 1 }, BUSINESS)).toBe(false);
   });
 });
 

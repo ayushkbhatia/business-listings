@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getAcceptedRecord } from "@/lib/db/queries/accepted-record";
+import { getAcceptedRecordFor } from "@/lib/db/queries/accepted-record";
 import { acceptedQuotePdf } from "@/lib/quote/record-pdf";
 import { resolveBuyerId } from "../../../_buyer";
 
@@ -13,7 +13,8 @@ import { resolveBuyerId } from "../../../_buyer";
  *
  * The same gate as the page, by the same loader — a route handler is exactly the
  * URL a page-level check would miss. Somebody else's enquiry, an unaccepted one
- * and a missing one are one 404 with no body.
+ * and a missing one are one 404 with no body. Board `1o` D4: `?supplier=` names
+ * whose record after a split, as on the page.
  */
 export const dynamic = "force-dynamic";
 
@@ -24,7 +25,7 @@ export async function GET(request: NextRequest, context: RouteContext<"/enquiry/
   const buyerId = await resolveBuyerId(token);
   if (!buyerId) return new NextResponse(null, { status: 404 });
 
-  const record = await getAcceptedRecord(buyerId, id);
+  const record = await getAcceptedRecordFor(buyerId, id, request.nextUrl.searchParams.get("supplier") || null);
   if (!record) return new NextResponse(null, { status: 404 });
 
   const pdf = acceptedQuotePdf(record, new Date());

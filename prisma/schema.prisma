@@ -596,6 +596,12 @@ model QuoteApproval {
   quoteRevision Int                 @map("quote_revision")
   /// Integer fils. Null for a quote with no single total (`no_total`).
   valueFils     BigInt?             @map("value_fils")
+  /// Board `1o` D5. A request to accept lines from several suppliers at once:
+  /// one entry per supplier, `{ quoteId, quoteRevision, enquiryLineIds,
+  /// poNumber }`, read by `lib/buyer-company/split-request.ts`. Null for a
+  /// single quote. `quoteId` then names the split's main supplier, and
+  /// `valueFils` is the combined amount the rule was checked against, once.
+  split         Json?
   raisedById    String              @map("raised_by_id") @db.Uuid
   reasons       ApprovalReason[]
   /// The one person who may approve, where a reason names one — the company's
@@ -827,16 +833,16 @@ model Area {
 
 /// Self-referencing tree, two levels in use.
 model Category {
-  id                  String     @id @default(cuid())
-  parentId            String?    @map("parent_id")
-  name                String
-  nameAr              String?    @map("name_ar")
-  slug                String     @unique
+  id                      String          @id @default(cuid())
+  parentId                String?         @map("parent_id")
+  name                    String
+  nameAr                  String?         @map("name_ar")
+  slug                    String          @unique
   /// Two-letter mono mark, e.g. "IN".
-  code                String
+  code                    String
   /// Query routing. Includes Arabic terms — صمامات must find valve suppliers.
-  synonyms            String[]   @default([])
-  defaultTemplateId   String?    @map("default_template_id")
+  synonyms                String[]        @default([])
+  defaultTemplateId       String?         @map("default_template_id")
   /// How this trade is sold — decision D5, `docs/services-spec.md`.
   ///
   /// Null inherits from the parent, so a sector can be set once and a
@@ -850,7 +856,7 @@ model Category {
   /// the other. Logistics holds *Customs clearance* beside *Material handling
   /// equipment*; IT holds *Cybersecurity* beside *Servers & storage*. A
   /// sector-level flag would be wrong on roughly half the tree.
-  tradeKind           TradeKind? @map("trade_kind")
+  tradeKind               TradeKind?      @map("trade_kind")
   /// Which scope sheet a service in this trade fills in — board `3g-s` B2.
   ///
   /// A family decides three things a global list cannot: which fee bases the
@@ -863,11 +869,11 @@ model Category {
   /// `tradeKind` uses, and a tree with none anywhere falls back to the seeded
   /// `general` family. That fallback is what lets a service be created in a
   /// trade nobody has classified yet — which today is all 440 of them.
-  scopeFamilyId       String?    @map("scope_family_id")
+  scopeFamilyId           String?         @map("scope_family_id")
   /// The trade `/rfq/new` opens on when nothing else names one. It was also the
   /// home page's sector gate until board 6h, which made "Browse by category" a
   /// rail that computes — by listing count — rather than one chosen by hand.
-  showOnHome          Boolean    @default(false) @map("show_on_home")
+  showOnHome              Boolean         @default(false) @map("show_on_home")
   /// Whether `/categories` lists this category — board `4d`.
   ///
   /// The second public surface's own switch (`B3`). A category appears on the
@@ -879,19 +885,19 @@ model Category {
   ///
   /// A sector with no public listings stays out of the index whatever this
   /// says. That half is computed from the count, not stored.
-  showInIndex         Boolean    @default(true) @map("show_in_index")
+  showInIndex             Boolean         @default(true) @map("show_in_index")
   /// Whether a buyer's RFQ fans out to the listings filed here — board `4d`.
   ///
   /// Read by `findFanoutCandidates`. Off takes the category out of category
   /// matching; an enquiry to a supplier the buyer named still reaches them,
   /// because that is not a fan-out.
-  acceptsRfq          Boolean    @default(true) @map("accepts_rfq")
+  acceptsRfq              Boolean         @default(true) @map("accepts_rfq")
   /// Whether a claim or a category change here needs a person — board `4d`.
   ///
   /// Read by the approval queue as the `licence_extra_check` check, which never
   /// passes while this is on (own or the sector's), so bulk approve cannot act
   /// on it. It had no reader at all before this board.
-  requiresExtraCheck  Boolean    @default(false) @map("requires_extra_check")
+  requiresExtraCheck      Boolean         @default(false) @map("requires_extra_check")
   /// The landing page's own copy.
   ///
   /// Board 6f: a category page with a heading and a grid of results is a page
@@ -901,10 +907,10 @@ model Category {
   ///
   /// Nullable, and most are null. That is the point of the matrix: it shows
   /// which pages have nothing to say yet.
-  intro               String?
+  intro                   String?
   /// Listings needed before landing pages publish.
-  publishThreshold    Int        @default(60) @map("publish_threshold")
-  verifiedShareMin    Float      @default(0.30) @map("verified_share_min")
+  publishThreshold        Int             @default(60) @map("publish_threshold")
+  verifiedShareMin        Float           @default(0.30) @map("verified_share_min")
   /// Listings required per 1,000 monthly searches — board 6f.
   ///
   /// The second half of the listings rule. A page needs the absolute floor
@@ -912,7 +918,7 @@ model Category {
   /// so a trade nobody searches for publishes at 60 and one with four thousand
   /// searches a month has to be worth arriving at. It bites only on scopes
   /// somebody has recorded a `ScopeDemand` row for.
-  demandPerThousand   Int        @default(25) @map("demand_per_thousand")
+  demandPerThousand       Int             @default(25) @map("demand_per_thousand")
   /// The fraction of that need a page which is ALREADY live keeps holding at.
   ///
   /// Board 6f asks for hysteresis: publish at 60, unpublish at 48. Without a
@@ -920,26 +926,26 @@ model Category {
   /// and leaving the sitemap. A share rather than a second integer because the
   /// need is no longer one number — at 0.8 it reproduces the board's 60 and 48
   /// exactly and scales with a demand-raised floor.
-  holdShare           Float      @default(0.80) @map("hold_share")
+  holdShare               Float           @default(0.80) @map("hold_share")
   /// Words of the page's own copy — board 6f's fourth control.
   ///
   /// A column rather than the module default it used to read, because §5 puts
   /// the word floor on the rules panel beside the other five and every one of
   /// them republishes the site. `thresholdsFor` pinned this to 250 with a
   /// comment saying "board 6f owns it"; it does now.
-  minIntroWords       Int        @default(250) @map("min_intro_words")
+  minIntroWords           Int             @default(250) @map("min_intro_words")
   /// Whether generated drafts must be read by a person before they publish.
   ///
   /// Board 6f §2: "Generate 38 drafts", not "Generate queued pages". A single
   /// button that publishes 38 pages into a live index is a materially different
   /// and worse button. On by default, and `generateDrafts` refuses to publish
   /// anything while it is on.
-  humanReviewRequired Boolean    @default(true) @map("human_review_required")
+  humanReviewRequired     Boolean         @default(true) @map("human_review_required")
   /// Days a newly published page is protected from the sweep — board 6f.
   ///
   /// The sweep skips a page inside this window rather than the page staying
   /// live while thin: see `AreaPage.firstPublishedAt`.
-  minLiveDays         Int        @default(30) @map("min_live_days")
+  minLiveDays             Int             @default(30) @map("min_live_days")
   /// What a services landing page calls the people who do this work — board
   /// `6a-s`, correction 3.
   ///
@@ -952,7 +958,7 @@ model Category {
   ///
   /// Null falls back to the trade's own name and "firms", which reads plainly
   /// and claims nothing. Read only where the trade resolves to `services`.
-  pluralHuman         String?    @map("plural_human")
+  pluralHuman             String?         @map("plural_human")
   /// The credential buyers in this trade look for — board `6a-s`, and the
   /// per-subcategory resolution `4e-s` Q3 said the family could not be.
   ///
@@ -968,7 +974,7 @@ model Category {
   /// and only for a kind a register can answer for — today `fta_tax_agent`
   /// alone. A kind nobody can check renders nothing: counting claims as though
   /// they were checks is the one thing a trust stat cannot do.
-  credentialKind      CredentialKind? @map("credential_kind")
+  credentialKind          CredentialKind? @map("credential_kind")
   /// When ops opened the services landing template for this trade — board
   /// `6a-s`, build phase 5: *feature flag the services template; roll out one
   /// category first and check it in Search Console before opening the others.*
@@ -982,9 +988,9 @@ model Category {
   /// absent from the sitemap and from every link block — rather than rendering
   /// the goods template, which is the defect the services template exists to
   /// fix (`6a-s` B2).
-  servicesLandingOpenedAt DateTime? @map("services_landing_opened_at")
-  sortOrder           Int        @default(0) @map("sort_order")
-  createdAt           DateTime   @default(now()) @map("created_at")
+  servicesLandingOpenedAt DateTime?       @map("services_landing_opened_at")
+  sortOrder               Int             @default(0) @map("sort_order")
+  createdAt               DateTime        @default(now()) @map("created_at")
 
   parent            Category?                @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
   children          Category[]               @relation("CategoryTree")
@@ -3533,12 +3539,14 @@ model Enquiry {
   attachments     Document[]
   quotes          Quote[]
   messages        Message[]
-  review          Review?
+  /// Board `1o` D6: one per accepted supplier on an enquiry accepted across suppliers.
+  reviews         Review[]
   reviewDraft     ReviewDraft?
   reviewRequests  ReviewRequest[]
   /// Board `7c` `B8`: the one supplier report a buyer may file from the
   /// accepted record, with this enquiry's thread as its evidence.
-  supplierReport  SupplierReport?
+  /// Board `1o` D4: one per supplier accepted from.
+  supplierReports SupplierReport[]
   campaign        Campaign?             @relation(fields: [campaignId], references: [id], onDelete: SetNull)
   /// Board `1h-s`. Present on an enquiry for work, absent on one for things —
   /// and its presence is the whole of what makes an enquiry a brief.
@@ -4892,6 +4900,13 @@ model EnquiryRecipient {
   /// The supplier's own words, optional, shown to the buyer as written.
   declineReason String?   @map("decline_reason")
 
+  /// Board `1o` D4. When the buyer's contact details went to this supplier.
+  /// One per accepted supplier, so a split releases to each of them. "Was the
+  /// buyer's contact released to X" is asked here, never of
+  /// `Enquiry.contactReleasedToBusinessId`, which names one supplier and so
+  /// cannot answer it for a split. A trigger mirrors the single-supplier write.
+  contactReleasedAt DateTime? @map("contact_released_at")
+
   createdAt DateTime @default(now()) @map("created_at")
 
   enquiry    Enquiry  @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
@@ -4909,6 +4924,7 @@ model EnquiryRecipient {
   /// routing on is the one that notices: the rail's scope filter, its five tab
   /// counts, the quotes pipeline, the speed card and the CSV all filter on it.
   @@index([assignedToId], map: "enquiry_recipient_assignee_idx")
+  @@index([businessId, contactReleasedAt], map: "enquiry_recipient_released_idx")
   @@map("enquiry_recipient")
 }
 
@@ -4948,6 +4964,15 @@ model Quote {
   paymentTerms    PaymentTerms?  @map("payment_terms")
   /// How the goods reach the buyer, as quoted. See `DeliveryTerms`.
   delivery        DeliveryTerms?
+  /// Board `1o` D1. The supplier's prices hold if the buyer takes only some
+  /// lines. Off by default: a quote without it is all or nothing, accepted
+  /// whole or not at all. Fixed once sent (trigger `quote_allows_partial_fixed`)
+  /// because the buyer chooses against it; changing it is a new revision.
+  allowsPartial   Boolean        @default(false) @map("allows_partial")
+  /// Board `1o` D5. The buyer's PO number for this supplier. A split goes to
+  /// several suppliers and a PO is issued to one; a single acceptance writes it
+  /// here and to `Enquiry.buyerReference`, which acceptances before `1o` used.
+  buyerReference  String?        @map("buyer_reference")
   createdAt       DateTime       @default(now()) @map("created_at")
   /// When the draft was last autosaved. A sent quote never moves it — a revision
   /// is a new row rather than an edit — so on everything but a draft it equals
@@ -4987,8 +5012,8 @@ model Quote {
 }
 
 model QuoteLine {
-  id            String  @id @default(cuid())
-  quoteId       String  @map("quote_id")
+  id            String    @id @default(cuid())
+  quoteId       String    @map("quote_id")
   /// The buyer's line this one answers.
   ///
   /// The composer used to match a revision's lines back onto the enquiry by
@@ -4999,9 +5024,9 @@ model QuoteLine {
   /// Nullable because every line written before board 3j has no answer, and
   /// inventing one by matching descriptions would bake that ambiguity into the
   /// column.
-  enquiryLineId String? @map("enquiry_line_id")
+  enquiryLineId String?   @map("enquiry_line_id")
   /// Null means a free-text line, flagged for manual pricing.
-  productId     String? @map("product_id")
+  productId     String?   @map("product_id")
   description   String
   /// Null where the line is priced as a whole — see `EnquiryLine.qty`.
   ///
@@ -5016,9 +5041,14 @@ model QuoteLine {
   qty           Int?
   /// A price, private to one buyer and one seller. One of two in the schema:
   /// `QuoteProposal.feeAed` is the other, under the same rule — board `3j-s`.
-  unitPrice     Decimal @map("unit_price") @db.Decimal(12, 2)
-  leadTimeDays  Int?    @map("lead_time_days")
-  sortOrder     Int     @default(0) @map("sort_order")
+  unitPrice     Decimal   @map("unit_price") @db.Decimal(12, 2)
+  leadTimeDays  Int?      @map("lead_time_days")
+  sortOrder     Int       @default(0) @map("sort_order")
+  /// Board `1o`. Set on the lines an acceptance covers: every line of a quote
+  /// accepted whole, or the chosen lines of a part with the supplier's own
+  /// added lines, which go with any part (D7). Null on every line of a quote
+  /// accepted before `1o`, which covered the whole of it.
+  acceptedAt    DateTime? @map("accepted_at")
 
   quote       Quote        @relation(fields: [quoteId], references: [id], onDelete: Cascade)
   product     Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
@@ -5229,7 +5259,10 @@ model Review {
   businessId         String    @map("business_id")
   buyerId            String    @map("buyer_id") @db.Uuid
   /// Gating: one review per enquiry, and the enquiry must exist.
-  enquiryId          String    @unique @map("enquiry_id")
+  /// One review per enquiry and supplier. An enquiry accepted across suppliers
+  /// (board `1o` D6) carries one review about each of them; any other enquiry
+  /// carries one, which `lib/reviews` holds it to.
+  enquiryId          String    @map("enquiry_id")
   /// The buyer's own verdict, 1–5. **An input, never the mean of the four
   /// below** (board 10f `B3`): it is the one figure board 1m sorts and filters
   /// on, and the board ships 4 against a dimension mean of 4.25 on purpose.
@@ -5295,6 +5328,7 @@ model Review {
   /// Postgres would therefore never choose over it. `heldAt` joins the key
   /// because every figure on board 1m's page excludes a held row, so that
   /// filter is on all six of those queries rather than on some of them.
+  @@unique([enquiryId, businessId])
   @@index([businessId, removedAt, heldAt, createdAt])
   @@map("review")
 }
@@ -5663,7 +5697,7 @@ model SupplierReport {
   ///
   /// `SetNull` for the reason `reviewId` gives: the report is a finding about a
   /// supplier, and it outlives the enquiry it was filed from.
-  enquiryId   String?         @unique @map("enquiry_id")
+  enquiryId   String?         @map("enquiry_id")
   /// What was said: a reporter's own words, or a detector's description of what
   /// it matched. Null where neither has anything to add.
   detail      String?
@@ -5743,6 +5777,9 @@ model SupplierReport {
   duplicates        SupplierReport[] @relation("ReportDuplicates")
   suggestedCategory Category?        @relation("ReportSuggestedCategory", fields: [suggestedCategoryId], references: [id], onDelete: SetNull)
 
+  /// One report per enquiry and supplier: a record per supplier after a split
+  /// (board `1o` D4), each with its own report. Public reports carry no enquiry.
+  @@unique([enquiryId, subjectBusinessId])
   @@index([subjectBusinessId, outcome])
   @@index([kind])
   @@index([reviewId])
@@ -9171,6 +9208,10 @@ enum NotificationEvent {
   /// Board `1n`. The buyer holds quotes that stop being acceptable when the
   /// enquiry closes, within the day, and none is accepted yet.
   enquiry_closing
+  /// Board `1o`. The buyer accepted some of a supplier's lines and took the
+  /// rest from other suppliers. Names the lines and their amount — never who
+  /// supplies the others, or at what price.
+  quote_partly_accepted
 
   @@map("notification_event")
 }

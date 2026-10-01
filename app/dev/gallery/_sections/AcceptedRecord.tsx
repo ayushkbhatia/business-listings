@@ -38,6 +38,9 @@ const TYPICAL: AcceptedRecord = {
   acceptedAt: new Date("2026-08-21T08:00:00Z"),
   isBrief: false,
   declinedCount: 3,
+  acceptedFrom: [],
+  partOfQuote: false,
+  linesNotAccepted: [],
   quote: {
     id: "q-7c",
     ref: "QT-8841-R2",

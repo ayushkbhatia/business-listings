@@ -3,7 +3,7 @@ import { feeOnBasis } from "@/lib/quote/proposal-words";
 import { filsToAed } from "@/lib/quote/money";
 import { approversFor } from "@/lib/buyer-company/queue";
 import { prisma } from "@/lib/db/client";
-import { formatAED, formatCount, formatDate, formatDateTime, UAE_LOCALE } from "@/lib/format";
+import { formatAED, formatCount, formatDate, formatDateTime, formatList, UAE_LOCALE } from "@/lib/format";
 /*
    Type-only, and written as `import type` rather than an inline `type` marker.
 
@@ -294,6 +294,61 @@ export async function onQuoteAccepted(input: {
         ref: enquiry.ref,
         quoteRef: input.quoteRef,
         amount: input.proposal ? feeOnBasis(input.proposal) : formatAED(input.totalAed),
+        enquiryId: input.enquiryId,
+        shortLink: absoluteUrl(`/dashboard/leads/${input.enquiryId}`),
+      }),
+    });
+  });
+}
+
+/**
+ * Board `1o`. The buyer accepted some of this supplier's lines and took the
+ * rest from others, in one decision.
+ *
+ * The lines and their amount are this supplier's own, and nothing else
+ * travels: not who supplies the rest, not at what price, not how many others
+ * there are (AC3). The buyer's contact details are on the lead, as after a
+ * whole acceptance.
+ */
+export async function onQuotePartlyAccepted(input: {
+  enquiryId: string;
+  businessId: string;
+  quoteRef: string;
+  /** The buyer's lines taken from this supplier, as the enquiry words them. */
+  lines: readonly { description: string; qty: number | null }[];
+  /** How many lines this supplier priced — the *of 3* in *2 of your 3 lines*. */
+  pricedLines: number;
+  /** The accepted part, with any lines the supplier added (D7). */
+  totalAed: string;
+}): Promise<void> {
+  await safely("quote_partly_accepted", async () => {
+    const [owner, enquiry] = await Promise.all([
+      prisma.user.findFirst({
+        where: { businessId: input.businessId, roles: { has: "seller_owner" } },
+        select: { id: true },
+        orderBy: { id: "asc" },
+      }),
+      prisma.enquiry.findUnique({ where: { id: input.enquiryId }, select: { ref: true } }),
+    ]);
+    if (!owner || !enquiry) return;
+
+    const named = formatList(
+      input.lines.map((line) =>
+        line.qty === null ? line.description : t("notify.partly_accepted.line", { description: line.description, qty: formatCount(line.qty) }),
+      ),
+    );
+    await notify({
+      event: "quote_partly_accepted",
+      businessId: input.businessId,
+      recipientUserId: owner.id,
+      enquiryId: input.enquiryId,
+      tradeKind: "goods",
+      valueAed: Number(input.totalAed),
+      params: withParams("quote_partly_accepted", {
+        ref: enquiry.ref,
+        quoteRef: input.quoteRef,
+        lines: t("notify.partly_accepted.lines", { count: input.lines.length, of: input.pricedLines, names: named }),
+        amount: formatAED(input.totalAed),
         enquiryId: input.enquiryId,
         shortLink: absoluteUrl(`/dashboard/leads/${input.enquiryId}`),
       }),
@@ -1585,7 +1640,11 @@ export async function onOffPlatformFlagged(input: { enquiryId: string; businessI
  * themselves has already walked away and hears nothing more. Nothing about the
  * winner travels: not the supplier, not the price (`permissions.md`).
  */
-export async function onQuotesDeclined(input: { enquiryId: string; acceptedBusinessId: string }): Promise<void> {
+export async function onQuotesDeclined(input: {
+  enquiryId: string;
+  /** Every supplier the buyer accepted from — one, or several after a split (board `1o`). */
+  acceptedBusinessIds: readonly string[];
+}): Promise<void> {
   await safely("quote_declined", async () => {
     const enquiry = await prisma.enquiry.findUnique({
       where: { id: input.enquiryId },
@@ -1595,12 +1654,12 @@ export async function onQuotesDeclined(input: { enquiryId: string; acceptedBusin
         requirement: true,
         serviceBrief: { select: { enquiryId: true } },
         quotes: {
-          where: { businessId: { not: input.acceptedBusinessId }, status: "lost" },
+          where: { businessId: { notIn: [...input.acceptedBusinessIds] }, status: "lost" },
           orderBy: [{ businessId: "asc" }, { revision: "desc" }],
           select: { businessId: true, ref: true },
         },
         recipients: {
-          where: { businessId: { not: input.acceptedBusinessId } },
+          where: { businessId: { notIn: [...input.acceptedBusinessIds] } },
           select: { businessId: true, assignedToId: true, declinedAt: true },
         },
       },

@@ -81,7 +81,13 @@ export interface BuyerEnquiry {
   brief: EnquiryBrief | null;
   closesAt: Date;
   createdAt: Date;
+  /** Set on acceptance: the enquiry is decided. After a split it names the main supplier only. */
   contactReleasedToBusinessId: string | null;
+  /**
+   * Board `1o` D4: every supplier the buyer accepted from — one, or several
+   * after a split. Each of their rows reads as chosen.
+   */
+  acceptedBusinessIds: string[];
   /**
    * Board `7b`: the buying company the enquiry was raised for, or null. Its
    * rule governs acceptance, so the accept controls send a company enquiry to
@@ -142,6 +148,7 @@ export async function getBuyerEnquiry(buyerId: string, enquiryId: string): Promi
           businessId: true,
           state: true,
           openedAt: true,
+          contactReleasedAt: true,
           business: { select: { slug: true, displayName: true } },
         },
       },
@@ -190,6 +197,10 @@ export async function getBuyerEnquiry(buyerId: string, enquiryId: string): Promi
     closesAt: enquiry.closesAt,
     createdAt: enquiry.createdAt,
     contactReleasedToBusinessId: enquiry.contactReleasedToBusinessId,
+    acceptedBusinessIds: enquiry.recipients
+      .filter((recipient) => recipient.contactReleasedAt !== null)
+      .map((recipient) => recipient.businessId)
+      .sort(),
     buyerCompanyId: enquiry.buyerCompanyId,
     contactReleasedAt: enquiry.contactReleasedAt,
     lines: enquiry.lines.map((l) => ({

@@ -15,6 +15,7 @@ import { Section, States } from "../_kit";
 import {
   REVIEW_WRITE_NOW,
   anonymousReview,
+  chooseAcceptedSupplier,
   chooseSupplier,
   drawnReview,
   editReview,
@@ -157,6 +158,9 @@ export function WriteReviewGallery() {
       </States>
       <States label="several suppliers replied · choose one" stack>
         <Specimen data={chooseSupplier()} name="choose" />
+      </States>
+      <States label="lines accepted from two suppliers · one review each (board 1o D6)" stack>
+        <Specimen data={chooseAcceptedSupplier()} name="choose-split" />
       </States>
       <States label="engagement · reviews not open yet" stack>
         <Specimen data={notYetOpen()} name="not-yet-open" />

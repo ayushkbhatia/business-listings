@@ -829,11 +829,16 @@ export const EVENT_SPECS = {
     session: "never",
     props: { quotes: "number", lines: "number", sort: "string?", phase: "string?" },
   },
-  /** Accepted, from which screen. On the supplier who won, which is their fact too. */
+  /**
+   * Accepted, from which screen. On the supplier who won, which is their fact too.
+   * Board `1o`: one per supplier accepted from, with `split` set when the
+   * enquiry was accepted across suppliers or in part. `lines` is how many of
+   * this supplier's lines the acceptance covered.
+   */
   quote_accepted: {
     emitter: "server",
     session: "never",
-    props: { source: "string", lines: "number", proposal: "boolean?" },
+    props: { source: "string", lines: "number", proposal: "boolean?", split: "boolean?" },
   },
   suppliers_nudged: {
     emitter: "server",

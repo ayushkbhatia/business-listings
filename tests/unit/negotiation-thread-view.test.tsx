@@ -17,6 +17,7 @@ import {
 import { amountWords, deltaWords, relativeWords, threadLabels, validityWords } from "@/lib/messaging/negotiation-words";
 import { revisionPdf } from "@/lib/quote/revision-pdf";
 import { compareRevision, revisionPairs } from "@/lib/messaging/negotiation";
+import { t } from "@/lib/i18n";
 
 /**
  * Board `10h` as rendered, from the board's own rows.
@@ -68,6 +69,27 @@ describe("the words", () => {
 });
 
 describe("as drawn", () => {
+  it("board 1o: after a split, every supplier accepted from reads accepted in the rail, whichever thread is open", () => {
+    const board = boardNegotiation();
+    // Accepted from Al Waha (the open thread) and from the second row; the rest not chosen.
+    const winners = new Set([board.rail[0]!.businessId, board.rail[1]!.businessId]);
+    const split = {
+      ...board,
+      enquiry: { ...board.enquiry, releasedTo: board.rail[0]!.businessId, releasedAt: NEGOTIATION_NOW, acceptedFromCount: 2 },
+      rail: board.rail.map((thread) => ({
+        ...thread,
+        releasedTo: winners.has(thread.businessId) ? thread.businessId : board.rail[0]!.businessId,
+      })),
+    };
+    const view = buildNegotiationView(split, { now: NEGOTIATION_NOW, token: "tok", acceptError: null });
+    const state = (name: string) => view.layout.rail.rows.find((row) => row.name === name)!.stateLine ?? "";
+    expect(state(board.rail[0]!.displayName)).toMatch(new RegExp(`^${t("negotiation.state.accepted")}`));
+    expect(state(board.rail[1]!.displayName)).toMatch(new RegExp(`^${t("negotiation.state.accepted")}`));
+    for (const thread of board.rail.slice(2)) {
+      expect(state(thread.displayName)).not.toMatch(new RegExp(`^${t("negotiation.state.accepted")}`));
+    }
+  });
+
   it("renders the rail as the board lists it", () => {
     renderNegotiation();
     const rail = screen.getByRole("navigation", { name: "Threads on ENQ-8841" });

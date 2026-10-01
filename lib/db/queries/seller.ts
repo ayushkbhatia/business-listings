@@ -68,7 +68,6 @@ export async function getLeadsForBusiness(businessId: string): Promise<LeadRow[]
           neededBy: true,
           closesAt: true,
           createdAt: true,
-          contactReleasedToBusinessId: true,
           // Masked by construction: only the name column, for the first name.
           buyer: { select: { fullName: true } },
           lines: { select: { qty: true } },
@@ -117,7 +116,8 @@ export async function getLeadsForBusiness(businessId: string): Promise<LeadRow[]
       openedAt: r.openedAt,
       firstReplyAt: r.firstReplyAt,
       sellerNudgedAt: r.sellerNudgedAt,
-      buyer: buyerForSeller(e.buyer, e.contactReleasedToBusinessId, businessId),
+      // Board `1o` D4: released to this business is on its own recipient row.
+      buyer: buyerForSeller(e.buyer, r.contactReleasedAt ? businessId : null, businessId),
       latestQuote: quote
         ? {
             ref: quote.ref,
@@ -178,8 +178,9 @@ export interface LeadDetail {
   /**
    * When the buyer accepted, where they did.
    *
-   * `Quote.acceptedAt` first, falling back to `Enquiry.contactReleasedAt` — the
-   * same pair the buyer's own side reads. The seller's screen used to render
+   * `Quote.acceptedAt` first, falling back to this supplier's own
+   * `EnquiryRecipient.contactReleasedAt` (board `1o` D4) — the same pair the
+   * buyer's own side reads. The seller's screen used to render
    * "accepted your quote on {when}" with the *enquiry's* creation date, which on
    * a three-week enquiry was a fortnight out.
    */
@@ -241,15 +242,15 @@ export async function getLeadDetail(
 ): Promise<LeadDetail | null> {
   const recipient = await prisma.enquiryRecipient.findUnique({
     where: { enquiryId_businessId: { enquiryId, businessId } },
-    select: { state: true, openedAt: true, firstReplyAt: true },
+    select: { state: true, openedAt: true, firstReplyAt: true, contactReleasedAt: true },
   });
   if (!recipient) return null;
-
-  const released = await prisma.enquiry.findUnique({
-    where: { id: enquiryId },
-    select: { contactReleasedToBusinessId: true, contactReleasedAt: true },
-  });
-  if (!released) return null;
+  /*
+     Board `1o` D4: whether the buyer's contact went to this business is on its
+     own recipient row — one of several after a split. The enquiry's column
+     names one supplier and says only that the enquiry is decided.
+  */
+  const releasedTo = recipient.contactReleasedAt ? businessId : null;
 
   const enquiry = await prisma.enquiry.findUnique({
     where: { id: enquiryId },
@@ -263,8 +264,7 @@ export async function getLeadDetail(
       scale: true,
       closesAt: true,
       createdAt: true,
-      contactReleasedToBusinessId: true,
-      buyer: { select: buyerSelectFor(released.contactReleasedToBusinessId, businessId) },
+      buyer: { select: buyerSelectFor(releasedTo, businessId) },
       /*
          Board `7b`. The company is selected only once it is released to this
          business — Rule 1 holds at the query, as it does for the buyer — and
@@ -272,9 +272,7 @@ export async function getLeadDetail(
          are what a quote is priced against. Its line and attn. contact are
          held back below until the same release.
       */
-      ...(released.contactReleasedToBusinessId === businessId
-        ? { buyerCompany: { select: RELEASED_COMPANY_SELECT } }
-        : {}),
+      ...(releasedTo ? { buyerCompany: { select: RELEASED_COMPANY_SELECT } } : {}),
       deliverySnapshot: true,
       lines: {
         orderBy: { sortOrder: "asc" },
@@ -290,13 +288,23 @@ export async function getLeadDetail(
       serviceBrief: { select: ENQUIRY_BRIEF_SELECT },
       quotes: {
         /*
-           Sent quotes only, for the same reason: the composer's eyebrow counts
-           these to name the next revision, and `SentQuotes` lists them under
-           "Sent already". With drafts included, opening a lead and typing one
-           price made the composer announce "Revision 2" of a quote nobody had
-           sent. The draft is read separately, by `findDraft`.
+           This seller's own quotes, and sent ones only.
+
+           Their own: the enquiry is shared, its quotes are not. Without
+           `businessId` here — lost on 5 Sep in PR 101, when the draft filter was
+           added and the two filters beside it kept theirs — a lead loaded every
+           supplier's sent quotes, so a seller opening an enquiry a competitor
+           had already answered saw the competitor's reference and total under
+           "Sent already", and had their note, validity and terms prefilled into
+           the composer as "Revision 2". Sellers never see another seller's
+           prices (`permissions.md`). `seller-queries.test.ts` holds it.
+
+           Sent: the composer's eyebrow counts these to name the next revision,
+           and with drafts included, opening a lead and typing one price made
+           the composer announce "Revision 2" of a quote nobody had sent. The
+           draft is read separately, by `findDraft`.
         */
-        where: { status: { not: "draft" } },
+        where: { businessId, status: { not: "draft" } },
         orderBy: { revision: "desc" },
         include: {
           lines: { orderBy: { sortOrder: "asc" } },
@@ -304,7 +312,6 @@ export async function getLeadDetail(
           proposal: { select: PROPOSAL_RECORD_SELECT },
         },
       },
-      contactReleasedAt: true,
     },
   });
   if (!enquiry) return null;
@@ -330,18 +337,16 @@ export async function getLeadDetail(
     createdAt: enquiry.createdAt,
     openedAt: recipient.openedAt,
     firstReplyAt: recipient.firstReplyAt,
-    acceptedAt:
-      enquiry.contactReleasedToBusinessId === businessId
-        ? (enquiry.quotes.find((q) => q.acceptedAt !== null)?.acceptedAt ??
-          enquiry.contactReleasedAt)
-        : null,
+    acceptedAt: releasedTo
+      ? (enquiry.quotes.find((q) => q.acceptedAt !== null)?.acceptedAt ?? recipient.contactReleasedAt)
+      : null,
     buyer: buyerForSeller(
       enquiry.buyer,
-      enquiry.contactReleasedToBusinessId,
+      releasedTo,
       businessId,
       "buyerCompany" in enquiry ? (enquiry.buyerCompany ?? null) : undefined,
     ),
-    delivery: deliveryForSeller(enquiry.deliverySnapshot, enquiry.contactReleasedToBusinessId === businessId),
+    delivery: deliveryForSeller(enquiry.deliverySnapshot, releasedTo !== null),
     lines: enquiry.lines.map((l, i) => ({
       id: l.id,
       description: l.description,
@@ -492,8 +497,9 @@ export async function getQuotesForBusiness(businessId: string): Promise<QuoteRow
       enquiry: {
         select: {
           ref: true,
-          contactReleasedToBusinessId: true,
           buyer: { select: { fullName: true } },
+          // Board `1o` D4: this business's own release, which a split may grant several.
+          recipients: { where: { businessId }, select: { contactReleasedAt: true } },
         },
       },
       lines: { select: { qty: true, unitPrice: true, productId: true } },
@@ -523,7 +529,7 @@ export async function getQuotesForBusiness(businessId: string): Promise<QuoteRow
     manualLineCount: q.lines.filter((l) => l.productId === null).length,
     totalAed: quoteTotalAed(q.lines.map((l) => ({ qty: l.qty, unitPrice: l.unitPrice.toString() }))),
     proposal: toProposalFigure(q.proposal),
-    buyer: buyerForSeller(q.enquiry.buyer, q.enquiry.contactReleasedToBusinessId, businessId),
+    buyer: buyerForSeller(q.enquiry.buyer, q.enquiry.recipients[0]?.contactReleasedAt ? businessId : null, businessId),
     lostReason: q.lostReason,
   }));
 }

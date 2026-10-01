@@ -1,4 +1,5 @@
 import "server-only";
+import { formatList } from "@/lib/format";
 import { prisma } from "@/lib/db/client";
 import type { Prisma } from "@/lib/db/generated/client";
 import { getThread } from "./service";
@@ -138,6 +139,12 @@ export interface RailThread {
   /** Supplier messages and revisions the buyer has not opened. */
   unread: number;
   deliveredAt: Date;
+  /**
+   * Board `1o` D4: this supplier when the buyer's contact went to them — one of
+   * several after a split — otherwise the enquiry's decided marker, or null.
+   * Per row, because a split leaves more than one row reading *accepted*.
+   */
+  releasedTo: string | null;
 }
 
 export interface Negotiation {
@@ -146,10 +153,21 @@ export interface Negotiation {
     ref: string;
     requirement: string;
     closesAt: Date;
+    /**
+     * This thread's supplier when the buyer's contact went to them (board `1o`:
+     * one of several after a split); otherwise the enquiry's decided marker, or
+     * null while nothing is accepted.
+     */
     releasedTo: string | null;
     releasedAt: Date | null;
-    /** Who was accepted, when it was somebody else. The name the buyer chose. */
+    /** Who was accepted, when it was somebody else — everybody the buyer chose, after a split. */
     winnerName: string | null;
+    /**
+     * How many suppliers the buyer accepted from: none yet, one, or several
+     * after a split (board `1o`) — when each has a record of its own, and a link
+     * to this supplier's has to name them.
+     */
+    acceptedFromCount: number;
     /** Board `7b`: the buying company whose rule governs acceptance, or null. */
     buyerCompanyId: string | null;
   };
@@ -205,6 +223,7 @@ export async function loadNegotiation(
           createdAt: true,
           declinedAt: true,
           declineReason: true,
+          contactReleasedAt: true,
           assignedTo: { select: { fullName: true, roles: true } },
           business: {
             select: {
@@ -306,6 +325,7 @@ export async function loadNegotiation(
       sellerHasWritten: (written.get(recipient.businessId) ?? 0) > 0 || latest !== undefined,
       unread: (unread.get(recipient.businessId) ?? 0) + (unreadQuotes.get(recipient.businessId) ?? 0),
       deliveredAt: recipient.createdAt,
+      releasedTo: recipient.contactReleasedAt ? recipient.businessId : enquiry.contactReleasedToBusinessId,
     };
   });
 
@@ -315,9 +335,16 @@ export async function loadNegotiation(
       ? { name: personRow.fullName.trim(), role: SELLER_ROLES.find((role) => personRow.roles.includes(role)) ?? null }
       : null;
 
-  const winner = enquiry.contactReleasedToBusinessId
-    ? enquiry.recipients.find((recipient) => recipient.businessId === enquiry.contactReleasedToBusinessId)
-    : undefined;
+  /*
+     Board `1o` D4: who the buyer accepted from is on each recipient row — one
+     supplier, or several after a split. This thread is "accepted here" when the
+     buyer's contact went to its supplier, and "accepted elsewhere" when the
+     enquiry is decided without them, naming everybody the buyer chose.
+  */
+  const releasedHere = current.contactReleasedAt !== null;
+  const winners = enquiry.recipients.filter(
+    (recipient) => recipient.contactReleasedAt !== null && recipient.businessId !== current.businessId,
+  );
 
   return {
     enquiry: {
@@ -325,10 +352,11 @@ export async function loadNegotiation(
       ref: enquiry.ref,
       requirement: enquiry.requirement,
       closesAt: enquiry.closesAt,
-      releasedTo: enquiry.contactReleasedToBusinessId,
+      releasedTo: releasedHere ? current.businessId : enquiry.contactReleasedToBusinessId,
       buyerCompanyId: enquiry.buyerCompanyId,
-      releasedAt: enquiry.contactReleasedAt,
-      winnerName: winner && winner.businessId !== current.businessId ? winner.business.displayName : null,
+      releasedAt: releasedHere ? current.contactReleasedAt : enquiry.contactReleasedAt,
+      winnerName: !releasedHere && winners.length > 0 ? formatList(winners.map((winner) => winner.business.displayName)) : null,
+      acceptedFromCount: winners.length + (releasedHere ? 1 : 0),
     },
     rail,
     supplier: {

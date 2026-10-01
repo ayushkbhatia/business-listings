@@ -201,8 +201,12 @@ export interface HistoryFacts {
   createdAt: Date;
   /** When the first quote or proposal on it was sent, or null when none was. */
   firstQuoteAt: Date | null;
-  /** The supplier whose quote was accepted, or null. */
-  acceptedBusinessId: string | null;
+  /**
+   * The suppliers accepted from: none, one, or several after a split (board
+   * `1o`). The enquiry counts once as accepted; each supplier counts toward
+   * the repeat-supplier figure.
+   */
+  acceptedBusinessIds: readonly string[];
 }
 
 export interface EnquiryHistory {
@@ -233,14 +237,14 @@ export function historyOf(rows: readonly HistoryFacts[], since: Date): EnquiryHi
 
   const acceptedBy = new Map<string, number>();
   for (const row of inWindow) {
-    if (row.acceptedBusinessId) acceptedBy.set(row.acceptedBusinessId, (acceptedBy.get(row.acceptedBusinessId) ?? 0) + 1);
+    for (const businessId of new Set(row.acceptedBusinessIds)) acceptedBy.set(businessId, (acceptedBy.get(businessId) ?? 0) + 1);
   }
 
   return {
     sent: inWindow.length,
     medianFirstQuoteMs: median(latencies),
     answered: latencies.length,
-    accepted: [...acceptedBy.values()].reduce((sum, n) => sum + n, 0),
+    accepted: inWindow.filter((row) => row.acceptedBusinessIds.length > 0).length,
     repeatSuppliers: [...acceptedBy.values()].filter((n) => n >= 2).length,
   };
 }

@@ -53,6 +53,7 @@ const line = (enquiryLineId: string | null, qty: number, unitPrice: string, lead
   qty,
   unitPrice,
   leadTimeDays,
+  acceptedAt: null,
 });
 
 function quoted(who: ComparedSupplier, minutes: number, lines: QuotedLine[], over: Partial<NonNullable<ComparedRecipient["quote"]>> = {}): ComparedRecipient {
@@ -76,6 +77,7 @@ function quoted(who: ComparedSupplier, minutes: number, lines: QuotedLine[], ove
       againstRevision: 1,
       paymentTerms: "net_30",
       delivery: "included",
+      allowsPartial: false,
       lines,
       ...over,
     },

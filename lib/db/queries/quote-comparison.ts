@@ -103,9 +103,10 @@ export async function getQuoteComparison(buyerId: string, refOrId: string): Prom
           againstRevision: true,
           paymentTerms: true,
           delivery: true,
+          allowsPartial: true,
           lines: {
             orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
-            select: { enquiryLineId: true, qty: true, unitPrice: true, leadTimeDays: true },
+            select: { enquiryLineId: true, qty: true, unitPrice: true, leadTimeDays: true, acceptedAt: true },
           },
         },
       },
@@ -185,11 +186,13 @@ export async function getQuoteComparison(buyerId: string, refOrId: string): Prom
             againstRevision: quote.againstRevision,
             paymentTerms: quote.paymentTerms,
             delivery: quote.delivery,
+            allowsPartial: quote.allowsPartial,
             lines: quote.lines.map((line) => ({
               enquiryLineId: line.enquiryLineId,
               qty: line.qty,
               unitPrice: line.unitPrice.toString(),
               leadTimeDays: line.leadTimeDays,
+              acceptedAt: line.acceptedAt,
             })),
           }
         : null,
