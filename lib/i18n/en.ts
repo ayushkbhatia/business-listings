@@ -1158,6 +1158,7 @@ export const en = {
   "admin.conflict.error.split_needs_a_name": "The new listing needs the legal name printed on the licence.",
   "admin.conflict.error.split_needs_an_expiry": "The new listing needs the licence's expiry date.",
   "admin.conflict.error.holder_cannot_resolve": "Escalate to somebody who can resolve a conflict — an ops lead.",
+  "admin.conflict.error.no_address": "This listing has no address to put a branch at. Add its head office first, or resolve it another way.",
   "admin.conflict.error.already_requested": "Tenancy documents are already asked for and not all back yet.",
   "admin.conflict.error.fix": "Correct it and send again. Nothing was changed.",
 

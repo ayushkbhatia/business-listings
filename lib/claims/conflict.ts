@@ -10,7 +10,7 @@ import { resolveEnquiryArea } from "@/lib/enquiry/area";
 import { t } from "@/lib/i18n";
 import { displayNameFor } from "@/lib/ingest/classify";
 import { onClaimConflictResolved, onClaimDocumentsRequested } from "@/lib/notify/events";
-import { normaliseLicenceNumber } from "@/lib/verification/licence/number";
+import { normaliseLicenceNumber, sameLicenceNumber } from "@/lib/verification/licence/number";
 import { lockListingClaims } from "./lock";
 import { registerEntriesFor } from "./records";
 import { seatOnAward, seatOnLoss } from "./seats";
@@ -74,6 +74,7 @@ export type ConflictError =
   | "split_needs_a_name"
   | "split_needs_an_expiry"
   | "holder_cannot_resolve"
+  | "no_address"
   | "already_requested";
 
 export type ConflictResult<T extends object = object> = ({ ok: true } & T) | { ok: false; error: ConflictError; claimId?: string };
@@ -202,7 +203,12 @@ function plan(input: ResolveInput, conflict: Loaded, now: Date): ConflictResult<
   if (input.resolution === "split" || input.resolution === "merge_branch") {
     second = input.secondClaimId ? (byId.get(input.secondClaimId) ?? null) : null;
     if (!second || second.id === winner.id) return { ok: false, error: "needs_a_second_claim" };
-    if (!licenceOf(second, conflict.business.licenceAuthority)) return { ok: false, error: "needs_a_licence", claimId: second.id };
+    const secondLicence = licenceOf(second, conflict.business.licenceAuthority);
+    if (!secondLicence) return { ok: false, error: "needs_a_licence", claimId: second.id };
+    // The listing's own licence is not a second company's, nor a branch of itself.
+    if (sameLicenceNumber(secondLicence, conflict.business.licenceNumber, conflict.business.licenceAuthority)) {
+      return { ok: false, error: "licence_has_a_listing", claimId: second.id };
+    }
   }
 
   const losers = live.filter((claim) => claim.id !== winner.id && claim.id !== second?.id);
@@ -283,7 +289,7 @@ export async function resolveConflict(
       let split: { legalName: string; licenceNumber: string; licenceExpiry: Date } | null = null;
       if (input.resolution === "split" && second) {
         const licence = licenceOf(second, business.licenceAuthority)!;
-        if (secondEntry?.businessId && secondEntry.businessId !== business.id) {
+        if (secondEntry?.businessId) {
           return { ok: false as const, error: "licence_has_a_listing" as const, claimId: second.id };
         }
         const legalName = (secondEntry?.tradeName ?? input.split?.legalName ?? "").trim();
@@ -292,6 +298,9 @@ export async function resolveConflict(
         if (!licenceExpiry) return { ok: false as const, error: "split_needs_an_expiry" as const, claimId: second.id };
         split = { legalName, licenceNumber: licence, licenceExpiry };
       }
+
+      // A branch is a place: a listing with no address has nowhere to put one.
+      if (input.resolution === "merge_branch" && !base) return { ok: false as const, error: "no_address" as const };
 
       const enquiriesReleased = await heldEnquiries(tx, business.id);
       const claimIds = conflict.claims.map((claim) => claim.id);
@@ -394,15 +403,15 @@ export async function resolveConflict(
           }
 
           // Merge: the second claim's licence becomes a branch, keeping its own number (`B13`).
-          if (second && input.resolution === "merge_branch") {
+          if (second && base && input.resolution === "merge_branch") {
             const licence = licenceOf(second, business.licenceAuthority)!;
             const location = await tx.location.create({
               data: {
                 businessId: business.id,
                 type: "sales_office",
-                emirate: base?.emirate ?? "abu_dhabi",
-                areaId: base!.areaId,
-                addressLine: base?.addressLine ?? "",
+                emirate: base.emirate,
+                areaId: base.areaId,
+                addressLine: base.addressLine,
                 licenceNumber: licence,
                 /*
                    Held until the owner publishes it on `/dashboard/locations`.

@@ -97,6 +97,8 @@ export interface VerifyState {
  * Returns null where the listing is gone. The caller redirects rather than
  * rendering a gate with nothing left to guard.
  */
+const CONFLICT_STATE = { resolvedAt: true, dissolvedAt: true, docsRequestedAt: true, docsReceivedAt: true } as const;
+
 export async function verifyStateFor(
   businessRef: string,
   claimantId: string,
@@ -141,13 +143,20 @@ export async function verifyStateFor(
         createdAt: true,
         route: true,
         tenancyDocument: { select: { createdAt: true } },
-        conflict: { select: { resolvedAt: true, dissolvedAt: true, docsRequestedAt: true, docsReceivedAt: true } },
+        conflict: { select: CONFLICT_STATE },
+        // A conflict opened before board 4c names its sides here, not by `conflict_id`.
+        conflictsAsA: { where: { resolvedAt: null, dissolvedAt: null }, take: 1, select: CONFLICT_STATE },
+        conflictsAsB: { where: { resolvedAt: null, dissolvedAt: null }, take: 1, select: CONFLICT_STATE },
       },
     }),
     // A claim pending is read from the claims, never stored (decided 1 Oct 2026).
     prisma.claimSubmission.count({ where: { businessId: business.id, decidedAt: null, claimantId: { not: claimantId } } }),
   ]);
-  const conflict = mine?.conflict && !mine.conflict.resolvedAt && !mine.conflict.dissolvedAt ? mine.conflict : null;
+  const conflict =
+    (mine?.conflict && !mine.conflict.resolvedAt && !mine.conflict.dissolvedAt ? mine.conflict : null) ??
+    mine?.conflictsAsA[0] ??
+    mine?.conflictsAsB[0] ??
+    null;
 
   const phone = business.locations[0]?.phone ?? null;
 

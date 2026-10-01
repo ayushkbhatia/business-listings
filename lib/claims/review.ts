@@ -174,6 +174,10 @@ export async function conflictReviewFor(conflictId: string, now: Date = new Date
   if (!conflict) return null;
 
   const sides = [conflict.submissionAId, conflict.submissionBId].filter((id): id is string => id !== null);
+  const claimants = await prisma.claimSubmission.findMany({
+    where: { OR: [{ conflictId }, { id: { in: sides } }] },
+    select: { claimantId: true },
+  });
   const [claims, source, audits, views, waiting, ownerSince] = await Promise.all([
     prisma.claimSubmission.findMany({
       where: { OR: [{ conflictId }, { id: { in: sides } }] },
@@ -198,7 +202,7 @@ export async function conflictReviewFor(conflictId: string, now: Date = new Date
         tenancyDocument: { select: { filename: true, createdAt: true } },
       },
     }),
-    sourceRecordFor(conflict.businessId),
+    sourceRecordFor(conflict.businessId, prisma, claimants.map((row) => row.claimantId)),
     prisma.auditEvent.findMany({
       where: { subject: `ClaimConflict:${conflictId}` },
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],

@@ -32,7 +32,16 @@ export interface SourceFacts {
 /** The first location the listing was drawn from: published first, then oldest (`12b`'s rule). */
 const HEAD_OFFICE_ORDER = [{ published: "desc" as const }, { createdAt: "asc" as const }, { id: "asc" as const }];
 
-export async function sourceRecordFor(businessId: string, db: Db = prisma): Promise<SourceFacts | null> {
+export async function sourceRecordFor(
+  businessId: string,
+  db: Db = prisma,
+  /**
+   * The claimants being scored. None of them may define the domain they are
+   * scored against — once a claim wins, its claimant is on the team, and their
+   * own address would otherwise become "the business's own" and match itself.
+   */
+  claimantIds: readonly string[] = [],
+): Promise<SourceFacts | null> {
   const business = await db.business.findUnique({
     where: { id: businessId },
     select: {
@@ -48,7 +57,11 @@ export async function sourceRecordFor(businessId: string, db: Db = prisma): Prom
         select: { addressLine: true, emirate: true, phone: true, area: { select: { name: true } } },
       },
       stagedListings: { orderBy: [{ createdAt: "asc" }, { id: "asc" }], take: 1, select: { raw: true } },
-      team: { where: { roles: { has: "seller_owner" } }, orderBy: { id: "asc" }, select: { email: true } },
+      team: {
+        where: { roles: { has: "seller_owner" }, id: { notIn: [...claimantIds] } },
+        orderBy: { id: "asc" },
+        select: { email: true },
+      },
       claimStatus: true,
     },
   });

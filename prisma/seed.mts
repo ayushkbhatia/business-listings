@@ -6894,7 +6894,7 @@ async function seedQueues(
     select: { id: true },
   });
 
-  await db.claimConflict.create({
+  const seededConflict = await db.claimConflict.create({
     data: {
       businessId: conflictTarget.id,
       submissionAId: contestedClaimId,
@@ -6904,6 +6904,11 @@ async function seedQueues(
       }),
       createdAt: days(-6),
     },
+  });
+  // Board 4c: a conflict's sides join it by `conflict_id`, the set every reader takes.
+  await db.claimSubmission.updateMany({
+    where: { id: { in: [contestedClaimId, rivalClaim.id] } },
+    data: { conflictId: seededConflict.id },
   });
 
   // ── The audit rows those decisions owe ────────────────────────────────────

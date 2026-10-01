@@ -131,6 +131,29 @@ function authoritiesByEmirate(): Map<Emirate, Authority[]> {
 
 /* ── Reading every source ──────────────────────────────────────────────────── */
 
+const CONFLICT_SIDE = {
+  id: true,
+  route: true,
+  decidedAt: true,
+  claimantName: true,
+  claimant: { select: { fullName: true } },
+} as const;
+
+type ConflictSide = { id: string; route: "licence_upload" | "phone_callback"; decidedAt: Date | null; claimantName: string | null; claimant: { fullName: string | null } };
+
+/**
+ * A conflict's undecided sides: the claims that joined it, and its first two
+ * by name — which is all a conflict opened before board 4c recorded. Once,
+ * by id, in arrival order.
+ */
+function sidesOf(conflict: { claims: ConflictSide[]; submissionA: ConflictSide; submissionB: ConflictSide | null }): ConflictSide[] {
+  const byId = new Map<string, ConflictSide>();
+  for (const side of [conflict.submissionA, conflict.submissionB, ...conflict.claims]) {
+    if (side && side.decidedAt === null) byId.set(side.id, side);
+  }
+  return [...byId.values()];
+}
+
 interface Raw {
   subject: QueueSubject;
   id: string;
@@ -242,8 +265,11 @@ export async function loadPending(db: Db = prisma): Promise<Raw[]> {
         claims: {
           where: { decidedAt: null },
           orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-          select: { route: true, claimantName: true, claimant: { select: { fullName: true } } },
+          select: CONFLICT_SIDE,
         },
+        // A conflict written before `conflict_id` existed names its sides only here.
+        submissionA: { select: CONFLICT_SIDE },
+        submissionB: { select: CONFLICT_SIDE },
       },
     }),
     db.document.findMany({
@@ -465,7 +491,8 @@ export async function loadPending(db: Db = prisma): Promise<Raw[]> {
   }
 
   for (const conflict of conflicts) {
-    const names = conflict.claims.map((side) => side.claimantName ?? side.claimant.fullName ?? "").filter(Boolean);
+    const sides = sidesOf(conflict);
+    const names = sides.map((side) => side.claimantName ?? side.claimant.fullName ?? "").filter(Boolean);
     raws.push({
       subject: "conflict",
       id: conflict.id,
@@ -479,8 +506,8 @@ export async function loadPending(db: Db = prisma): Promise<Raw[]> {
         ? { key: "admin.queue.summary.conflict_challenge", params: { name: names[0] ?? "" } }
         : names.length === 2
           ? { key: "admin.queue.summary.conflict", params: { a: names[0]!, b: names[1]! } }
-          : { key: "admin.queue.summary.conflict_many", params: { count: conflict.claims.length, n: conflict.claims.length } },
-      facts: { kind: "conflict", claims: conflict.claims, challenge: conflict.challenge },
+          : { key: "admin.queue.summary.conflict_many", params: { count: sides.length, n: sides.length } },
+      facts: { kind: "conflict", claims: sides, challenge: conflict.challenge },
       docsOnConflict:
         conflict.docsRequestedAt && conflict.docsRequestNote && !conflict.docsReceivedAt
           ? { at: conflict.docsRequestedAt, reason: conflict.docsRequestNote }

@@ -151,6 +151,18 @@ export function ApprovalQueueGallery() {
         </div>
       </States>
 
+      <States label="escalated conflict — paused, not overdue" stack>
+        <div className="w-full">
+          <ApprovalQueue
+            rows={[{ ...ROWS[0]!, ref: "conflict:gallery-escalated", late: false, escalated: "Escalated to S. Nair" }]}
+            staff={STAFF}
+            empty={null}
+            decide={inert}
+            bulk={inert}
+          />
+        </div>
+      </States>
+
       <States label="queue empty" stack>
         <div className="w-full">
           <ApprovalQueue

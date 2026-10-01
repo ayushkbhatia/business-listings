@@ -142,8 +142,13 @@ export async function attachTenancyDocument(
   if (!claim?.conflictId) return { ok: false, error: "no_request" };
 
   await tx.claimSubmission.update({ where: { id: claim.id }, data: { tenancyDocumentId: input.documentId } });
+  const conflict = await tx.claimConflict.findUniqueOrThrow({
+    where: { id: claim.conflictId },
+    select: { submissionAId: true, submissionBId: true },
+  });
+  const sides = [conflict.submissionAId, conflict.submissionBId].filter((id): id is string => id !== null);
   const missing = await tx.claimSubmission.count({
-    where: { conflictId: claim.conflictId, decidedAt: null, tenancyDocumentId: null },
+    where: { decidedAt: null, tenancyDocumentId: null, OR: [{ conflictId: claim.conflictId }, { id: { in: sides } }] },
   });
   if (missing === 0) {
     await tx.claimConflict.update({ where: { id: claim.conflictId }, data: { docsReceivedAt: now } });
