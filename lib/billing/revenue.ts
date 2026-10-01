@@ -20,8 +20,9 @@ import { monthlyValueFils } from "./period";
  * No GMV, no take rate, no commission, no transaction volume. CLAUDE.md is
  * explicit that the platform is never party to a transaction, and quoted value
  * is self-reported by sellers — putting it beside MRR on a revenue screen would
- * read as money we handled. Quoted value belongs on the marketplace-health
- * screen, labelled self-reported, and it is there.
+ * read as money we handled. Quoted value belongs on the platform overview
+ * (board 4a), labelled self-reported, read through `lib/quote/quoted-value.ts`
+ * and itemised by sector and month on `/admin/quotes` — never here.
  */
 
 /**

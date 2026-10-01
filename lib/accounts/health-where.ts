@@ -1,4 +1,5 @@
 import type { Prisma } from "@/lib/db/generated/client";
+import { VERIFIED_TIER } from "@/lib/verification";
 import {
   CAP_REFUSED_EVENTS,
   CHURN_RISK_BELOW,
@@ -29,6 +30,26 @@ export const PAYING_WHERE: Where = {
     is: { status: { in: [...PAYING_STATUSES] }, plan: { is: { monthlyPriceAed: { gt: 0 } } } },
   },
 };
+
+/** How far ahead a verified licence counts as expiring. */
+export const EXPIRING_LICENCE_DAYS = 30;
+
+/**
+ * A verified listing whose licence lapses inside the window — or has lapsed and
+ * the nightly sweep has not dropped its tier yet, which is still a badge resting
+ * on a licence that is no longer current.
+ *
+ * One predicate for the console's figure and the `licence=expiring` filter it
+ * opens, so the number clicked is the number listed. The console counted this
+ * with `gte: 3` against a ladder ending at 2 until build plan 1.5, and linked it
+ * to the unfiltered list after that.
+ */
+export function expiringLicenceWhere(now: Date): Where {
+  return {
+    verificationTier: { gte: VERIFIED_TIER },
+    licenceExpiry: { lt: new Date(now.getTime() + EXPIRING_LICENCE_DAYS * 86_400_000) },
+  };
+}
 
 function upgradeEventWhere(now: Date): Where {
   const since = upgradeWindowStart(now);

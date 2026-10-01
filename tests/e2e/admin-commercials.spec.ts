@@ -23,6 +23,33 @@ import { expect, test } from "@playwright/test";
  * is off deliberately and said out loud.
  */
 
+test.describe("board 4a — the overview, from finance's seat", () => {
+  test("shows MRR as 4g's figure with what it is made of, and no queue finance cannot open", async ({ page }) => {
+    await page.goto("/admin");
+    const figures = page.getByRole("list", { name: "Platform figures" });
+    const mrr = figures.getByRole("link", { name: /^MRR: / });
+    await expect(mrr).toHaveAttribute("href", /^\/admin\/revenue\?period=\d{4}-\d{2}$/);
+    await expect(figures.getByText("Moderation queue", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Needs a human today" })).toHaveCount(0);
+
+    // D-MRR: the composition adds up to the tile, line by line.
+    await expect(page.getByRole("heading", { name: "Plan mix" })).toBeVisible();
+    const composition = page.getByRole("table", { name: "What MRR is made of" });
+    const value = ((await mrr.textContent()) ?? "").replace(/^MRR:\s*/, "").trim();
+    if (await composition.count()) {
+      await expect(composition.getByRole("row").last()).toContainText(value);
+    }
+
+    // The tile and the revenue board state one figure for one month. The board
+    // prints fils on every figure once any has them, so a whole amount may
+    // carry `.00` there.
+    const href = (await mrr.getAttribute("href"))!;
+    await page.goto(href);
+    const pattern = value.includes(".") ? value.replace(/[.]/g, "\\.") : `${value}(\\.00)?`;
+    await expect(page.getByText(new RegExp(pattern)).first()).toBeVisible();
+  });
+});
+
 test.describe("board 4g — revenue", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/admin/revenue");

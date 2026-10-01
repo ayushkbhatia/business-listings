@@ -99,6 +99,7 @@ export const SURFACE_GROUPS: readonly SurfaceGroup[] = [
     seat: "ops_lead",
     surfaces: [
       { href: "/admin", what: "Platform overview" },
+      { href: "/admin/quotes", what: "Quoted value, by sector and month" },
       { href: "/admin/queue", what: "Moderation queue" },
       { href: "/admin/businesses", what: "Every listing" },
       { href: "/admin/reviews", what: "Reported reviews" },

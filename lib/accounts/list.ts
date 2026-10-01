@@ -9,7 +9,8 @@ import {
   upgradeWindowStart,
   type AccountState,
 } from "./health";
-import { PAYING_WHERE, stateWhere } from "./health-where";
+import { expiringLicenceWhere, PAYING_WHERE, stateWhere } from "./health-where";
+import { LISTED } from "@/lib/taxonomy/listed";
 
 /**
  * Board 4f — the accounts list, its counts, and the facts each row shows.
@@ -48,6 +49,14 @@ export function accountWhere(filter: AccountFilter, now: Date): Where {
     // A query that could be none of the three matches nothing, honestly.
     and.push(or.length > 0 ? { OR: or } : { id: "__no_match__" });
   }
+
+  // Board 4a's deep links. Each is the predicate the overview counted with, so
+  // the figure a person clicked is the range line they land on.
+  if (filter.status === "live") and.push(LISTED);
+  if (filter.claimed) and.push({ claimStatus: "claimed" });
+  if (filter.paying === true) and.push(PAYING_WHERE);
+  else if (filter.paying === false) and.push({ NOT: PAYING_WHERE });
+  if (filter.licence === "expiring") and.push(expiringLicenceWhere(now));
 
   if (filter.plan === "none") {
     // B2: unclaimed has no plan. Free is a plan somebody claimed their way onto.
@@ -174,10 +183,21 @@ export interface AccountPage {
 
 export const QUOTED_WINDOW_DAYS = 30;
 
+/**
+ * How many rows a filter matches — the range line's total.
+ *
+ * Board 4a counts its tiles through this rather than with a query of its own:
+ * a figure on the overview opens this page with the filter that reproduces it,
+ * and the two can only agree if they are the same count.
+ */
+export async function countAccounts(filter: AccountFilter, now: Date): Promise<number> {
+  return prisma.business.count({ where: accountWhere(filter, now) });
+}
+
 export async function readAccountPage(filter: AccountFilter, page: number, now: Date): Promise<AccountPage> {
   const where = accountWhere(filter, now);
   const [total, raws] = await Promise.all([
-    prisma.business.count({ where }),
+    countAccounts(filter, now),
     prisma.business.findMany({
       where,
       // Worst reply rate first, unmeasured last — the order an ops lead calls

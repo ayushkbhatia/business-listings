@@ -585,13 +585,26 @@ export async function templateDetail(templateId: string): Promise<TemplateDetail
   };
 }
 
+/**
+ * Live products that carry no spec values at all — the ones no buyer can
+ * compare on anything. Sellers fill them; this board's templates are what they
+ * fill them against.
+ *
+ * Board 4a keeps this figure in its *Other queues* card and links it here, so
+ * the header below states it from the same function and the two cannot differ.
+ */
+export function liveProductsWithoutSpecs(): Promise<number> {
+  return prisma.product.count({ where: { status: "live", specValues: { equals: {} } } });
+}
+
 /** Header figures. Every one a query — board 4e criterion 12. */
 export const libraryHeader = cache(
-  async (): Promise<{ templates: number; covered: number; total: number; products: number }> => {
-    const [templates, cover, served] = await Promise.all([
+  async (): Promise<{ templates: number; covered: number; total: number; products: number; withoutSpecs: number }> => {
+    const [templates, cover, served, withoutSpecs] = await Promise.all([
       specLibrary(),
       coverage(),
       prisma.specTemplateCategory.findMany({ select: { categoryId: true } }),
+      liveProductsWithoutSpecs(),
     ]);
 
     /*
@@ -609,6 +622,7 @@ export const libraryHeader = cache(
       covered: cover.covered,
       total: cover.total,
       products,
+      withoutSpecs,
     };
   },
 );

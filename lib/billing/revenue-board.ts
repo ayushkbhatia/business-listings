@@ -6,6 +6,7 @@ import { CHURN_RISK_BELOW } from "@/lib/accounts/health";
 import { measureReplies, windowStart, type RateObservation } from "@/lib/metrics/response-time";
 import { CANCEL_REASONS } from "./cancellation";
 import type { MrrCause, MrrKind } from "./mrr";
+import { mrrComposition, type MrrComposition } from "./mrr-composition";
 import {
   causeOf,
   emptyLines,
@@ -41,7 +42,7 @@ import {
 
 // ── State at an instant ──────────────────────────────────────────────────────
 
-interface AccountState {
+export interface AccountState {
   businessId: string;
   mrrFils: number;
   planId: string | null;
@@ -58,6 +59,62 @@ async function stateAt(instant: Date): Promise<AccountState[]> {
     HAVING SUM(m.delta_fils) <> 0
   `;
   return rows.map((row) => ({ businessId: row.business_id, mrrFils: Number(row.mrr_fils), planId: row.plan_id }));
+}
+
+/**
+ * The accounts paying at an instant: ledger value above zero, with the plan of
+ * their latest movement. The same read behind every figure on this board, for
+ * board 4a's *Paid subscribers* and plan mix, which have to equal this board's
+ * paying count and plan mix rather than agree with them by coincidence.
+ */
+export async function payingAt(instant: Date): Promise<AccountState[]> {
+  return (await stateAt(instant)).filter((row) => row.mrrFils > 0);
+}
+
+/**
+ * MRR's composition for a set of accounts — list price × plan mix, the annual
+ * terms, and anything else, named. D-MRR, board 4a; arithmetic in
+ * `./mrr-composition.ts`.
+ */
+export async function compositionOf(accounts: readonly AccountState[]): Promise<MrrComposition> {
+  const plans = await prisma.plan.findMany({
+    select: { id: true, name: true, monthlyPriceAed: true, annualMonthsCharged: true },
+    orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
+  });
+  return mrrComposition(accounts, plans);
+}
+
+/**
+ * Upgrades and churn per month, counted in accounts, for board 4a's chart.
+ *
+ * Each movement is filed on its waterfall line by `lineOf` — this board's own
+ * classifier — so an upgrade on the chart is an upgrade in the waterfall, and a
+ * billing-term change is neither. Churn is the two lines that end an account's
+ * paying: cancellations and lapses after failed payments.
+ */
+export async function ledgerCountsByMonth(
+  periods: readonly RevenuePeriod[],
+): Promise<Map<string, { upgrades: number; churn: number }>> {
+  const counts = new Map(periods.map((period) => [period.key, { upgrades: 0, churn: 0 }]));
+  if (periods.length === 0) return counts;
+  const from = new Date(Math.min(...periods.map((period) => period.from.getTime())));
+  const to = new Date(Math.max(...periods.map((period) => period.to.getTime())));
+  const rows = await prisma.mrrMovement.findMany({
+    where: { occurredAt: { gte: from, lt: to }, kind: { in: ["expansion", "churn"] } },
+    select: { kind: true, cause: true, fromPlanId: true, toPlanId: true, note: true, occurredAt: true },
+    orderBy: [{ occurredAt: "asc" }, { id: "asc" }],
+  });
+  for (const row of rows) {
+    const period = periods.find(
+      (candidate) => row.occurredAt >= candidate.from && row.occurredAt < candidate.to,
+    );
+    if (!period) continue;
+    const line = lineOf({ kind: row.kind as MrrKind, cause: row.cause, fromPlanId: row.fromPlanId, toPlanId: row.toPlanId, note: row.note });
+    const entry = counts.get(period.key)!;
+    if (line === "upgrades") entry.upgrades += 1;
+    if (line === "cancellations" || line === "lapsed") entry.churn += 1;
+  }
+  return counts;
 }
 
 // ── One month ────────────────────────────────────────────────────────────────
@@ -280,6 +337,8 @@ export interface RevenueBoard {
   byPlan: PlanRow[];
   /** Accounts closed through board 11i in the month. Reported apart from churn — Q2. */
   closures: number;
+  /** Ending MRR's composition: list price × plan mix, annual terms, anything else. D-MRR. */
+  composition: MrrComposition;
 }
 
 const EMIRATE_ORDER: readonly Emirate[] = [
@@ -313,7 +372,7 @@ export async function revenueBoard(period: RevenuePeriod, now: Date = new Date()
     .map((reason) => ({ reason, count: counts.get(reason) ?? 0 }))
     .filter((row) => row.count > 0 || (row.reason !== "business_closing" && row.reason !== "not_recorded"));
 
-  const [replyFinding, plans, owners, closures] = await Promise.all([
+  const [replyFinding, plans, owners, closures, composition] = await Promise.all([
     replyFindingFor(cancellations.filter((movement) => movement.cancelReason === "not_enough_enquiries")),
     prisma.plan.findMany({ select: { id: true, name: true, sortOrder: true }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }] }),
     prisma.business.findMany({
@@ -321,6 +380,7 @@ export async function revenueBoard(period: RevenuePeriod, now: Date = new Date()
       select: { id: true, licenceAuthority: true },
     }),
     prisma.business.count({ where: { closedAt: { gte: period.from, lt: period.to } } }),
+    compositionOf(current.stateAtEnd),
   ]);
 
   /*
@@ -360,6 +420,7 @@ export async function revenueBoard(period: RevenuePeriod, now: Date = new Date()
       .filter((plan) => planTotals.has(plan.id))
       .map((plan) => ({ planId: plan.id, planName: plan.name, ...planTotals.get(plan.id)! })),
     closures,
+    composition,
   };
 }
 

@@ -1,309 +1,438 @@
 import "server-only";
+import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/db/client";
-import { zeroResultCount } from "@/lib/search/zero-results";
-import { CREDENTIAL_REVIEW_DAYS, VERIFIED_TIER } from "@/lib/verification";
-import { reportQueueHealth } from "@/lib/reports/queue";
-import { SLOWEST_REPORT_SLA_DAYS } from "@/lib/reports/sla";
-/*
-   Re-exported so `/admin`'s one-line service-level summary has a single import
-   for both ends of the range it quotes. The figures themselves live in
-   `lib/reports/sla.ts`, per type, and this file states no report clock of its
-   own.
-*/
-export { FASTEST_REPORT_SLA_DAYS } from "@/lib/reports/sla";
-
-// Re-exported so callers keep one import. The function itself lives outside
-// this module because it is pure and `server-only` is not testable in jsdom.
-export { visibleTo } from "./visibility";
+import type { Actor } from "@/lib/auth/roles";
+import { countAccounts } from "@/lib/accounts/list";
+import { claimConversion, claimsApprovedByWindow } from "@/lib/accounts/claims";
+import { PAYING_WHERE } from "@/lib/accounts/health-where";
+import { compositionOf, ledgerCountsByMonth, payingAt, periodFigures } from "@/lib/billing/revenue-board";
+import { reconcile } from "@/lib/billing/revenue";
+import { currentPeriod, periodFor, previousPeriod, type RevenuePeriod } from "@/lib/billing/revenue-period";
+import { dunningSummary } from "@/lib/billing/dunning-queue";
+import { outstandingInvoices } from "@/lib/billing/invoice-list";
+import { openCallCount } from "@/lib/crm/board";
+import { readHomeStats } from "@/lib/db/queries/home";
+import { enquiriesByWindow } from "@/lib/enquiry/volume";
+import { queuedRecordCount } from "@/lib/ingest/queue";
+import { runsAwaitingReview } from "@/lib/ingest/read";
+import { readMaintenanceWindow } from "@/lib/maintenance/source";
+import { phaseAt } from "@/lib/maintenance/window";
+import { loadQueue, queueHealth } from "@/lib/moderation/queue";
+import { quotedValueByWindow } from "@/lib/quote/quoted-value";
+import { loadReportQueue } from "@/lib/reports/queue";
+import { REPORT_TYPES } from "@/lib/reports/taxonomy";
+import { noGoodResultQueries } from "@/lib/search/no-good-result";
+import { liveProductsWithoutSpecs } from "@/lib/spec/library";
+import {
+  loadTaxonomyTree,
+  publishedBetween,
+  rfqCount,
+  rfqWindow,
+  sectorStocks,
+  subtreeIds,
+} from "@/lib/taxonomy/board";
+import {
+  assembleOverview,
+  type OverviewWarning,
+  type OtherQueue,
+  type OverviewLive,
+  type OverviewPeriod,
+  type OverviewSnapshot,
+  type OverviewStatus,
+  type OverviewView,
+  ownerWarnings,
+  type PlanAccounts,
+} from "./overview-view";
+import { mayOpen } from "./visibility";
 
 /**
- * Board 4a — the console in one screen.
+ * Board 4a — the platform overview, read.
  *
- * The README: *"every number on it is a link into the queue that fixes it, and
- * it answers one question each morning — which of the six jobs is behind"*.
- * Five now: the storefronts job went with the template builder (boards `5a`–`5c`,
- * cut 15 Sep 2026).
+ * The flow map's one sentence is the brief: *six jobs keep the marketplace
+ * working; this screen answers one question each morning — which of them is
+ * behind — and every number on it links into the queue that fixes it.*
  *
- * So this module computes, per job, the two numbers that answer it: how much is
- * waiting, and how much of it has been waiting too long. **Age before volume**
- * — a queue of two hundred rows all filed this morning is healthy, and a queue
- * of three where the oldest is nine days old is not. A console that sorts by
- * volume shows you the first one.
+ * **It owns almost none of its data** (B3). Every figure is another board's,
+ * read through that board's own function — `4b`'s queue, `4h`'s reports, `4g`'s
+ * ledger, `4f`'s accounts, `4d`'s tree, `12d`'s call list — and where a figure
+ * had no callable owner one was built in the owner's module first. A second
+ * implementation of a figure here is how this screen would drift from the board
+ * it links to.
  *
- * Every count here is a real query. There is no placeholder in this file and
- * there must never be one: this is the screen whose entire job is saying what
- * is behind, and a number on it that nobody computed is worse than a blank.
+ * Two blocks, because two kinds of figure sit on the screen (B4):
  *
- * Where a job's queue has no table yet the metric returns `null` rather than
- * zero. Zero means "nothing waiting". Null means "we cannot
- * see yet", and the screen says so in those words.
+ *   - **The snapshot** is one month: what the period picker drives. Computed
+ *     once per month and cached, ten minutes for the month in progress and six
+ *     hours for a closed one, under one tag a refresh clears.
+ *   - **The live block** is now: the queues, the status chip, the stocks and
+ *     the checks between boards. Never cached by period, so changing the month
+ *     cannot move a live figure.
+ *
+ * `./overview-view.ts` assembles the two, filtered to what the seat may open.
  */
+
+
+/** The tag every snapshot carries. *Refresh figures* clears it. */
+export const OVERVIEW_CACHE_TAG = "admin-overview";
+
+/** The month in progress is cached briefly; a closed month changes only when the ledger is corrected. */
+const LIVE_MONTH_TTL_S = 10 * 60;
+const CLOSED_MONTH_TTL_S = 6 * 60 * 60;
+
+/** How many months the chart draws, ending with the selected one. */
+export const CHART_MONTHS = 12;
+
+/** How many months the picker offers, the month in progress first. */
+export const PICKER_MONTHS = 13;
 
 /**
- * How long a row may sit before it is late, in days.
+ * The month a request asked for.
  *
- * These are ours, not the design system's — no board states them. They are set
- * against what the delay costs somebody outside the building: a buyer waiting
- * on a contested listing is the most expensive, an unanswered supplier report
- * next, a taxonomy edit least. Change them here and every screen moves.
+ * The month in progress when nothing is asked, because this is the screen an
+ * ops lead opens each morning and its live tiles are about now; `4g` opens on
+ * the last closed month because a revenue report is read whole. A link to `4g`
+ * carries the month either way. A malformed or future month reads as the last
+ * closed one, `4g`'s own rule.
  */
-export const SLA_DAYS = {
-  /** A seller's trade name is wrong on a public page while this waits. */
-  moderation: 2,
-  /** Two companies both think they own a listing, and buyers are enquiring. */
-  claim: 3,
-  /**
-   * Somebody reported a supplier. Conduct queues age badly.
-   *
-   * The slowest of board 4h's per-type clocks, which is what the console's
-   * one-line service-level summary can honestly quote for a queue holding nine
-   * types. The per-type figures — a day for off-platform payment, two for a
-   * review dispute — are in `lib/reports/sla.ts`, and the lateness on this
-   * board's own metric is computed from those rather than from this.
-   */
-  report: SLOWEST_REPORT_SLA_DAYS,
-  /** A payment failed. D14 is when the plan drops, so 14 is the deadline. */
-  dunning: 14,
-  /**
-   * A credential a seller has asked to publish. Board 3e §4 states this on the
-   * seller's own screen, which makes it copy rather than configuration — so it
-   * is read from `lib/verification.ts`, where the screen reads it too, rather
-   * than written twice.
-   */
-  credential: CREDENTIAL_REVIEW_DAYS,
-} as const;
-
-export type JobKey = "supply" | "comparable" | "accounts" | "money" | "trust";
-
-export interface ConsoleMetric {
-  key: string;
-  /** i18n key for the label. */
-  labelKey: string;
-  /** What is waiting. `null` where the table this counts does not exist yet. */
-  count: number | null;
-  /**
-   * True where this metric is a queue somebody works through, so its rows can
-   * be late. False for a standing figure — 24 unclaimed listings is the size of
-   * the directory's opportunity, not a backlog anybody is behind on, and
-   * rolling it into "past their service level" would make that headline
-   * meaningless.
-   */
-  isQueue: boolean;
-  /** How many of those are past their SLA. `null` where nothing measures it. */
-  late: number | null;
-  /** The oldest row's age in whole days, or null where nothing is waiting. */
-  oldestDays: number | null;
-  /** The nav key of the screen that fixes it, so the number can become a link. */
-  navKey: string;
-  href: string;
+export function overviewPeriodFor(key: string | null | undefined, now: Date = new Date()): RevenuePeriod {
+  return key ? periodFor(key, now) : currentPeriod(now);
 }
 
-export interface ConsoleJob {
-  key: JobKey;
-  labelKey: string;
-  metrics: ConsoleMetric[];
+function iso(period: RevenuePeriod): OverviewPeriod {
+  return {
+    key: period.key,
+    from: period.from.toISOString(),
+    to: period.to.toISOString(),
+    monthEnd: period.monthEnd.toISOString(),
+    partial: period.partial,
+    daysElapsed: period.daysElapsed,
+    daysInMonth: period.daysInMonth,
+  };
 }
 
+/** Twelve months ending with `period`, oldest first. */
+export function chartPeriods(period: RevenuePeriod, now: Date): RevenuePeriod[] {
+  const months = [period];
+  while (months.length < CHART_MONTHS) months.unshift(previousPeriod(months[0]!, now));
+  return months;
+}
+
+// ── The snapshot ─────────────────────────────────────────────────────────────
+
+/**
+ * One month's figures, uncached. The integration tests call this; the page
+ * and the API call `loadSnapshot`, which caches it.
+ */
+export async function readSnapshot(periodKey: string, now: Date = new Date()): Promise<OverviewSnapshot> {
+  const period = overviewPeriodFor(periodKey, now);
+  const previous = previousPeriod(period, now);
+  const months = chartPeriods(period, now);
+  const windows = months.map((month) => ({ key: month.key, from: month.from, to: month.to }));
+  const rfq = rfqWindow(period.to);
+
+  const [figures, published, claims, quoted, ledgerCounts, enquiries, tree, noGoodResult, conversion] =
+    await Promise.all([
+      periodFigures(period),
+      publishedBetween(period.from, period.to),
+      claimsApprovedByWindow(windows),
+      quotedValueByWindow([
+        { key: period.key, from: period.from, to: period.to },
+        { key: previous.key, from: previous.from, to: previous.to },
+      ]),
+      ledgerCountsByMonth(months),
+      enquiriesByWindow(windows),
+      loadTaxonomyTree(),
+      noGoodResultQueries(period.from, period.to),
+      claimConversion(period.to),
+    ]);
+
+  const [composition, sectorRfqs] = await Promise.all([
+    compositionOf(figures.stateAtEnd),
+    Promise.all(
+      tree.sectors.map(async (sector) => [sector.id, await rfqCount(subtreeIds(sector), rfq.since, rfq.until)] as const),
+    ),
+  ]);
+
+  return {
+    period: iso(period),
+    previous: iso(previous),
+    computedAt: now.toISOString(),
+    publishedInPeriod: published,
+    claimsApproved: claims.get(period.key) ?? 0,
+    paid: { atEnd: figures.month.payingAtEnd, atStart: figures.month.payingAtStart },
+    mrr: { endingFils: figures.endingFils, startingFils: figures.month.startingFils, composition },
+    quoted: { current: quoted.get(period.key)!, previous: quoted.get(previous.key)! },
+    chart: months.map((month) => ({
+      key: month.key,
+      from: month.from.toISOString(),
+      claims: claims.get(month.key) ?? 0,
+      upgrades: ledgerCounts.get(month.key)?.upgrades ?? 0,
+      churn: ledgerCounts.get(month.key)?.churn ?? 0,
+      rfqs: enquiries.get(month.key) ?? 0,
+      partial: month.partial,
+    })),
+    rfqWindow: { from: rfq.since.toISOString(), to: rfq.until.toISOString() },
+    sectorRfqs: Object.fromEntries(sectorRfqs),
+    noGoodResult,
+    conversion: {
+      cohort: conversion.cohort,
+      converted: conversion.converted,
+      rate: conversion.rate,
+      claimedFrom: conversion.claimedFrom?.toISOString() ?? null,
+      claimedTo: conversion.claimedTo?.toISOString() ?? null,
+    },
+  };
+}
+
+/**
+ * The cached snapshot. `unstable_cache` needs a Next request context, so only
+ * the page, the API and the refresh action call this.
+ */
+export function loadSnapshot(periodKey: string, partial: boolean): Promise<OverviewSnapshot> {
+  return unstable_cache(() => readSnapshot(periodKey), ["admin-overview", periodKey], {
+    revalidate: partial ? LIVE_MONTH_TTL_S : CLOSED_MONTH_TTL_S,
+    tags: [OVERVIEW_CACHE_TAG],
+  })();
+}
+
+// ── The live block ───────────────────────────────────────────────────────────
 
 const DAY_MS = 86_400_000;
 
-function daysSince(date: Date | null | undefined, now: Date): number | null {
-  if (!date) return null;
-  return Math.floor((now.getTime() - date.getTime()) / DAY_MS);
+/** The click log's window: which figure was opened most this month. */
+export const OPENS_WINDOW_DAYS = 30;
+
+async function statusNow(now: Date): Promise<OverviewStatus> {
+  const window = await readMaintenanceWindow(now.getTime());
+  if (!window) return { state: "normal" };
+  const phase = phaseAt(window, now);
+  const systems = window.affected.filter((row) => row.state === "down").map((row) => row.system);
+  if (phase === "lapsed" || systems.length === 0) return { state: "normal" };
+  if (phase === "upcoming") {
+    return { state: "planned", startsAt: window.startsAt.toISOString(), endsAt: window.endsAt.toISOString(), systems };
+  }
+  return {
+    state: "down",
+    since: window.startsAt.toISOString(),
+    endsAt: window.endsAt.toISOString(),
+    systems,
+    overrun: phase === "overrun",
+  };
 }
 
-function cutoff(now: Date, days: number): Date {
-  return new Date(now.getTime() - days * DAY_MS);
+/** The figures opened most from the overview, over the window. Staff clicks only. */
+export async function figureOpens(now: Date = new Date()): Promise<{ figure: string; count: number }[]> {
+  const since = new Date(now.getTime() - OPENS_WINDOW_DAYS * DAY_MS);
+  const rows = await prisma.$queryRaw<{ figure: string | null; count: bigint }[]>`
+    SELECT props->>'figure' AS figure, COUNT(*) AS count
+    FROM product_event
+    WHERE name = 'overview_figure_opened' AND created_at >= ${since}
+    GROUP BY 1
+    ORDER BY 2 DESC, 1 ASC
+    LIMIT 3
+  `;
+  return rows
+    .filter((row): row is { figure: string; count: bigint } => typeof row.figure === "string")
+    .map((row) => ({ figure: row.figure, count: Number(row.count) }));
 }
 
-export async function consoleOverview(now = new Date()): Promise<ConsoleJob[]> {
+/** The kept figures, only those whose screen this seat may open. */
+async function otherQueues(actor: Actor, now: Date, may: (navKey: string) => boolean): Promise<OtherQueue[]> {
+  const jobs: Promise<OtherQueue | null>[] = [
+    may("ingest") ? runsAwaitingReview().then((runs) => ({ key: "import_runs" as const, count: runs.length })) : Promise.resolve(null),
+    may("ingest") ? queuedRecordCount().then((count) => ({ key: "records_to_categorise" as const, count })) : Promise.resolve(null),
+    may("spec-library")
+      ? liveProductsWithoutSpecs().then((count) => ({ key: "products_without_specs" as const, count }))
+      : Promise.resolve(null),
+    may("crm") ? openCallCount(actor).then((count) => ({ key: "open_calls" as const, count })) : Promise.resolve(null),
+    may("dunning") ? dunningSummary(now).then((summary) => ({ key: "past_due" as const, count: summary.inSequence })) : Promise.resolve(null),
+    may("invoices")
+      ? outstandingInvoices().then((owed) => ({ key: "invoices_outstanding" as const, count: owed.count, amountFils: owed.fils }))
+      : Promise.resolve(null),
+    may("businesses")
+      ? countAccounts({ licence: "expiring" }, now).then((count) => ({ key: "licences_expiring" as const, count }))
+      : Promise.resolve(null),
+  ];
+  return (await Promise.all(jobs)).filter((queue): queue is OtherQueue => queue !== null);
+}
 
+/**
+ * What a paying account's plan is, by the ledger, among claimed businesses —
+ * and the payers that are not claimed, which should be none.
+ */
+async function planMixNow(now: Date): Promise<{ plans: PlanAccounts[]; payers: number; unclaimedPayers: number }> {
+  const payers = await payingAt(now);
+  const [claimedPayers, plans] = await Promise.all([
+    payers.length === 0
+      ? Promise.resolve([] as { id: string }[])
+      : prisma.business.findMany({
+          where: { id: { in: payers.map((payer) => payer.businessId) }, claimStatus: "claimed" },
+          select: { id: true },
+        }),
+    prisma.plan.findMany({
+      select: { id: true, name: true, monthlyPriceAed: true },
+      orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
+    }),
+  ]);
+  const claimed = new Set(claimedPayers.map((row) => row.id));
+  const accounts = new Map<string, number>();
+  for (const payer of payers) {
+    if (!claimed.has(payer.businessId) || !payer.planId) continue;
+    accounts.set(payer.planId, (accounts.get(payer.planId) ?? 0) + 1);
+  }
+  return {
+    plans: plans
+      .filter((plan) => accounts.has(plan.id))
+      .map((plan) => ({
+        planId: plan.id,
+        planName: plan.name,
+        listPriceFils: Math.round(plan.monthlyPriceAed * 100),
+        accounts: accounts.get(plan.id)!,
+      })),
+    payers: payers.length,
+    unclaimedPayers: payers.length - claimed.size,
+  };
+}
+
+export async function readLive(actor: Actor, now: Date = new Date()): Promise<OverviewLive> {
+  const may = (navKey: string) => mayOpen(actor, navKey);
+
+  const tree = await loadTaxonomyTree();
   const [
-    queuePending,
-    queueLate,
-    queueOldest,
-    claimsOpen,
-    claimsLate,
-    claimsOldest,
-    thinCategories,
-    productsWithoutSpecs,
-    zeroResults,
-    freeAtCap,
-    unclaimedListings,
-    stagedRecords,
-    reports,
-    pastDue,
-    unpaidInvoices,
-    expiringLicences,
+    home,
+    claimed,
+    claimedLive,
+    payingSubscriptions,
+    paidPlanColumn,
+    mix,
+    sectors,
+    queueView,
+    health,
+    reportView,
+    status,
+    others,
+    ledger,
+    opens,
   ] = await Promise.all([
-    prisma.listingChangeRequest.count({ where: { status: "pending" } }),
-    prisma.listingChangeRequest.count({
-      where: { status: "pending", createdAt: { lt: cutoff(now, SLA_DAYS.moderation) } },
-    }),
-    prisma.listingChangeRequest.findFirst({
-      where: { status: "pending" },
-      orderBy: { createdAt: "asc" },
-      select: { createdAt: true },
-    }),
-
-    prisma.claimSubmission.count({ where: { decidedAt: null } }),
-    prisma.claimSubmission.count({
-      where: { decidedAt: null, createdAt: { lt: cutoff(now, SLA_DAYS.claim) } },
-    }),
-    prisma.claimSubmission.findFirst({
-      where: { decidedAt: null },
-      orderBy: { createdAt: "asc" },
-      select: { createdAt: true },
-    }),
-
-    // A category whose published subcategory pages would fall below the floor.
-    // The threshold columns exist and nothing has ever read them; step 1 wires
-    // the taxonomy screen to the same numbers.
-    prisma.category.count({ where: { parentId: { not: null } } }),
-    prisma.product.count({ where: { status: "live", specValues: { equals: {} } } }),
-    /*
-       Thirty days, not all time. Board 12c's right rail is where this metric's
-       link lands and it states the same label, so the two have to be the same
-       number — and an all-time count of zero-result searches only ever goes up,
-       which makes it a milestone rather than a queue.
-    */
-    zeroResultCount(),
-
-    prisma.business.count({ where: { planId: "free", claimStatus: "claimed" } }),
-    prisma.business.count({ where: { claimStatus: "unclaimed" } }),
-
-    // Staged and not yet a listing. Real now: step 2 built the table that board
-    // 4a used to say was not measurable yet.
-    //
-    // Approved runs count too since board 12a's board-level pass. A run
-    // publishes what is ready and keeps the rest — records waiting on the
-    // categorisation queue, or held for a fix — and those publish from the same
-    // run later. Counting only staged runs made them vanish from this figure the
-    // moment the first half of their file was approved.
-    prisma.stagedListing.count({
-      where: {
-        disposition: { in: ["ready", "needs_category"] },
-        run: { status: { in: ["staged", "approved"] } },
-      },
-    }),
-
-    /*
-       Board 4h. One read of the board's own queue rather than three counts of
-       one of its two tables.
-
-       This counted `supplier_report` alone against a single service level, so
-       it could say four were waiting while the board said six — review disputes
-       are in that queue and were in neither count — and it called a fraud
-       report healthy at three days. `reportQueueHealth` is the same array the
-       board renders, with the per-type clock from `lib/reports/sla.ts`, which
-       is the rule `SLA_MS` states for board 4b: the overview and the queue
-       cannot disagree about what late means.
-    */
-    reportQueueHealth(now),
-
-    prisma.subscription.count({ where: { status: "past_due" } }),
-    prisma.invoice.count({ where: { status: "issued", paidAt: null } }),
-
-    /*
-       Verification rests on a licence. One that expires drops the tier, and the
-       seller finds out from the badge rather than from us unless somebody looks.
-
-       This asked for `gte: 3` against a ladder that ends at 2 — `VerificationTier`
-       is `0 | 1 | 2`, `TOP_ACHIEVABLE_TIER` is `VERIFIED_TIER`, and the database
-       CHECK is `BETWEEN 0 AND 2`. No row could ever match, so the trust panel
-       showed 0 for every day it has shipped and no expiring licence has ever
-       surfaced on it. The number was structurally zero rather than measured, and
-       a metric that cannot be non-zero is worse than an absent one: it reads as
-       "nothing to do here".
-
-       Bound to the constant now, so the ladder cannot move away from it again.
-    */
-    prisma.business.count({
-      where: {
-        verificationTier: { gte: VERIFIED_TIER },
-        licenceExpiry: { lt: new Date(now.getTime() + 30 * DAY_MS) },
-      },
-    }),
+    readHomeStats(),
+    countAccounts({ claimed: true }, now),
+    countAccounts({ status: "live", claimed: true }, now),
+    prisma.business.count({ where: PAYING_WHERE }),
+    // `4f`'s plan column: claimed businesses whose plan is a priced one.
+    prisma.business.count({ where: { claimStatus: "claimed", plan: { is: { monthlyPriceAed: { gt: 0 } } } } }),
+    planMixNow(now),
+    sectorStocks(tree),
+    may("queue") ? loadQueue({}, now) : Promise.resolve(null),
+    may("queue") ? queueHealth(now) : Promise.resolve(null),
+    may("reports") ? loadReportQueue({}, now) : Promise.resolve(null),
+    statusNow(now),
+    otherQueues(actor, now, may),
+    may("revenue") ? reconcile() : Promise.resolve(null),
+    figureOpens(now),
   ]);
 
   /*
-     Open tasks on the call list, every seat's. Board 12d made the list a table
-     a derivation run writes, so this is a count of rows rather than a second
-     derivation run inside a console tile — which is what calling the old
-     `callList` from here amounted to, on every console load.
+     Where two owners state one figure, both are read and any difference is
+     said on the tile — Phase 5's reconciliation, run live as well as nightly:
+     a warning a day late is a morning of a wrong number.
   */
-  const callListSize = await prisma.crmTask.count({ where: { closedAt: null } });
-
-  const metric = (
-    key: string,
-    labelKey: string,
-    navKey: string,
-    href: string,
-    count: number | null,
-    late: number | null = null,
-    oldest: Date | null = null,
-  ): ConsoleMetric => ({
-    key,
-    labelKey,
-    count,
-    isQueue: late !== null,
-    late: count === null ? null : late,
-    oldestDays: daysSince(oldest, now),
-    navKey,
-    href,
+  const warnings = ownerWarnings({
+    treeListings: tree.totals.listings,
+    homeListings: home.listings,
+    ledgerPayers: mix.payers,
+    subscriptionPayers: payingSubscriptions,
+    claimedLedgerPayers: mix.plans.reduce((sum, plan) => sum + plan.accounts, 0),
+    planColumnPayers: paidPlanColumn,
+    mrr: ledger,
   });
 
-  return [
-    {
-      key: "supply",
-      labelKey: "console.job.supply",
-      metrics: [
-        metric("queue", "console.metric.queue", "queue", "/admin/queue", queuePending, queueLate, queueOldest?.createdAt ?? null),
-        metric("claims", "console.metric.claims", "queue", "/admin/queue", claimsOpen, claimsLate, claimsOldest?.createdAt ?? null),
-        metric("staged", "console.metric.staged", "ingest", "/admin/ingest", stagedRecords),
-        metric("unclaimed", "console.metric.unclaimed", "crm", "/admin/crm", unclaimedListings),
-      ],
-    },
-    {
-      key: "comparable",
-      labelKey: "console.job.comparable",
-      metrics: [
-        metric("subcategories", "console.metric.subcategories", "categories", "/admin/categories", thinCategories),
-        metric("no_specs", "console.metric.no_specs", "spec-library", "/admin/spec-library", productsWithoutSpecs),
-        metric("zero_results", "console.metric.zero_results", "search", "/admin/search", zeroResults),
-      ],
-    },
-    {
-      key: "accounts",
-      labelKey: "console.job.accounts",
-      metrics: [
-        metric("free_accounts", "console.metric.free_accounts", "businesses", "/admin/businesses", freeAtCap),
-        // Derived from signals rather than typed, so this counts what the last
-        // derivation run left open.
-        metric("call_list", "console.metric.call_list", "crm", "/admin/crm", callListSize),
-      ],
-    },
-    {
-      key: "money",
-      labelKey: "console.job.money",
-      metrics: [
-        /*
-         * No lateness here, deliberately. The D14 deadline is real but
-         * `Subscription` records no date it went past due — the dunning stage
-         * arrives in step 5. Counting every past-due row as late would be a
-         * number nobody computed, on the screen that exists to be trusted.
-         */
-        metric("past_due", "console.metric.past_due", "dunning", "/admin/dunning", pastDue),
-        metric("unpaid", "console.metric.unpaid", "invoices", "/admin/invoices", unpaidInvoices),
-      ],
-    },
-    {
-      key: "trust",
-      labelKey: "console.job.trust",
-      metrics: [
-        metric("reports", "console.metric.reports", "reports", "/admin/reports", reports.open, reports.late, reports.oldestAt),
-        metric("expiring", "console.metric.expiring", "businesses", "/admin/businesses", expiringLicences),
-      ],
-    },
-  ];
+  return {
+    now: now.toISOString(),
+    listingsLive: tree.totals.listings,
+    claimed,
+    claimedLive,
+    planMix: mix.plans,
+    sectors: sectors.map((sector) => ({ id: sector.id, name: sector.name, listings: sector.listings, claimed: sector.claimed })),
+    queue: queueView
+      ? {
+          open: queueView.total,
+          overSla: queueView.overSla,
+          conflicts: queueView.counts.conflict,
+          lastDecidedAt: health?.lastDecidedAt?.toISOString() ?? null,
+        }
+      : null,
+    reports: reportView
+      ? {
+          open: reportView.total,
+          overSla: reportView.overSla,
+          types: REPORT_TYPES.map((type) => ({ type, count: reportView.counts[type] })),
+        }
+      : null,
+    status,
+    otherQueues: others,
+    warnings,
+    opens,
+  };
+}
+
+// ── The nightly reconciliation ───────────────────────────────────────────────
+
+/** The comparisons `ownerWarnings` makes: listings, payers twice, unclaimed payers, MRR. */
+const RECONCILED_PAIRS = 5;
+
+/**
+ * Phase 5's reconciliation suite, as a daily job step: the same comparisons the
+ * overview makes live, run with every owner's figure and kept on the job's run
+ * record, so a disagreement has a date as well as a warning. A disagreement is
+ * a finding about the data, not a failed step — the step returns it rather than
+ * throwing, and the overview's tiles say it every time they are opened.
+ */
+export async function reconcileOverview(now: Date = new Date()): Promise<{ checked: number; disagreements: OverviewWarning[] }> {
+  const [tree, home, payingSubscriptions, paidPlanColumn, mix, ledger] = await Promise.all([
+    loadTaxonomyTree(),
+    readHomeStats(),
+    prisma.business.count({ where: PAYING_WHERE }),
+    prisma.business.count({ where: { claimStatus: "claimed", plan: { is: { monthlyPriceAed: { gt: 0 } } } } }),
+    planMixNow(now),
+    reconcile(),
+  ]);
+  const disagreements = ownerWarnings({
+    treeListings: tree.totals.listings,
+    homeListings: home.listings,
+    ledgerPayers: mix.payers,
+    subscriptionPayers: payingSubscriptions,
+    claimedLedgerPayers: mix.plans.reduce((sum, plan) => sum + plan.accounts, 0),
+    planColumnPayers: paidPlanColumn,
+    mrr: ledger,
+  });
+  return { checked: RECONCILED_PAIRS, disagreements };
+}
+
+// ── The overview ─────────────────────────────────────────────────────────────
+
+export interface PlatformOverview {
+  view: OverviewView;
+  /** The picker's months, newest first. */
+  periods: RevenuePeriod[];
+}
+
+/** What `/admin` renders and `GET /api/admin/overview` returns. */
+export async function platformOverview(
+  actor: Actor,
+  periodKey: string | null | undefined,
+  now: Date = new Date(),
+  options: { cached?: boolean } = {},
+): Promise<PlatformOverview> {
+  const period = overviewPeriodFor(periodKey ?? null, now);
+  const [snapshot, live] = await Promise.all([
+    options.cached === false ? readSnapshot(period.key, now) : loadSnapshot(period.key, period.partial),
+    readLive(actor, now),
+  ]);
+  const periods: RevenuePeriod[] = [];
+  let cursor = currentPeriod(now);
+  while (periods.length < PICKER_MONTHS) {
+    periods.push(cursor);
+    cursor = previousPeriod(cursor, now);
+  }
+  return { view: assembleOverview(snapshot, live, (navKey) => mayOpen(actor, navKey)), periods };
 }

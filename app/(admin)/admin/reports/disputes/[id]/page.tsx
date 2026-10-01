@@ -60,7 +60,7 @@ export default async function DisputeDetailPage({
 
   const back = ((): string => {
     const carried = new URLSearchParams();
-    for (const key of ["type", "mine", "escalated"]) {
+    for (const key of ["type", "mine", "escalated", "flagged", "late"]) {
       const value = query[key];
       if (typeof value === "string") carried.set(key, value);
     }

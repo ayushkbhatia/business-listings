@@ -95,6 +95,7 @@ export default async function SpecLibraryPage({
             covered: formatCount(header.covered),
             total: formatCount(header.total),
             products: formatCount(header.products),
+            withoutSpecs: formatCount(header.withoutSpecs),
           })}
         </span>
       }

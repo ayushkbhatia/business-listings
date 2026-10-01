@@ -72,7 +72,7 @@ export default async function InvoicesPage() {
       meta={
         <span className="text-caption text-muted">
           {t("admin.invoices.meta", {
-            count: formatCount(rows.length),
+            count: formatCount(list.total),
             outstanding: aed(list.outstandingFils),
           })}
         </span>
@@ -83,12 +83,21 @@ export default async function InvoicesPage() {
           face="sans"
           label={t("admin.invoices.total_issued")}
           value={aed(issuedFils)}
-          caption={t("admin.invoices.lines", { count: formatCount(rows.length) })}
+          /*
+             The sum of the rows below, so it says which rows: every invoice, or
+             the most recent ones when there are more than the list carries.
+          */
+          caption={
+            rows.length < list.total
+              ? t("admin.invoices.issued_recent", { n: formatCount(rows.length) })
+              : t("admin.invoices.issued_all", { count: rows.length, n: formatCount(rows.length) })
+          }
         />
         <StatCard
           face="sans"
           label={t("admin.invoices.outstanding")}
           value={aed(list.outstandingFils)}
+          caption={t("admin.invoices.outstanding_on", { count: list.outstandingCount, n: formatCount(list.outstandingCount) })}
         />
       </div>
 

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Tabs } from "@/components/structure";
 import { can } from "@/lib/auth/can";
 import { requireStaff } from "@/lib/auth/staff";
+import { prisma } from "@/lib/db/client";
 import { crmBoard, tabFrom, CRM_TABS } from "@/lib/crm/board";
 import { cn } from "@/lib/cn";
 import { t, type MessageKey } from "@/lib/i18n";
@@ -31,15 +32,40 @@ export const dynamic = "force-dynamic";
 
 const TONE: Record<Tone, string> = { bad: "text-bad-ink", warn: "text-warn-ink", ok: "text-ok-ink", neutral: "text-ink" };
 
-export default async function CrmPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+export default async function CrmPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string; category?: string }>;
+}) {
   const seat = await requireStaff();
   if (!can(seat.actor, "crm.work")) notFound();
 
   const now = new Date();
-  const { tab: requested } = await searchParams;
+  const { tab: requested, category: requestedSector } = await searchParams;
   const tab = tabFrom(requested);
-  const [board, badges] = await Promise.all([crmBoard(seat.actor, tab, now), getAdminNavBadges(seat)]);
+  /*
+     Board 4a's *Severe · recruit* row opens this list narrowed to its sector.
+     Only a sector is accepted — an unknown id or a subcategory is dropped, and
+     the page says which list it is showing rather than the one the address
+     claimed.
+  */
+  const sector =
+    requestedSector && /^[a-z0-9]{8,40}$/.test(requestedSector)
+      ? await prisma.category.findFirst({
+          where: { id: requestedSector, parentId: null },
+          select: { id: true, name: true },
+        })
+      : null;
+  const [board, badges] = await Promise.all([
+    crmBoard(seat.actor, tab, now, { sectorId: sector?.id ?? null }),
+    getAdminNavBadges(seat),
+  ]);
   const view = presentCrm(board, now);
+  const sectorQuery = sector ? `category=${sector.id}` : "";
+  const tabHref = (key: string) => {
+    const params = [key === "calls" ? "" : `tab=${key}`, sectorQuery].filter(Boolean).join("&");
+    return params ? `/admin/crm?${params}` : "/admin/crm";
+  };
 
   const listHeader = (
     <>
@@ -105,11 +131,23 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
           items={CRM_TABS.map((key) => ({
             key,
             label: t(`admin.crm.tab.${key}` as MessageKey),
-            href: key === "calls" ? "/admin/crm" : `/admin/crm?tab=${key}`,
+            href: tabHref(key),
             badge: board.tabCounts[key],
           }))}
         />
       </div>
+
+      {sector ? (
+        <p className="mb-[var(--gutter)] flex flex-wrap items-center gap-2 text-body-sm text-body">
+          <span>{t("admin.crm.sector_filter", { sector: sector.name })}</span>
+          <Link
+            href={tab === "calls" ? "/admin/crm" : `/admin/crm?tab=${tab}`}
+            className="rounded-tag text-moss underline underline-offset-2 focus-visible:shadow-focus focus-visible:outline-none"
+          >
+            {t("admin.crm.sector_filter_clear")}
+          </Link>
+        </p>
+      ) : null}
 
       {view.banner ? (
         <div className="mb-[var(--gutter)] rounded-panel border border-warn-line bg-warn-surface p-4">

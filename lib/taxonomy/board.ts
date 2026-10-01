@@ -8,6 +8,7 @@ import { resolveTemplateId } from "@/lib/spec/resolve";
 import { loadTradeKinds } from "./service";
 import { tradeKindOrigin } from "./trade-kind";
 import { buildTree, sectorOf, type TaxonomyTree, type TreeNode } from "./tree-model";
+import { LISTED } from "./listed";
 
 /**
  * Board 4d — what `/admin/categories` reads.
@@ -25,13 +26,13 @@ type Db = PrismaClient | Prisma.TransactionClient;
  * Who counts as a listing on this screen: published and not suspended.
  *
  * The population `1a`'s hero counts (`readHomeStats`) and `6c` counts
- * (`categoryIndex`). A merged listing is unpublished by the merge, so the two
- * agree on it without saying so. Q1 on this board is that two public surfaces
- * published totals that did not add up — the defence is that every surface
- * counts one population, and `tests/integration/taxonomy-board.test.ts` holds
- * this total equal to the hero's.
+ * (`categoryIndex`). Q1 on this board is that two public surfaces published
+ * totals that did not add up — the defence is that every surface counts one
+ * population, and `tests/integration/taxonomy-board.test.ts` holds this total
+ * equal to the hero's. Defined in `./listed.ts` since board `4a` and `4f`'s
+ * `status=live` filter read it too.
  */
-export const LISTED = { publishedAt: { not: null }, suspendedAt: null } as const satisfies Prisma.BusinessWhereInput;
+export { LISTED };
 
 /** Every category and every public listing, as one tree. */
 export async function loadTaxonomyTree(db: Db = prisma): Promise<TaxonomyTree> {
@@ -149,6 +150,108 @@ const DAY_MS = 86_400_000;
 /** "RFQs / month" is the last thirty days, not the calendar month so far. */
 export const RFQ_WINDOW_DAYS = 30;
 
+/**
+ * The RFQs that belong to a set of categories, over a window.
+ *
+ * An RFQ belongs to a category when it reached a listing filed there, or when
+ * it was a service brief written for the trade. An enquiry carries no category
+ * of its own, so this is the measured answer rather than a guess at what the
+ * buyer meant — and a buyer who sent one RFQ to six suppliers here sent one
+ * RFQ, not six.
+ *
+ * One predicate for the editor's *RFQs / month* and board `4a`'s category
+ * health, which links each sector's figure to this editor: the two are the same
+ * count over the same thirty days when the overview is on the month in
+ * progress.
+ */
+export function rfqWhere(categoryIds: readonly string[], since: Date, until: Date): Prisma.EnquiryWhereInput {
+  return {
+    createdAt: { gte: since, lt: until },
+    OR: [
+      { recipients: { some: { business: { primaryCategoryId: { in: [...categoryIds] } } } } },
+      { serviceBrief: { is: { categoryId: { in: [...categoryIds] } } } },
+    ],
+  };
+}
+
+export function rfqCount(categoryIds: readonly string[], since: Date, until: Date, db: Db = prisma): Promise<number> {
+  return db.enquiry.count({ where: rfqWhere(categoryIds, since, until) });
+}
+
+/** The thirty days the editor's figure covers, ending at `until`. */
+export function rfqWindow(until: Date): { since: Date; until: Date } {
+  return { since: new Date(until.getTime() - RFQ_WINDOW_DAYS * DAY_MS), until };
+}
+
+/**
+ * Listings published in a window — board 4a's *+N published* under *Listings
+ * live*, the flow beside this board's stock.
+ *
+ * Read off `publishedAt`, which a later unpublish clears (a merge or a closure
+ * nulls it in the same transaction). So a listing published in a month and
+ * merged away since is not counted in that month: the figure is what this
+ * month's publications amount to today, and the overview's caption says so.
+ */
+export function publishedBetween(from: Date, to: Date, db: Db = prisma): Promise<number> {
+  return db.business.count({ where: { publishedAt: { gte: from, lt: to } } });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sector health — board 4a reads it
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface SectorHealth {
+  id: string;
+  name: string;
+  /** The tree's rolled-up count — what this board's row shows. */
+  listings: number;
+  /** Of those, the claimed ones: the supply that can answer an RFQ. */
+  claimed: number;
+  /** RFQs over the thirty days ending at `until`. */
+  rfqs: number;
+}
+
+/**
+ * Every sector with the three figures board 4a's category table states.
+ *
+ * Listings come off the tree, so a sector's row there and its row here are one
+ * number. Claimed listings roll up by the same rule the tree uses — filed under
+ * the sector or anywhere beneath it — so the share is of the same population.
+ * B7 on board 4a: sectors only, at one level, and never a subcategory among
+ * them.
+ */
+export async function sectorHealth(tree: TaxonomyTree, until: Date, db: Db = prisma): Promise<SectorHealth[]> {
+  const window = rfqWindow(until);
+  const stocks = await sectorStocks(tree, db);
+  return Promise.all(
+    stocks.map(async (stock) => {
+      const sector = tree.sectors.find((candidate) => candidate.id === stock.id)!;
+      return { ...stock, rfqs: await rfqCount(subtreeIds(sector), window.since, window.until, db) };
+    }),
+  );
+}
+
+/**
+ * The two stocks of `sectorHealth` without the RFQs: what a sector holds now.
+ * Board 4a reads these live and the RFQs once per month, because the month's
+ * demand is a figure for the period and the supply is a figure for today.
+ */
+export async function sectorStocks(tree: TaxonomyTree, db: Db = prisma): Promise<Omit<SectorHealth, "rfqs">[]> {
+  const claimedRows = await db.business.groupBy({
+    by: ["primaryCategoryId"],
+    where: { ...LISTED, claimStatus: "claimed" },
+    _count: { _all: true },
+    orderBy: { primaryCategoryId: "asc" },
+  });
+  const claimedBy = new Map(claimedRows.map((row) => [row.primaryCategoryId, row._count._all]));
+  return tree.sectors.map((sector) => ({
+    id: sector.id,
+    name: sector.name,
+    listings: sector.listings,
+    claimed: subtreeIds(sector).reduce((sum, id) => sum + (claimedBy.get(id) ?? 0), 0),
+  }));
+}
+
 export async function loadCategoryEditor(
   tree: TaxonomyTree,
   categoryId: string,
@@ -197,22 +300,7 @@ export async function loadCategoryEditor(
     trade.kind === "services"
       ? prisma.service.count({ where: { categoryId: { in: ids }, status: "live", business: LISTED } })
       : prisma.product.count({ where: { categoryId: { in: ids }, status: { not: "draft" }, business: LISTED } }),
-    /*
-       An RFQ belongs to a category when it reached a listing filed there, or
-       when it was a service brief written for the trade. An enquiry carries no
-       category of its own, so this is the measured answer rather than a guess
-       at what the buyer meant — and a buyer who sent one RFQ to six suppliers
-       here sent one RFQ, not six.
-    */
-    prisma.enquiry.count({
-      where: {
-        createdAt: { gte: since },
-        OR: [
-          { recipients: { some: { business: { primaryCategoryId: { in: ids } } } } },
-          { serviceBrief: { is: { categoryId: { in: ids } } } },
-        ],
-      },
-    }),
+    rfqCount(ids, since, now),
     // `4f`'s paying definition, over the same listings the figure beside it counts.
     prisma.business.count({ where: { AND: [LISTED, PAYING_WHERE, { primaryCategoryId: { in: ids } }] } }),
     resolveTemplateId(prisma, categoryId),

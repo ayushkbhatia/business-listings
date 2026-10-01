@@ -22,7 +22,7 @@ import { signedReadUrl } from "@/lib/storage";
 /**
  * The promise the screen makes out loud, in one place.
  *
- * Distinct from `SLA_DAYS.claim` in `lib/console/overview.ts`, and they are not
+ * Distinct from `SLA_DAYS.claim` in `lib/console/sla.ts`, and they are not
  * in conflict: this is the *usual* turnaround a supplier is told about, and that
  * is the point at which a queue row counts as late. A screen quoting the late
  * threshold would be promising three days.

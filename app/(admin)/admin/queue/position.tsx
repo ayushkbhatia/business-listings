@@ -21,19 +21,29 @@ import { QueueKeys } from "./QueueKeys";
 export interface QueueParams {
   kind?: string;
   mine?: string;
+  /** Board 4a: only the rows past their service level. */
+  overdue?: string;
   triage?: string;
 }
 
-export function queueQuery({ kind, mine, triage }: { kind?: QueueKind | null; mine?: boolean; triage?: boolean }): string {
+export interface QueueQueryOptions {
+  kind?: QueueKind | null;
+  mine?: boolean;
+  overdue?: boolean;
+  triage?: boolean;
+}
+
+export function queueQuery({ kind, mine, overdue, triage }: QueueQueryOptions): string {
   const params = new URLSearchParams();
   if (kind) params.set("kind", kind);
   if (mine) params.set("mine", "1");
+  if (overdue) params.set("overdue", "1");
   if (triage) params.set("triage", "1");
   const query = params.toString();
   return query ? `?${query}` : "";
 }
 
-export function queueHref(options: { kind?: QueueKind | null; mine?: boolean; triage?: boolean }): string {
+export function queueHref(options: QueueQueryOptions): string {
   return `/admin/queue${queueQuery(options)}`;
 }
 
@@ -55,8 +65,9 @@ export async function QueuePosition({
 }) {
   const kind = params.kind && isQueueKind(params.kind) ? params.kind : null;
   const mine = params.mine === "1";
+  const overdue = params.overdue === "1";
   const triage = params.triage === "1";
-  const view = await loadQueue({ kind, assigneeId: mine ? actor.id : null });
+  const view = await loadQueue({ kind, assigneeId: mine ? actor.id : null, overdue });
   /*
      The same list the queue shows, in the same order, so the position is
      checkable against it (board 4c criterion 11: `1 of 318` under All,
@@ -68,7 +79,7 @@ export async function QueuePosition({
   const index = workable.findIndex((row) => row.ref === subject);
   const next = workable.find((row, position) => row.ref !== subject && (index === -1 || position > index)) ?? null;
   const previous = index > 0 ? workable[index - 1]! : null;
-  const query = queueQuery({ kind, mine, triage });
+  const query = queueQuery({ kind, mine, overdue, triage });
   /*
      Board 4c B15, the shell every review screen shares: the kind and how long
      it has waited, red once it is past the kind's service level — or the word
@@ -83,6 +94,7 @@ export async function QueuePosition({
 
   const scope = [
     kind ? t(`admin.queue.type.${kind}`) : t("admin.queue.position.everything"),
+    ...(overdue ? [t("admin.queue.position.overdue")] : []),
     ...(mine ? [t("admin.queue.assigned_to_me")] : []),
   ].join(" · ");
 
@@ -94,7 +106,7 @@ export async function QueuePosition({
           {kindChip}
         </StatusBadge>
       )}
-      <Link href={queueHref({ kind, mine })} className="rounded-tag underline-offset-2 hover:underline focus-visible:shadow-focus focus-visible:outline-none">
+      <Link href={queueHref({ kind, mine, overdue })} className="rounded-tag underline-offset-2 hover:underline focus-visible:shadow-focus focus-visible:outline-none">
         {t("admin.review.back")}
       </Link>
       <span>

@@ -38,7 +38,7 @@ export const dynamic = "force-dynamic";
 export default async function QueuePage({
   searchParams,
 }: {
-  searchParams: Promise<{ kind?: string; mine?: string }>;
+  searchParams: Promise<{ kind?: string; mine?: string; overdue?: string }>;
 }) {
   const seat = await requireStaff();
   if (!can(seat.actor, "queue.decide")) notFound();
@@ -46,16 +46,18 @@ export default async function QueuePage({
   const query = await searchParams;
   const kind: QueueKind | null = query.kind && isQueueKind(query.kind) ? query.kind : null;
   const mine = query.mine === "1";
+  /* Board 4a's *Submissions over SLA*: the figure opens the rows it counted. */
+  const overdue = query.overdue === "1";
   const now = new Date();
 
   const [view, health, staff, badges] = await Promise.all([
-    loadQueue({ kind, assigneeId: mine ? seat.actor.id : null }, now),
+    loadQueue({ kind, assigneeId: mine ? seat.actor.id : null, overdue }, now),
     queueHealth(now),
     queueStaff(),
     getAdminNavBadges(seat),
   ]);
 
-  const rows = boardRows(view.rows, { canResolveConflicts: can(seat.actor, "claim.resolve"), now, query: queueQuery({ kind, mine }) });
+  const rows = boardRows(view.rows, { canResolveConflicts: can(seat.actor, "claim.resolve"), now, query: queueQuery({ kind, mine, overdue }) });
   const wholeQueue = view.all.length;
   const passRate = wholeQueue === 0 ? 0 : view.passing / wholeQueue;
   const first = view.rows[0];
@@ -79,8 +81,15 @@ export default async function QueuePage({
         <p className="mx-auto mt-1 max-w-prose text-caption text-muted">
           {t("admin.queue.mine_empty.body", { count: wholeQueue, n: formatCount(wholeQueue) })}
         </p>
-        <Link href={queueHref({ kind })} className="mt-2 inline-block text-caption text-moss underline underline-offset-2">
+        <Link href={queueHref({ kind, overdue })} className="mt-2 inline-block text-caption text-moss underline underline-offset-2">
           {t("admin.queue.mine_empty.back")}
+        </Link>
+      </div>
+    ) : overdue && view.rows.length === 0 ? (
+      <div className="text-center">
+        <p className="text-body-sm text-body">{t("admin.queue.overdue_empty.title")}</p>
+        <Link href={queueHref({ kind, mine })} className="mt-2 inline-block text-caption text-moss underline underline-offset-2">
+          {t("admin.queue.overdue_empty.back")}
         </Link>
       </div>
     ) : (
@@ -114,14 +123,14 @@ export default async function QueuePage({
       actions={
         <div className="flex flex-wrap items-center gap-2">
           <Link
-            href={queueHref({ kind, mine: !mine })}
+            href={queueHref({ kind, mine: !mine, overdue })}
             aria-current={mine ? "true" : undefined}
             className={buttonClassName({ variant: "secondary" })}
           >
             {mine ? t("admin.queue.all_submissions") : t("admin.queue.assigned_to_me")}
           </Link>
           {first && (
-            <Link href={`${first.href}${queueQuery({ kind, mine, triage: true })}`} className={buttonClassName()}>
+            <Link href={`${first.href}${queueQuery({ kind, mine, overdue, triage: true })}`} className={buttonClassName()}>
               {t("admin.queue.start_triage")}
             </Link>
           )}
@@ -131,19 +140,32 @@ export default async function QueuePage({
       <div className="flex flex-col gap-[var(--gutter)]">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-4">
           <nav aria-label={t("admin.queue.chips_label")} className="flex flex-wrap items-center gap-2">
-            <ChipLink href={queueHref({ mine })} selected={kind === null}>
+            <ChipLink href={queueHref({ mine, overdue })} selected={kind === null}>
               {t("admin.queue.chip.all", { n: formatCount(view.total) })}
             </ChipLink>
             {QUEUE_KINDS.map((key) => (
               <ChipLink
                 key={key}
-                href={queueHref({ kind: key, mine })}
+                href={queueHref({ kind: key, mine, overdue })}
                 selected={kind === key}
                 tone={key === "conflict" && view.counts.conflict > 0 ? "bad" : "default"}
               >
                 {t(`admin.queue.chip.${key}`, { n: formatCount(view.counts[key]) })}
               </ChipLink>
             ))}
+            {/*
+               A toggle beside the kinds rather than a kind of its own: lateness
+               cuts across all six, and it combines with whichever is selected.
+               Counted off the same rows as the kinds, so under Assigned to me it
+               counts what is assigned to you.
+            */}
+            <ChipLink
+              href={queueHref({ kind, mine, overdue: !overdue })}
+              selected={overdue}
+              tone={view.overdue > 0 ? "bad" : "default"}
+            >
+              {t("admin.queue.chip.overdue", { n: formatCount(view.overdue) })}
+            </ChipLink>
           </nav>
           <span className="text-body-sm text-muted">{t("admin.queue.sort")}</span>
         </div>

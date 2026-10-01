@@ -26,6 +26,23 @@ test.describe("what a moderator is not offered", () => {
     await expect(page.getByRole("heading", { level: 1 })).toContainText("Platform overview");
   });
 
+  test("is shown no MRR and no plan mix on the overview, rather than blank ones (4a B10)", async ({ page }) => {
+    const figures = page.getByRole("list", { name: "Platform figures" });
+    await expect(figures.getByText("Moderation queue", { exact: true })).toBeVisible();
+    await expect(figures.getByText("MRR", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Plan mix" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Needs a human today" })).toBeVisible();
+    // Nor a money queue in the kept figures: those screens are finance's.
+    const rail = page.getByRole("complementary", { name: "What needs doing" });
+    await expect(rail.getByText("Invoices outstanding")).toHaveCount(0);
+    await expect(rail.getByText("Subscriptions in failed-payment follow-up")).toHaveCount(0);
+
+    const response = await page.request.get("/api/admin/overview");
+    const body = (await response.json()) as { figures: { mrr?: unknown }; planMix?: unknown };
+    expect(body.figures.mrr).toBeUndefined();
+    expect(body.planMix).toBeUndefined();
+  });
+
   test("sees no route they cannot act on", async ({ page }) => {
     const sidebar = page.getByRole("navigation", { name: "Staff navigation" });
 
