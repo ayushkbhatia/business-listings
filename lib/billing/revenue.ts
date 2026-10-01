@@ -24,7 +24,12 @@ import { monthlyValueFils } from "./period";
  * screen, labelled self-reported, and it is there.
  */
 
-const COUNTS_AS_MRR = ["active", "past_due"] as const;
+/**
+ * The statuses whose subscriptions are recurring revenue. Exported because
+ * `/admin/subscriptions` states a monthly figure per row and promises that the
+ * column adds up to this screen's.
+ */
+export const COUNTS_AS_MRR = ["active", "past_due"] as const;
 
 export interface MrrNow {
   /** Monthly recurring revenue, in fils. */
