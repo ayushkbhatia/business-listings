@@ -198,6 +198,24 @@ test.describe("the commercial screens a moderator cannot reach", () => {
   });
 });
 
+test.describe("a moderator and product questions", () => {
+  /*
+     `question.remove` is ops lead alone — taking down a buyer's published words
+     is the same decision as removing a review, one rung above the queue. The
+     page answers 404 by URL as well as leaving the link out.
+  */
+  test("cannot reach /admin/questions", async ({ page }) => {
+    const response = await page.goto("/admin/questions");
+    expect(response?.status()).toBe(404);
+  });
+
+  test("is not offered it in the sidebar", async ({ page }) => {
+    await page.goto("/admin");
+    const sidebar = page.getByRole("navigation", { name: "Staff navigation" });
+    await expect(sidebar.getByRole("link", { name: "Questions" })).toHaveCount(0);
+  });
+});
+
 test.describe("board 12a — the importer is a moderator's, dedupe is not", () => {
   test("opens the runs and the queue, and offers no dedupe tab", async ({ page }) => {
     /*

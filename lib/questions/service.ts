@@ -98,8 +98,16 @@ export async function answerQuestion(input: {
   if (question.removedAt) return { ok: false, error: "removed" };
   if (question.answeredAt) return { ok: false, error: "already_answered" };
 
-  await prisma.productQuestion.update({
-    where: { id: input.questionId },
+  /*
+     Conditional, on both of the things checked above.
+
+     A read and then an unconditional write: two seats answering at once both
+     passed the check and the second answer replaced the first — the revision
+     "once" exists to forbid — and an answer racing a staff removal landed on a
+     question already taken down. The loser of either race matches nothing.
+  */
+  const { count } = await prisma.productQuestion.updateMany({
+    where: { id: input.questionId, answeredAt: null, removedAt: null },
     data: {
       answer,
       // The CHECK requires both together; writing them apart is refused.
@@ -107,6 +115,13 @@ export async function answerQuestion(input: {
       answeredBy: input.answeredBy,
     },
   });
+  if (count === 0) {
+    const now = await prisma.productQuestion.findUniqueOrThrow({
+      where: { id: input.questionId },
+      select: { removedAt: true },
+    });
+    return { ok: false, error: now.removedAt ? "removed" : "already_answered" };
+  }
   return { ok: true };
 }
 
@@ -136,28 +151,48 @@ export async function removeQuestion(input: {
   if (!existing) return { ok: false, error: "not_found" };
   if (existing.removedAt) return { ok: false, error: "already_removed" };
 
-  await prisma.$transaction(async (tx) => {
-    await staffMutation(
-      {
-        actor: input.actor,
-        capability: "question.remove",
-        subject: `ProductQuestion:${input.questionId}`,
-        reason: written,
-        tx,
-      },
-      async () => {
-        const after = await tx.productQuestion.update({
-          where: { id: input.questionId },
-          data: { removedAt: new Date(), removalReason: written },
-          select: { id: true, removedAt: true, removalReason: true },
-        });
-        return { result: after, before: existing, after };
-      },
-    );
-  });
+  try {
+    await prisma.$transaction(async (tx) => {
+      await staffMutation(
+        {
+          actor: input.actor,
+          capability: "question.remove",
+          subject: `ProductQuestion:${input.questionId}`,
+          reason: written,
+          tx,
+        },
+        async () => {
+          /*
+             Conditional, so two ops leads removing at once write one removal
+             and one audit row between them.
+
+             This was an unconditional `update` after the check above: both
+             passed it, the second reason overwrote the first on the row, and
+             the log recorded two removals of one question — one of them a
+             decision that took effect on nothing. `staffMutation` writes its
+             row after `run` returns, so the loser throws to roll its own back.
+          */
+          const removedAt = new Date();
+          const { count } = await tx.productQuestion.updateMany({
+            where: { id: input.questionId, removedAt: null },
+            data: { removedAt, removalReason: written },
+          });
+          if (count !== 1) throw LOST;
+          const after = { id: input.questionId, removedAt, removalReason: written };
+          return { result: after, before: existing, after };
+        },
+      );
+    });
+  } catch (error) {
+    if (error === LOST) return { ok: false, error: "already_removed" };
+    throw error;
+  }
 
   return { ok: true };
 }
+
+/** Thrown inside the removal's transaction when another removal got there first. */
+const LOST = Symbol("lost the race");
 
 /** The seller's queue: unanswered first, because those are the ones costing them. */
 export async function questionsForSeller(businessId: string, take = 50) {

@@ -17,6 +17,7 @@ import { ApprovalQueueGallery } from "./_sections/ApprovalQueue";
 import { CredentialReviewGallery } from "./_sections/CredentialReview";
 import { ConflictReviewGallery } from "./_sections/ConflictReview";
 import { Reviews } from "./_sections/Reviews";
+import { QuestionsGallery } from "./_sections/Questions";
 import { AuthGallery } from "./_sections/Auth";
 import { CloseAccountGallery } from "./_sections/CloseAccount";
 import { StaffRolesGallery } from "./_sections/StaffRoles";
@@ -327,6 +328,7 @@ export default function Gallery() {
       <Billing />
 
       <Reviews />
+      <QuestionsGallery />
       <AuthGallery />
       <CloseAccountGallery />
       <StaffRolesGallery />

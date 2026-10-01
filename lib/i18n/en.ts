@@ -3528,6 +3528,7 @@ export const en = {
   "admin.questions.remove": "Remove",
   "admin.questions.reason_label": "Why it is being removed",
   "admin.questions.removed": "Question removed.",
+  "admin.questions.removed_tone": "Removed",
   "admin.questions.already_removed": "That question was already removed.",
   "admin.questions.on": "{business} · {product}",
 
