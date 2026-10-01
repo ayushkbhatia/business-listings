@@ -205,7 +205,9 @@ describe("the queue", () => {
     expect(view.overSla).toBeGreaterThanOrEqual(1);
     const firstOnTime = view.all.findIndex((candidate) => !candidate.late);
     expect(firstOnTime === -1 || view.all.indexOf(row) < firstOnTime).toBe(true);
-    expect(SLA_MS.conflict).not.toBe(SLA_MS.profile_edit);
+    // Per kind: a conflict runs on the 48 hours both claimants were promised (board 4c `B8`), not a plain claim's days.
+    expect(SLA_MS.conflict).toBe(48 * 3_600_000);
+    expect(SLA_MS.conflict).not.toBe(SLA_MS.claim);
   });
 
   it("excludes a claim that is part of an open conflict — the conflict is the row", async () => {
@@ -439,7 +441,8 @@ describe("what the seller reads", () => {
     expect(standing.request?.reason).toBe("AQ4B send the trade licence, not the VAT certificate.");
 
     const claimantActor = { ...actor(claimant.id, "buyer", "seller_owner"), businessId: biz.id } satisfies Actor;
-    expect(await withdrawClaim(claimantActor, biz.id, "AQ4B withdrawn to send the licence.")).toEqual({ ok: true });
+    // A plain claim, so there is no conflict for the withdrawal to dissolve.
+    expect(await withdrawClaim(claimantActor, biz.id, "AQ4B withdrawn to send the licence.")).toEqual({ ok: true, dissolved: false });
     const row = await prisma.claimSubmission.findUniqueOrThrow({ where: { id: claim.id }, select: { outcome: true, decisionReason: true } });
     expect(row).toEqual({ outcome: "withdrawn", decisionReason: "AQ4B withdrawn to send the licence." });
     expect((await loadQueue({}, new Date())).all.some((entryRow) => entryRow.ref === ref)).toBe(false);

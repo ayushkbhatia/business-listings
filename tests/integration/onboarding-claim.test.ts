@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
+import { deleteClaims } from "./claim-cleanup";
 import {
   findClaimMatches,
   submitClaim,
@@ -41,6 +42,8 @@ beforeAll(async () => {
     select: { id: true, roles: true },
   });
   claimant = { id: buyer.id, roles: buyer.roles };
+  // A run that died before its afterEach left its claims, and a claim left open is the next run's race.
+  await deleteClaims({ claimantId: claimant.id });
 
   /*
      An unclaimed record whose licence number belongs to it alone.
@@ -64,6 +67,8 @@ beforeAll(async () => {
       claimStatus: "unclaimed",
       mergedIntoId: null,
       licenceNumber: { notIn: duplicated.map((row) => row.licenceNumber) },
+      // Nobody else's claim waiting on it: a second one is a conflict (board 4c), not the claim these tests mean.
+      claimSubmissions: { none: { decidedAt: null } },
     },
     orderBy: { tradeName: "asc" },
     select: { id: true, tradeName: true, licenceNumber: true, slug: true },
@@ -85,7 +90,7 @@ beforeAll(async () => {
 });
 
 afterEach(async () => {
-  await prisma.claimSubmission.deleteMany({ where: { claimantId: claimant.id } });
+  await deleteClaims({ claimantId: claimant.id });
   await prisma.searchQueryLog.deleteMany({ where: { query: { startsWith: PREFIX } } });
   await prisma.zeroResultQuery.deleteMany({ where: { query: { startsWith: PREFIX } } });
   await prisma.rateLimitHit.deleteMany({ where: { identifier: { startsWith: PREFIX } } });

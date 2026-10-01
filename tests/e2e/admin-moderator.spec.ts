@@ -249,3 +249,32 @@ test.describe("standing item 9.5 — the scheduled jobs are every seat's to read
     await expect(page.getByRole("main").getByRole("button")).toHaveCount(0);
   });
 });
+
+test.describe("board 4c — a conflict is a moderator's to read and hand on, not to decide", () => {
+  /*
+     B1, and build plan 4.4. The conflict row on the approval queue used to
+     carry a link that 404'd for this seat (`claim.resolve` is ops lead alone),
+     so a moderator could see queue depth they could not open. The row stays —
+     the depth is real — and it opens the evidence with one control: assign it
+     to an ops lead. The services refuse every decision from this seat
+     regardless (tests/integration/claim-conflict.test.ts).
+  */
+  test("opens the conflict from the queue, with the evidence and an assignment and no decision", async ({ page }) => {
+    await page.goto("/admin/queue?kind=conflict");
+    const row = page
+      .getByRole("table", { name: /Submissions waiting for a decision/ })
+      .locator("tbody tr")
+      .filter({ hasText: "Zephyr Cooling Technical Services" });
+    const open = row.getByRole("link", { name: "Open" });
+    await expect(open).toBeVisible();
+    const href = await open.getAttribute("href");
+    expect(href).toMatch(/^\/admin\/queue\/conflict\//);
+
+    const response = await page.goto(href!);
+    expect(response?.status()).toBe(200);
+    await expect(page.getByText(/Only an ops lead resolves a conflict/)).toBeVisible();
+    await expect(page.getByText("Assign to an ops lead", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Award to/ })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Escalate|Split|Merge|tenancy|Log a call/ })).toHaveCount(0);
+  });
+});

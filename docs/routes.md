@@ -172,13 +172,14 @@ and it is the one that argues back.
 /admin/queue                            Approval queue                        [4b]  built board pass
 /admin/queue?kind=:kind&mine=1          The same queue, one kind, assigned    [4b]  built board pass
 /admin/queue/rules                      Auto-check rules (ops lead)           [4b]  built board pass
-/admin/queue/:id                        Review a submission                   [4c]
+/admin/queue/:id                        Review a submission (a change request) [4c] built board pass
 /admin/queue/claim/:id                  Decide an uncontested claim           [4b]  built board pass
 /admin/queue/claim/:id/document         The claim's licence, signed, 2 min    [4b]  built board pass
+/admin/queue/claim/:id/document?file=tenancy  The claim's tenancy contract, signed [4c] built board pass
 /admin/queue/location/:id               A branch outside the licence          [4b]  built board pass
 /admin/queue/credential/:id             Review a credential against a register [4c-s] built board pass
 /admin/queue/credential/:id/document    The credential's certificate, signed  [4c-s] built board pass
-/admin/queue/conflict/:id               Resolve a conflicting claim           [4c]
+/admin/queue/conflict/:id               Two or more claims on one listing     [4c]  built board pass
 /admin/queue/document/:id               Decide a seller's credential          [3e]  built h3 wave 3
 /admin/ingest                           Licence importer                     [12a]  built h4s2, board pass
 /admin/ingest/:id                       One import run, and its records      [12a]  built h4s2, board pass

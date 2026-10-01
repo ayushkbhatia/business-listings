@@ -301,6 +301,28 @@ describe("opening a conflict, from the product's own path", () => {
   });
 });
 
+describe("a conflict written before board 4c", () => {
+  it("still lists its sides when they name it only as A and B", async () => {
+    // The shape the old opener and the old seed wrote: no `conflict_id` on the claims.
+    const business = await listing("Legacy");
+    const [a, b] = await Promise.all([person("Legacy A"), person("Legacy B")]);
+    const make = (who: { id: string }) =>
+      prisma.claimSubmission.create({
+        data: { businessId: business.id, claimantId: who.id, route: "phone_callback", phone: "+97125531190" },
+        select: { id: true },
+      });
+    const [first, second] = [await make(a), await make(b)];
+    const conflict = await prisma.claimConflict.create({
+      data: { businessId: business.id, submissionAId: first.id, submissionBId: second.id },
+      select: { id: true },
+    });
+
+    const row = (await loadPending()).find((raw) => raw.subject === "conflict" && raw.id === conflict.id)!;
+    expect(row.facts.kind === "conflict" && row.facts.claims.length).toBe(2);
+    expect((await conflictReviewFor(conflict.id))!.claims).toHaveLength(2);
+  });
+});
+
 describe("criterion 1 and 3 — who may resolve, and the note", () => {
   it("refuses a moderator at the service, whatever the screen offers (403)", async () => {
     const { conflictId, aClaim } = await race("Mod");
@@ -482,6 +504,18 @@ describe("split (criterion 8) and merge (criterion 9)", () => {
     expect(
       await resolveConflict({ actor: ops, conflictId, resolution: "split", claimId: aClaim, secondClaimId: bClaim, note: NOTE, partyReasons: {} }),
     ).toEqual({ ok: false, error: "licence_has_a_listing", claimId: bClaim });
+  });
+
+  it("refuses to split off, or branch, the listing's own licence", async () => {
+    const { conflictId, aClaim, bClaim, business } = await race("Own");
+    await prisma.claimSubmission.update({ where: { id: bClaim }, data: { statedLicenceNumber: business.licenceNumber } });
+    for (const resolution of ["split", "merge_branch"] as const) {
+      expect(await resolveConflict({ actor: ops, conflictId, resolution, claimId: aClaim, secondClaimId: bClaim, note: NOTE, partyReasons: {} })).toEqual({
+        ok: false,
+        error: "licence_has_a_listing",
+        claimId: bClaim,
+      });
+    }
   });
 
   it("makes B's licence a held branch of the listing, keeping its own number, and gives B no seat", async () => {

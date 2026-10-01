@@ -512,8 +512,32 @@ the screen is permanently empty above copy reading "Run the matcher after an imp
   businesses* chip — no seller path creates a business, so the kind has no writer (§Flagged, B5
   holds for every kind that exists); and a `CHECK` pairing `outcome` with `decided_at`, which follows
   once the running resolver writes it.
-- [ ] **4.4 `4c`** — let the credential lane open the credential; filter conflict rows a moderator
-  will 404 on.
+- [x] **4.4 `4c`** — built against the board-level handoff (1 Oct 2026). The credential lane already
+  opened its certificate (`credential/[id]/page.tsx` → a two-minute signed link behind
+  `queue.decide`), confirmed and left alone. The conflict row a moderator 404'd on is neither
+  made inert nor filtered: the handoff's `B1` gives a moderator a screen — the evidence and
+  *Assign to ops lead*, no decision — so the row keeps the queue depth it was right to show and
+  opens it, `actionHref` and `href` agree for every seat, and assigning a conflict to anybody
+  without `claim.resolve` is refused. The screen is the board: every claim scored on the same rows
+  against the source record and our licence register, `holdsSourceLicence` first and a strict lead
+  on exact matches after it, a public-record call as the tiebreak (`B5`–`B7`, Q1); a rail with the
+  source licence, the waiting enquiries counted once in one unit and a decision log read from claim
+  events and audit rows (`B9`, `B14`); one `resolveConflict` for award, split, merge-as-branch and
+  keep-owner (`B2`); escalate to a named holder with the clock paused, a request for tenancy
+  contracts with it running, a call log; the 48 hours the queue measures and the copy promises
+  from one constant (`B8`); J/K and the kind chip on every review screen (`B15`). Five claim
+  notifications naming no other claimant (`B3`). **Found on the way and fixed:** conflicts never
+  opened from the product — the opener ran only for a claimed listing and then looked for two
+  undecided claims a challenge never has, so a race was two plain claims a moderator could both
+  approve; "Report a dispute" gave the challenger `seller_owner` on somebody else's business at
+  submit; the loser of an award kept the seat; the internal note reached both claimants through
+  `decisionReason`; a disputed listing rendered as claimed; the owner's verification screen listed
+  a challenger's licence; split invented `PENDING-` licence numbers. **Decided (owner, 1 Oct):**
+  pending is derived, not stored; only an uncontested claim attaches a seat; a challenge ends by
+  keeping the owner or escalating; merge gives B no seat. **Closed from 4.3:** the `CHECK` pairing
+  `claim_submission.outcome` with `decided_at`. **Not built:** the challenge case's award (undrawn,
+  Q2), merge reversal on `12b`'s thirty days (D-UNDO: no undo), and `12f` tickets, which do not
+  exist to link.
 - [x] **4.5 `4f`** — search by name, licence number and TRN; filters, pages and saved segments;
   health derived from a measured reply rate; an export that records its filter; and a detail route
   where the account decisions now live. **Not built:** the appeal path the terms page promises
@@ -767,7 +791,7 @@ the only large piece and the only one selling something it does not deliver.
 | `12a` | Licence-record importer | built | medium | Rows staged `needs_category` are terminal — nothing assigns them a category. Closed by 4.1. | 4.1 |
 | `12b` | Dedupe & merge | built | small | Pairs from the importer, three outcomes, bulk merge as a unit, tuning previewed, owner confirmation. Closed by 4.2. | 4.2 |
 | `4b` | Approval queue | built | medium | Six kinds, checks computed from tunable rules, bounded bulk bar, claims decided. Closed by 4.3. | 4.3 |
-| `4c` | Review a submission | partial | small | The credential lane cannot open the credential; moderators get conflict rows that 404. | 4.4 |
+| `4c` | Review a submission | built | 1 Oct 2026 | N claims on one listing scored on the same rows; one resolve call; conflicts open from the product; contested claims hold no seat; moderators read and assign. | 4.4 |
 | `4f` | Businesses & health | built | small | Health derived from measured reply rate, search, filters, segments, export, detail route. The suspension appeal path is not built. | 4.5 |
 | `10g` | Unclaimed listing | partial | small | Both calls to action render `disabled`; the claim destination exists and only the href is absent. | 1.1 / 4.6 |
 | `10a` | Subcategory page | partial ↓ | export only | Two definitions of "suppliers in this trade" render on one page. | 5.2 |

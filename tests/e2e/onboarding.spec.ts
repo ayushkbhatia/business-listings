@@ -195,7 +195,8 @@ test.describe("board 2b — prove ownership", () => {
     // Criterion 5. Blocking the second claimant would hand the listing
     // permanently to whoever arrived first.
     await page.goto(CLAIMABLE);
-    await expect(page.getByText(/decides in 48 hours/)).toBeVisible();
+    // Board 4c B8: the 48 hours the queue measures a conflict against, from one constant.
+    await expect(page.getByText(/decides between them within 48 hours/).first()).toBeVisible();
   });
 
   test("saves what was typed and says where the link went", async ({ page }) => {
