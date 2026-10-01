@@ -219,6 +219,7 @@ and it is the one that argues back.
 /admin/reports/:id                      One report: evidence and the decision  [4h]  built 4h
 /admin/reports/disputes/:id             One review dispute, on its own screen  [4h]  built 4h
 /admin/reports/detectors                Detection thresholds, ops lead         [4h]  built 4h
+/admin/questions                        Product questions — removal, reasoned [1g]  built #68
 /admin/support                          Support desk & view-as               [12f]  built h4s4
 /admin/notifications                    Notification templates              [12g]  built 12g
 /admin/notifications/channels           Carrier per channel, 30-day health   [12g]  built 12g

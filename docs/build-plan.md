@@ -787,11 +787,23 @@ the only large piece and the only one selling something it does not deliver.
   claimed a unique index that is on `placement_waitlist` rather than on `placement_slot`; the rule is
   now held by an advisory lock on the scope, and the race is a test that fails without it. The race
   test also found the check could not see a slot whose start was microseconds later than the
-  caller's clock. Three `lib/billing/` files feeding live admin screens are still untested.
+  caller's clock. **The billing half closed 1 Oct 2026** (`fix/billing-screen-tests`). The count of
+  three was stale both ways: `entitlements-service` and `invoice-list` had been covered, `vat.ts`
+  was deleted by #221, and `plan-diff` had tests the count missed because they import it as
+  `./plan-diff`. The untested three were `dunning-queue`, `invoice-delivery` and
+  `subscription-list`, and each now has an integration file. Testing them found eight defects.
+  Every charge path but `changePlan` took the net while writing a paid invoice with VAT on it. A
+  dunning retry that went through left the period unmoved, so the next renewal charged it again. A
+  cleared one-off address sent the invoice to Settings. Any billing seat could send any firm's
+  invoice. The queue read a not-started account as "already on Free" and counted a year of paid
+  renewals as attempts. Two header counts stopped at `take: 500`. A grandfathered seller's category
+  cap followed the live plan, and both grandfathered counts compared six of the twelve frozen
+  fields.
 - [ ] **9.7 Standing: reconcile the three registers.** 129 route files, ~100 rows in
-  `docs/routes.md`, 48 in `lib/dev/surfaces.ts`. `/admin/questions` is in neither and has zero
-  tests. Board `12i` exists in the tree and appears zero times in the epic, so the 100-board total
-  is short by at least one.
+  `docs/routes.md`, 48 in `lib/dev/surfaces.ts`. `/admin/questions` is in both now and has
+  integration and e2e tests (1 Oct 2026), which found two check-then-write races in
+  `lib/questions/service.ts` and a removed badge that read a review's string. Board `12i` exists in
+  the tree and appears zero times in the epic, so the 100-board total is short by at least one.
 
 ---
 
