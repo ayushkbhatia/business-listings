@@ -135,7 +135,11 @@ export async function confirmTermChange(formData: FormData): Promise<BillingResu
   if (!seat) return { ok: false, error: t("dev.no_seat_title") };
 
   const to = String(formData.get("term") ?? "") as BillingTerm;
-  const result = await changeTerm(seat.actor, seat.businessId, to);
+  // What the button said, re-verified inside `changeTerm` — the same promise
+  // `confirmPlanChange` keeps, and parsed the same way.
+  const quoted = formData.get("dueFils");
+  const expectedDueFils = quoted === null ? null : Number(quoted) || 0;
+  const result = await changeTerm(seat.actor, seat.businessId, to, expectedDueFils);
   if (!result.ok) return { ok: false, error: result.error };
 
   revalidateBilling();

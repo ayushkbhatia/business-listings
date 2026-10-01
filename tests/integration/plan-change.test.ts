@@ -672,12 +672,18 @@ describe("changing term", () => {
     };
 
     await onPlan("pro");
+    /*
+       Six hours off a whole day, on purpose. The credit counts whole days left,
+       floored, and a renewal exactly twenty days out is twenty days for a quote
+       read in the same millisecond and nineteen for the charge a moment later —
+       a local round trip is fast enough to land on the boundary, and did.
+    */
     await prisma.subscription.updateMany({
       where: { businessId },
       data: {
         term: "monthly",
         periodStartedAt: new Date(Date.now() - 10 * 86_400_000),
-        renewsAt: new Date(Date.now() + 20 * 86_400_000),
+        renewsAt: new Date(Date.now() + 20 * 86_400_000 + 6 * 3_600_000),
       },
     });
     const quoted = await quoteTermChange(actor, businessId, "annual");
@@ -685,7 +691,21 @@ describe("changing term", () => {
 
     setPaymentProvider(recording);
     try {
-      const result = await changeTerm(actor, businessId, "annual");
+      /*
+         First with a figure the button did not show. Refused before the card is
+         touched — the figure on a button is a promise, and a term change did not
+         re-check it until this file asked.
+      */
+      const moved = await changeTerm(
+        actor,
+        businessId,
+        "annual",
+        quoted.quote.proration.dueFils - 3_146,
+      );
+      expect(moved).toMatchObject({ ok: false, code: "quote_moved" });
+      expect(charges).toHaveLength(0);
+
+      const result = await changeTerm(actor, businessId, "annual", quoted.quote.proration.dueFils);
       if (!result.ok || !result.invoiceId) throw new Error("the switch should have invoiced");
       raisedInvoices.push(result.invoiceId);
 

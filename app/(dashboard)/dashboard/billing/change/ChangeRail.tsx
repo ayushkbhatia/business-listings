@@ -72,6 +72,8 @@ export type ChangeRailProps =
       term: "monthly" | "annual";
       primaryLabel: string;
       keepCurrentLabel: string;
+      /** What the button says, posted back and re-verified. Criterion 7. */
+      dueFils: number;
       providerNote: string | null;
     }
   | {
@@ -192,6 +194,7 @@ export function ChangeRail(props: ChangeRailProps) {
             onClick={() => {
               const form = new FormData();
               form.set("term", props.term);
+              form.set("dueFils", String(props.dueFils));
               run(() => confirmTermChange(form));
             }}
           >

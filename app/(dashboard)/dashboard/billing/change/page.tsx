@@ -502,6 +502,7 @@ function railProps(
         amount: aed(tq.proration.dueFils),
       }),
       keepCurrentLabel: t("change.keep_current", { plan: summary.plan.name }),
+      dueFils: tq.proration.dueFils,
       providerNote: tq.providerIsLive ? null : t("change.provider_not_live"),
     };
   }
