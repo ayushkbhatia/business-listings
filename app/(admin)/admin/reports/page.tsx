@@ -58,7 +58,7 @@ export const dynamic = "force-dynamic";
 export default async function ReportsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ type?: string; mine?: string; escalated?: string; flagged?: string }>;
+  searchParams: Promise<{ type?: string; mine?: string; escalated?: string; flagged?: string; late?: string }>;
 }) {
   const seat = await requireStaff();
   if (!can(seat.actor, "report.resolve")) notFound();
@@ -69,11 +69,13 @@ export default async function ReportsPage({
   const escalated = query.escalated === "1";
   /* Board 13c — the three-source flag the report modal's footer promises. */
   const flagged = query.flagged === "1";
+  /* Board 4a's *Reports over SLA*: the figure opens the rows it counted. */
+  const late = query.late === "1";
   const now = new Date();
 
   const [view, outcomes, staff, log, badges] = await Promise.all([
     loadReportQueue(
-      { type, assigneeId: mine ? seat.actor.id : null, escalated, flagged },
+      { type, assigneeId: mine ? seat.actor.id : null, escalated, flagged, late },
       now,
     ),
     reportOutcomes(now),
@@ -87,16 +89,19 @@ export default async function ReportsPage({
     mine?: boolean;
     escalated?: boolean;
     flagged?: boolean;
+    late?: boolean;
   }) => {
     const params = new URLSearchParams();
     const wantType = next.type === undefined ? type : next.type;
     const wantMine = next.mine === undefined ? mine : next.mine;
     const wantEscalated = next.escalated === undefined ? escalated : next.escalated;
     const wantFlagged = next.flagged === undefined ? flagged : next.flagged;
+    const wantLate = next.late === undefined ? late : next.late;
     if (wantType) params.set("type", wantType);
     if (wantMine) params.set("mine", "1");
     if (wantEscalated) params.set("escalated", "1");
     if (wantFlagged) params.set("flagged", "1");
+    if (wantLate) params.set("late", "1");
     const text = params.toString();
     return text ? `/admin/reports?${text}` : "/admin/reports";
   };
@@ -231,6 +236,14 @@ export default async function ReportsPage({
               </ChipLink>
               <ChipLink href={search({ flagged: !flagged })} selected={flagged}>
                 {t("admin.reports.chip.flagged", { n: formatCount(view.flagged) })}
+              </ChipLink>
+              {/* Counted off the whole queue, the same figure as the header's badge. */}
+              <ChipLink
+                href={search({ late: !late })}
+                selected={late}
+                tone={view.overSla > 0 ? "bad" : "default"}
+              >
+                {t("admin.reports.chip.late", { n: formatCount(view.overSla) })}
               </ChipLink>
             </nav>
             <span className="text-body-sm text-muted">{t("admin.reports.sort")}</span>

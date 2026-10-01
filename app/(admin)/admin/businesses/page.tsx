@@ -8,6 +8,8 @@ import { t, type MessageKey } from "@/lib/i18n";
 import {
   EMIRATES,
   KINDS,
+  LICENCE_STATES,
+  LISTING_STATUSES,
   PAGE_SIZE,
   hasAnyFilter,
   normaliseAccountFilter,
@@ -16,6 +18,7 @@ import {
   type AccountFilter,
 } from "@/lib/accounts/filter";
 import { ACCOUNT_STATES, CHURN_RISK_BELOW, UPGRADE_WINDOW_DAYS } from "@/lib/accounts/health";
+import { EXPIRING_LICENCE_DAYS } from "@/lib/accounts/health-where";
 import { accountSummary, readAccountPage } from "@/lib/accounts/list";
 import { listSegments } from "@/lib/accounts/segments";
 import { cn } from "@/lib/cn";
@@ -133,6 +136,39 @@ export default async function BusinessesPage({ searchParams }: { searchParams: P
                   spellCheck={false}
                 />
               </label>
+              {/*
+                 Board 4a's populations. The overview's tiles open this page
+                 with these set, and they are controls rather than hidden
+                 parameters so the view a person lands on can be read, changed
+                 and cleared like any other.
+              */}
+              <FilterSelect
+                name="status"
+                label={t("admin.businesses.filter.status")}
+                value={filter.status}
+                any={t("admin.businesses.filter.any_status")}
+                options={LISTING_STATUSES.map((status) => ({
+                  value: status,
+                  label: t(`admin.businesses.status.${status}` as MessageKey),
+                }))}
+              />
+              <FilterSelect
+                name="claimed"
+                label={t("admin.businesses.filter.claimed")}
+                value={filter.claimed ? "1" : undefined}
+                any={t("admin.businesses.filter.any_claimed")}
+                options={[{ value: "1", label: t("admin.businesses.claimed_only") }]}
+              />
+              <FilterSelect
+                name="paying"
+                label={t("admin.businesses.filter.paying")}
+                value={filter.paying === undefined ? undefined : filter.paying ? "1" : "0"}
+                any={t("admin.businesses.filter.any_paying")}
+                options={[
+                  { value: "1", label: t("admin.businesses.paying.yes") },
+                  { value: "0", label: t("admin.businesses.paying.no") },
+                ]}
+              />
               <FilterSelect
                 name="plan"
                 label={t("admin.businesses.filter.plan")}
@@ -165,6 +201,16 @@ export default async function BusinessesPage({ searchParams }: { searchParams: P
                 options={[0, 1, 2].map((tier) => ({
                   value: String(tier),
                   label: t("admin.businesses.tier_option", { tier: String(tier) }),
+                }))}
+              />
+              <FilterSelect
+                name="licence"
+                label={t("admin.businesses.filter.licence")}
+                value={filter.licence}
+                any={t("admin.businesses.filter.any_licence")}
+                options={LICENCE_STATES.map((state) => ({
+                  value: state,
+                  label: t(`admin.businesses.licence.${state}` as MessageKey, { days: String(EXPIRING_LICENCE_DAYS) }),
                 }))}
               />
               <FilterSelect

@@ -2,7 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/db/client";
 import { Prisma, type PrismaClient, type QueueSubject } from "@/lib/db/generated/client";
 import type { Authority, Emirate } from "@/lib/db/generated/enums";
-import { SLA_DAYS } from "@/lib/console/overview";
+import { SLA_DAYS } from "@/lib/console/sla";
 import { CONFLICT_SLA_MS } from "@/lib/claims/clock";
 import { AUTHORITY_EMIRATE } from "@/lib/ingest/sources";
 import { activityCovers } from "@/lib/onboarding/activity";
@@ -622,6 +622,12 @@ export interface QueueFilter {
   kind?: QueueKind | null;
   /** Only rows assigned to this staff member. */
   assigneeId?: string | null;
+  /**
+   * Only rows past their kind's service level. Board 4a's *Submissions over
+   * SLA* opens the queue with this set, so the figure clicked is the list shown
+   * rather than a sort order the reader has to count down.
+   */
+  overdue?: boolean;
 }
 
 export interface QueueView {
@@ -634,6 +640,8 @@ export interface QueueView {
   counts: Record<QueueKind, number>;
   total: number;
   overSla: number;
+  /** Over SLA among the rows the assignee filter leaves — the `overdue` chip, counted like the kinds (B4). */
+  overdue: number;
   /** Rows where every check passed, across the whole queue. */
   passing: number;
 }
@@ -775,10 +783,13 @@ export function viewOf(all: QueueEntry[], rules: CheckRules, filter: QueueFilter
   return {
     rules,
     all,
-    rows: filter.kind ? mine.filter((entry) => entry.kind === filter.kind) : mine,
+    rows: mine
+      .filter((entry) => (filter.kind ? entry.kind === filter.kind : true))
+      .filter((entry) => (filter.overdue ? entry.late : true)),
     counts,
     total: mine.length,
     overSla: all.filter((entry) => entry.late).length,
+    overdue: mine.filter((entry) => entry.late).length,
     passing: all.filter((entry) => entry.allPassed).length,
   };
 }

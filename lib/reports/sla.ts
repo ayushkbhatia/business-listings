@@ -23,7 +23,7 @@ import { REPORT_TYPES, type ReportType } from "./taxonomy";
  *     hour it stands is an hour somebody can lose a deposit.
  *
  * The rest are set against what the delay costs somebody outside the building,
- * the same principle `SLA_DAYS` in `lib/console/overview.ts` states for the
+ * the same principle `SLA_DAYS` in `lib/console/sla.ts` states for the
  * approval queue — and that file now reads `report` from here, so the console's
  * *past their service level* figure and this board's *over SLA* badge cannot
  * disagree.

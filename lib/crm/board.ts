@@ -109,8 +109,45 @@ export interface CrmBoard {
 
 const OPEN = { closedAt: null } as const;
 
-export async function crmBoard(actor: Actor, tab: CrmTab, now: Date = new Date()): Promise<CrmBoard> {
-  const visible: Prisma.CrmTaskWhereInput = { ...OPEN, OR: [{ assignedToId: null }, { assignedToId: actor.id }] };
+/**
+ * The open tasks a seat sees: unassigned, or assigned to them — `assignedToId`
+ * is the lock (B10). Narrowed to one sector when board 4a's *Severe · recruit*
+ * label opens the list, on the same rule as `4f`'s sector filter: the listing's
+ * sector, or a listing filed on the sector itself.
+ */
+function visibleWhere(actor: Actor, sectorId: string | null = null): Prisma.CrmTaskWhereInput {
+  const own: Prisma.CrmTaskWhereInput = { ...OPEN, OR: [{ assignedToId: null }, { assignedToId: actor.id }] };
+  return sectorId ? { AND: [own, sectorWhere(sectorId)] } : own;
+}
+
+function sectorWhere(sectorId: string): Prisma.CrmTaskWhereInput {
+  return { business: { OR: [{ sectorId }, { primaryCategoryId: sectorId }] } };
+}
+
+/**
+ * The Calls tab's count for a seat — what its tab badge shows.
+ *
+ * Board 4a's *Open calls on the list* reads this rather than counting every
+ * seat's tasks: it opens this screen, and a figure that counted calls other
+ * people hold would land on a list that cannot show them.
+ */
+export async function openCallCount(actor: Actor): Promise<number> {
+  return prisma.crmTask.count({ where: visibleWhere(actor) });
+}
+
+export interface CrmBoardOptions {
+  /** A sector's id, from board 4a's recruit row. Null for every sector. */
+  sectorId?: string | null;
+}
+
+export async function crmBoard(
+  actor: Actor,
+  tab: CrmTab,
+  now: Date = new Date(),
+  options: CrmBoardOptions = {},
+): Promise<CrmBoard> {
+  const sectorId = options.sectorId ?? null;
+  const visible = visibleWhere(actor, sectorId);
   const tabWhere: Prisma.CrmTaskWhereInput =
     tab === "upgrade" ? { signal: { in: [...PIPELINE_SIGNALS.upgrade] } } : tab === "renewal" ? { signal: { in: [...PIPELINE_SIGNALS.renewal] } } : {};
 
@@ -150,7 +187,7 @@ export async function crmBoard(actor: Actor, tab: CrmTab, now: Date = new Date()
     prisma.crmTask.count({ where: { ...OPEN, assignedToId: actor.id } }),
     prisma.crmTask.count({ where: { AND: [OPEN, tabWhere, { assignedToId: { notIn: [actor.id] } }, { assignedToId: { not: null } }] } }),
     prisma.crmTask.findMany({
-      where: { ...OPEN, signal: "held_page" },
+      where: sectorId ? { AND: [{ ...OPEN, signal: "held_page" }, sectorWhere(sectorId)] } : { ...OPEN, signal: "held_page" },
       orderBy: [{ demandScore: "desc" }, { id: "asc" }],
       select: { signalRef: true, signalFacts: true, assignedToId: true },
     }),

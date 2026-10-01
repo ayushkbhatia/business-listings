@@ -36,16 +36,40 @@ export type SortKey = (typeof SORTS)[number];
 /** `none` is the unclaimed half of `B2`: no plan, which is not Free. */
 export type PlanKey = string | "none";
 
+/**
+ * Board 4a's deep links, as filters this page can state.
+ *
+ * Every figure on the overview opens the screen that owns it with the filter
+ * that reproduces it (`4a` B1), and four of its figures are populations this
+ * table had no way to show: the listings live on the directory, the claimed
+ * accounts, the paying ones, and the verified licences about to lapse. Each is
+ * an ordinary filter here rather than a special view, so it can be combined,
+ * saved as a segment and exported like any other.
+ */
+export const LISTING_STATUSES = ["live"] as const;
+export type ListingStatusKey = (typeof LISTING_STATUSES)[number];
+
+export const LICENCE_STATES = ["expiring"] as const;
+export type LicenceStateKey = (typeof LICENCE_STATES)[number];
+
 export const PAGE_SIZE = 50;
 /** A search longer than this is a paste, not a name or a number. */
 const MAX_QUERY = 80;
 
 export interface AccountFilter {
   q?: string;
+  /** `live`: published and not suspended — the population `1a` and `4d` count. */
+  status?: ListingStatusKey;
+  /** Claim status `claimed`, in any state of publication. */
+  claimed?: true;
+  /** `4f`'s paying definition, or its complement. */
+  paying?: boolean;
   plan?: PlanKey;
   emirate?: EmirateKey;
   sector?: string;
   tier?: 0 | 1 | 2;
+  /** `expiring`: a verified licence lapsing within the window, or lapsed and not yet swept. */
+  licence?: LicenceStateKey;
   health?: AccountState;
   kind?: KindKey;
   sort?: SortKey;
@@ -64,6 +88,18 @@ export function normaliseAccountFilter(raw: Raw): AccountFilter {
 
   const q = one(raw, "q")?.replace(/\s+/g, " ");
   if (q) filter.q = q.slice(0, MAX_QUERY);
+
+  const status = one(raw, "status");
+  if (status && (LISTING_STATUSES as readonly string[]).includes(status)) filter.status = status as ListingStatusKey;
+
+  if (one(raw, "claimed") === "1") filter.claimed = true;
+
+  const paying = one(raw, "paying");
+  if (paying === "1") filter.paying = true;
+  else if (paying === "0") filter.paying = false;
+
+  const licence = one(raw, "licence");
+  if (licence && (LICENCE_STATES as readonly string[]).includes(licence)) filter.licence = licence as LicenceStateKey;
 
   const plan = one(raw, "plan");
   if (plan && /^[a-z0-9_-]{1,40}$/.test(plan)) filter.plan = plan;
@@ -95,7 +131,27 @@ export function pageFrom(raw: Raw): number {
   return Number.isSafeInteger(page) && page >= 1 && page <= 100_000 ? page : 1;
 }
 
-const ORDER: readonly (keyof AccountFilter)[] = ["q", "plan", "emirate", "sector", "tier", "health", "kind", "sort"];
+const ORDER: readonly (keyof AccountFilter)[] = [
+  "q",
+  "status",
+  "claimed",
+  "paying",
+  "plan",
+  "emirate",
+  "sector",
+  "tier",
+  "licence",
+  "health",
+  "kind",
+  "sort",
+];
+
+/** How a value is written into the URL. The two flags are `1`/`0`, never `true`. */
+function urlValue(value: AccountFilter[keyof AccountFilter]): string {
+  if (value === true) return "1";
+  if (value === false) return "0";
+  return String(value);
+}
 
 /**
  * The canonical query string: keys in one order, empty values gone, no page.
@@ -106,7 +162,7 @@ export function toQueryString(filter: AccountFilter, extra: Record<string, strin
   const params = new URLSearchParams();
   for (const key of ORDER) {
     const value = filter[key];
-    if (value !== undefined && value !== "") params.set(key, String(value));
+    if (value !== undefined && value !== "") params.set(key, urlValue(value));
   }
   for (const [key, value] of Object.entries(extra)) params.set(key, String(value));
   return params.toString();

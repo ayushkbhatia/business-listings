@@ -3,6 +3,7 @@ import { Panel } from "@/components/structure";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 import { PlanMixTable } from "./PlanMixTable";
+import { CompositionTable } from "./CompositionTable";
 import type { RevenueView } from "./present";
 
 /**
@@ -154,6 +155,9 @@ export function RevenueBoardView({ view }: { view: RevenueView }) {
       <div className="mt-[var(--gutter)]">
         <Panel title={view.plans.title}>
           <PlanMixTable rows={view.plans.rows} caption={view.plans.title} />
+          {view.plans.composition.length > 0 ? (
+            <CompositionTable rows={view.plans.composition} caption={t("composition.caption")} />
+          ) : null}
         </Panel>
       </div>
 

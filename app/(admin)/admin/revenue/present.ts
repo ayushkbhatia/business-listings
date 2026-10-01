@@ -14,6 +14,7 @@ import { WINDOW_DAYS } from "@/lib/metrics/response-time";
 import { formatAED, formatCount, formatDateRange, formatMonth, formatPercent } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import type { PlanMixRow } from "./PlanMixTable";
+import { compositionRows, type CompositionRow } from "./composition";
 
 /**
  * Board 4g — the month, as the strings the page prints.
@@ -77,7 +78,7 @@ export interface RevenueView {
     closures: string | null;
   };
   emirates: { title: string; rows: EmirateView[]; empty: boolean };
-  plans: { title: string; rows: PlanMixRow[] };
+  plans: { title: string; rows: PlanMixRow[]; composition: CompositionRow[] };
 }
 
 function whole(fils: number): boolean {
@@ -393,6 +394,8 @@ export function presentRevenue(board: RevenueBoard): RevenueView {
       share: current.endingFils === 0 ? "—" : percent(plan.mrrFils / current.endingFils, 1),
       arpa: plan.accounts === 0 ? "—" : money(Math.round(plan.mrrFils / plan.accounts), false),
     })),
+    // D-MRR: what the ending MRR is made of, printed where the plan mix is.
+    composition: board.composition.ledgerFils === 0 ? [] : compositionRows(board.composition),
   };
 
   // ── Period ─────────────────────────────────────────────────────────────────

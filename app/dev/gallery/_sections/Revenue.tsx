@@ -16,6 +16,7 @@ import {
   type Lines,
   type ReplyFinding,
 } from "@/lib/billing/revenue-period";
+import { mrrComposition } from "@/lib/billing/mrr-composition";
 import { Section, States } from "../_kit";
 
 /**
@@ -72,8 +73,29 @@ function board(input: {
     byEmirate: input.emirates ?? [],
     byPlan: input.plans ?? [],
     closures: input.closures ?? 0,
+    /*
+       D-MRR, board 4a: the composition the page prints under the plan mix.
+       A specimen's plan rows carry no list price, so its composition is the
+       ledger alone — every account at a price this gallery does not state —
+       which is the honest reading of a fixture built from totals.
+    */
+    composition: mrrComposition(
+      (input.plans ?? []).flatMap((plan) =>
+        Array.from({ length: plan.accounts }, (_, index) => ({
+          mrrFils: Math.floor(plan.mrrFils / plan.accounts) + (index === 0 ? plan.mrrFils % plan.accounts : 0),
+          planId: plan.planId,
+        })),
+      ),
+      GALLERY_PLANS,
+    ),
   };
 }
+
+/** The handoff's list prices, for the composition: Basic AED 99 and Pro AED 299, ten months a year. */
+const GALLERY_PLANS = [
+  { id: "basic", name: "Basic", monthlyPriceAed: 99, annualMonthsCharged: 10 },
+  { id: "pro", name: "Pro", monthlyPriceAed: 299, annualMonthsCharged: 10 },
+];
 
 const emirates = (rows: [EmirateRow["emirate"], number, number][]): EmirateRow[] =>
   rows.map(([emirate, aed, accounts]) => ({ emirate, mrrFils: aed * FILS, accounts }));

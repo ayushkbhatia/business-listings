@@ -37,6 +37,7 @@ import { rebuildSectorIndex } from "@/lib/onboarding/sector-index";
 import { syncCrmTasks } from "@/lib/crm/sync";
 import { runDemandBands } from "@/lib/placement/demand";
 import { dubaiDayStart } from "@/lib/format";
+import { reconcileOverview } from "@/lib/console/overview";
 
 /**
  * The daily run — the jobs whose natural grain is a day.
@@ -489,6 +490,21 @@ export async function GET(request: NextRequest) {
       if (today.getUTCDate() !== 1) return { skipped: "not the first of the month" };
       return runDemandBands();
     },
+    /*
+       Board 4a, Phase 5 — the overview's reconciliation, kept nightly.
+
+       Where two boards own one figure — live listings on the tree and the home
+       page, paying accounts in the ledger and the subscription table, the plan
+       column and the ledger's plans, MRR in the ledger and the subscriptions —
+       the overview compares them every time it opens and says so on the tile.
+       This runs the same comparison once a day and leaves it on the run's
+       record, so a disagreement has a first date. It returns what it found and
+       never throws over it: a disagreement is a finding about the data, not a
+       step that failed.
+
+       Last, because it reads what the billing steps above it settled.
+    */
+    overviewReconciliation: () => reconcileOverview(),
   }, request);
 
   console.info("[jobs] daily", outcome.steps);

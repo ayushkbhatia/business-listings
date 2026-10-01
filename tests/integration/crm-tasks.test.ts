@@ -4,10 +4,9 @@ import type { Actor, Role } from "@/lib/auth/roles";
 import { PermissionError } from "@/lib/auth/errors";
 import { areaMatrix } from "@/lib/content/matrix";
 import { syncCrmTasks } from "@/lib/crm/sync";
-import { crmBoard } from "@/lib/crm/board";
+import { crmBoard, openCallCount } from "@/lib/crm/board";
 import { buildCallList, claimTask, logCall, refreshSignals, releaseTask, revealContact } from "@/lib/crm/service";
 import { callHistory } from "@/lib/crm/history";
-import { consoleOverview } from "@/lib/console/overview";
 import type { SignalFacts } from "@/lib/crm/model";
 
 /**
@@ -341,10 +340,33 @@ describe("B5, B6 and B10 — the board's counts", () => {
     for (const row of board.rows) expect(row.signal).toBe("churn_risk");
   }, 120_000);
 
-  it("gives the console tile the open task count", async () => {
-    const jobs = await consoleOverview();
-    const metric = jobs.flatMap((job) => job.metrics).find((candidate) => candidate.key === "call_list");
-    expect(metric?.count).toBe(await prisma.crmTask.count({ where: { closedAt: null } }));
+  it("gives board 4a's open-calls figure the count the Calls tab shows that seat", async () => {
+    /*
+       The console counted every seat's open tasks and linked the figure here,
+       where a seat sees only its own and the unassigned ones: the number
+       clicked was not the number listed. `openCallCount` is the tab's own count.
+    */
+    await syncCrmTasks();
+    const board = await crmBoard(opsLead, "calls");
+    expect(await openCallCount(opsLead)).toBe(board.tabCounts.calls);
+    expect(await openCallCount(opsLead)).toBe(
+      await prisma.crmTask.count({ where: { closedAt: null, OR: [{ assignedToId: null }, { assignedToId: opsLead.id }] } }),
+    );
+  }, 120_000);
+
+  it("narrows the list to one sector for board 4a's recruit label, and counts only that sector", async () => {
+    await syncCrmTasks();
+    const sector = await prisma.category.findFirstOrThrow({ where: { parentId: null }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }], select: { id: true } });
+    const board = await crmBoard(opsLead, "calls", new Date(), { sectorId: sector.id });
+    const inSector = await prisma.crmTask.count({
+      where: {
+        closedAt: null,
+        OR: [{ assignedToId: null }, { assignedToId: opsLead.id }],
+        business: { OR: [{ sectorId: sector.id }, { primaryCategoryId: sector.id }] },
+      },
+    });
+    expect(board.tabCounts.calls).toBe(inSector);
+    expect(board.rows.length).toBe(inSector);
   }, 120_000);
 });
 

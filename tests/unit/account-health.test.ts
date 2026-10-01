@@ -137,6 +137,20 @@ describe("the filter a URL can carry", () => {
     expect(a).toBe("plan=basic&health=churn_risk");
   });
 
+  it("reads board 4a's populations, and writes each back as the overview links it", () => {
+    /*
+       Every tile on the overview opens this page with the filter that
+       reproduces its figure; the query string it links must be the canonical
+       one, or a saved segment of the same view would read as a different one.
+    */
+    const filter = normaliseAccountFilter({ status: "live", claimed: "1", paying: "0", licence: "expiring", sector: "c0ffee0000" });
+    expect(filter).toEqual({ status: "live", claimed: true, paying: false, licence: "expiring", sector: "c0ffee0000" });
+    expect(toQueryString(filter)).toBe("status=live&claimed=1&paying=0&sector=c0ffee0000&licence=expiring");
+    expect(toQueryString(normaliseAccountFilter({ claimed: "1", paying: "1", plan: "basic" }))).toBe("claimed=1&paying=1&plan=basic");
+    expect(hasAnyFilter({ paying: false })).toBe(true);
+    expect(normaliseAccountFilter({ status: "dead", claimed: "yes", paying: "maybe", licence: "old" })).toEqual({});
+  });
+
   it("does not count ordering as a filter, and bounds the page", () => {
     expect(hasAnyFilter({ sort: "reply_rate" })).toBe(false);
     expect(pageFrom({ page: "0" })).toBe(1);

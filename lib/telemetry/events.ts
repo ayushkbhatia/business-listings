@@ -96,6 +96,7 @@ export const EVENT_NAMES = [
   "suppliers_nudged",
   "suppliers_messaged",
   "comparison_exported",
+  "overview_figure_opened",
 ] as const;
 
 export type EventName = (typeof EVENT_NAMES)[number];
@@ -854,6 +855,23 @@ export const EVENT_SPECS = {
     emitter: "server",
     session: "never",
     props: { quotes: "number", lines: "number" },
+  },
+
+  /*
+     Board 4a, Phase 5: *which figure gets clicked each morning tells you which
+     job is behind most often.* A member of staff followed a figure on the
+     platform overview into the board that owns it.
+
+     `server`, though it is an attention fact: the browser's beacon records
+     seller events only, and this one is posted to a staff-only route that
+     resolves the seat itself (`/api/admin/overview/opened`) and writes it. No
+     `businessId` — it is about the console, not a listing — and the figure is
+     a key from the overview's own closed list, checked before it is stored.
+  */
+  overview_figure_opened: {
+    emitter: "server",
+    session: "never",
+    props: { figure: "string", period: "string" },
   },
 } as const satisfies Record<EventName, EventDefinition>;
 

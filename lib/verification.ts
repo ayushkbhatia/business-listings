@@ -73,7 +73,7 @@ export const TOP_ACHIEVABLE_TIER = VERIFIED_TIER;
  * this number **copy** as much as configuration: the screen states it and
  * `/admin/queue` bands a row late against it, and a screen promising two days
  * over a queue that goes amber at five is the same defect as a badge that
- * outlives its licence. `SLA_DAYS.credential` in `lib/console/overview.ts`
+ * outlives its licence. `SLA_DAYS.credential` in `lib/console/sla.ts`
  * reads it from here rather than restating it.
  *
  * Here rather than beside the queue because that module is `server-only` and

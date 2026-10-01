@@ -94,6 +94,11 @@ export interface ReportQueueFilter {
   escalated?: boolean;
   /** Board 13c — at the three-source threshold. */
   flagged?: boolean;
+  /**
+   * Past the type's service level. Board 4a's *Reports over SLA* opens the
+   * queue with this set, so the figure clicked is the list shown.
+   */
+  late?: boolean;
 }
 
 /**
@@ -128,6 +133,7 @@ export function viewOf(all: ReportEntry[], filter: ReportQueueFilter): ReportQue
     .filter((entry) => (filter.assigneeId ? entry.assignee?.id === filter.assigneeId : true))
     .filter((entry) => (filter.escalated ? entry.escalatedAt !== null : true))
     .filter((entry) => (filter.flagged ? entry.flagged : true))
+    .filter((entry) => (filter.late ? entry.sla === "late" : true))
     .sort(queueOrder);
 
   return {

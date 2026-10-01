@@ -1,82 +1,152 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 /**
- * Board 4a, from an ops lead's session.
+ * Board 4a, from an ops lead's session — built to the board-level handoff of
+ * 1 Oct 2026.
  *
- * The console's one job each morning is answering which of the five jobs is
- * behind. So the assertions are about that: five panels, age before volume, and
- * every number either a link into the queue that fixes it or visibly marked as
- * a screen that does not exist yet.
+ * The screen's one job each morning is answering which job is behind, and its
+ * definition is that *every number on it links into the queue that fixes it*.
+ * So the assertions are about that: each figure followed to its board lands on
+ * the same number (Phase 5's e2e criterion), the picker moves no live figure
+ * (B4), and an ops lead — whom §07 gives no `revenue.read` — is shown no MRR and
+ * no plan mix rather than blank ones (B10).
+ *
+ * Numbers are read off the screen and compared with the destination, never
+ * hard-coded: the seed is shared and other specs move it.
  */
 
-test.describe("board 4a — the console overview", () => {
+function escape(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+async function tile(page: Page, label: string): Promise<{ value: string; href: string }> {
+  const link = page.getByRole("list", { name: "Platform figures" }).getByRole("link", { name: new RegExp(`^${escape(label)}: `) });
+  const text = ((await link.textContent()) ?? "").replace(/\s+/g, " ").trim();
+  return { value: text.slice(text.indexOf(": ") + 2), href: (await link.getAttribute("href"))! };
+}
+
+async function railRow(page: Page, label: string): Promise<{ count: string; href: string }> {
+  const link = page.getByRole("complementary", { name: "What needs doing" }).getByRole("link", { name: label, exact: true });
+  const row = link.locator("xpath=ancestor::li[1]");
+  const count = ((await row.locator("span").last().textContent()) ?? "").trim();
+  return { count, href: (await link.getAttribute("href"))! };
+}
+
+test.describe("board 4a — the platform overview", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/admin");
   });
 
-  test("opens on the five jobs", async ({ page }) => {
-    await expect(page.getByRole("heading", { level: 1 })).toContainText("Platform overview");
+  test("opens on the figures an ops lead may open, and no money", async ({ page }) => {
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Platform overview");
+    const figures = page.getByRole("list", { name: "Platform figures" });
+    for (const label of ["Listings live", "Claimed", "Paid subscribers", "Quoted value", "Moderation queue"]) {
+      await expect(figures.getByText(label, { exact: true })).toBeVisible();
+    }
+    // B10: omitted, not shown blank. §07 gives ops lead no `revenue.read`.
+    await expect(figures.getByText("MRR", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Plan mix" })).toHaveCount(0);
+  });
 
-    for (const job of [
-      "Get listings in",
-      "Keep the data comparable",
-      "Grow and keep accounts",
-      "Take the money",
-      "Protect the trust",
-    ]) {
-      await expect(page.getByRole("heading", { level: 2, name: job })).toBeVisible();
+  test("says which figures are live and which the month moves (B4)", async ({ page }) => {
+    const figures = page.getByRole("list", { name: "Platform figures" });
+    for (const label of ["Listings live", "Claimed", "Moderation queue"]) {
+      await expect(figures.locator("li", { hasText: label }).getByText("Now", { exact: true })).toBeVisible();
+    }
+    await expect(page.getByText(/Tiles marked now are live and ignore the month/)).toBeVisible();
+  });
+
+  test("lands each tile on the same number on the board that owns it", async ({ page }) => {
+    const listings = await tile(page, "Listings live");
+    const claimed = await tile(page, "Claimed");
+    const paid = await tile(page, "Paid subscribers");
+    const queue = await tile(page, "Moderation queue");
+    const quoted = await tile(page, "Quoted value");
+
+    expect(listings.href).toBe("/admin/businesses?status=live");
+    expect(claimed.href).toBe("/admin/businesses?claimed=1");
+    expect(paid.href).toBe("/admin/businesses?paying=1");
+    expect(queue.href).toBe("/admin/queue");
+    expect(quoted.href).toMatch(/^\/admin\/quotes\?period=\d{4}-\d{2}$/);
+
+    for (const figure of [listings, claimed, paid]) {
+      await page.goto(figure.href);
+      const range = page.locator("p[aria-live=polite]").first();
+      if (figure.value === "0") await expect(range).toContainText("No businesses");
+      else await expect(range).toContainText(` of ${figure.value}`);
+    }
+
+    await page.goto(queue.href);
+    await expect(page.getByRole("link", { name: `All ${queue.value}`, exact: true })).toBeVisible();
+
+    await page.goto(quoted.href);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Accepted quotes");
+    await expect(page.locator("header")).toContainText(quoted.value);
+  });
+
+  test("lands each needs-a-human row on the rows it counted (B2)", async ({ page }) => {
+    const overdue = await railRow(page, "Submissions over SLA");
+    expect(overdue.href).toBe("/admin/queue?overdue=1");
+    const late = await railRow(page, "Reports over SLA");
+    expect(late.href).toBe("/admin/reports?late=1");
+    const conflicts = await railRow(page, "Conflicting claims");
+    expect(conflicts.href).toBe("/admin/queue?kind=conflict");
+
+    await page.goto(overdue.href);
+    await expect(page.getByRole("link", { name: `Over SLA ${overdue.count}`, exact: true })).toBeVisible();
+    await page.goto(late.href);
+    await expect(page.getByRole("link", { name: `Over SLA ${late.count}`, exact: true })).toBeVisible();
+    await page.goto(conflicts.href);
+    await expect(page.getByRole("link", { name: `Conflicts ${conflicts.count}`, exact: true })).toBeVisible();
+  });
+
+  test("reads 4h's own types, never a second taxonomy", async ({ page }) => {
+    const rail = page.getByRole("complementary", { name: "What needs doing" });
+    for (const link of await rail.getByRole("link").all()) {
+      const href = (await link.getAttribute("href")) ?? "";
+      if (!href.startsWith("/admin/reports?type=")) continue;
+      expect(href).toMatch(/type=(off_platform_payment|accepted_quote|review_dispute|review_integrity|content|wrong_details|closed|wrong_trade|claim_conflict)$/);
     }
   });
 
-  test("says how much is past its service level, in the page meta", async ({ page }) => {
-    const header = page.getByRole("banner").or(page.locator("header")).first();
-    await expect(header).toContainText(/past their service level|Nothing is past its service level/);
+  test("leaves every live figure alone when the month changes (B4)", async ({ page }) => {
+    const before = [await tile(page, "Listings live"), await tile(page, "Claimed"), await tile(page, "Moderation queue")];
+    const menu = page.locator("summary", { hasText: /\d{4}/ }).first();
+    await menu.click();
+    const earlier = page.getByRole("navigation", { name: "Month" }).getByRole("link").nth(2);
+    await earlier.click();
+    await expect(page).toHaveURL(/\/admin\?period=\d{4}-\d{2}$/);
+    const after = [await tile(page, "Listings live"), await tile(page, "Claimed"), await tile(page, "Moderation queue")];
+    expect(after.map((figure) => figure.value)).toEqual(before.map((figure) => figure.value));
   });
 
-  test("names the service levels rather than leaving them implicit", async ({ page }) => {
-    // A queue with no stated deadline is a queue nobody can be behind on, so
-    // the numbers are on the screen that uses them.
-    await expect(page.getByText(/Service level, in days/)).toBeVisible();
+  test("prints the supply-gap rule under the category table, a real table (B6)", async ({ page }) => {
+    const table = page.getByRole("table", { name: /Sectors by RFQs per claimed listing/ });
+    await expect(table.getByRole("columnheader", { name: "Supply gap" })).toBeVisible();
+    await expect(page.getByText(/Supply gap is RFQs over the last 30 days for each claimed listing/)).toBeVisible();
+    // Every row is a sector, linked to the taxonomy's editor for it.
+    for (const header of await table.getByRole("rowheader").all()) {
+      await expect(header.getByRole("link")).toHaveAttribute("href", /^\/admin\/categories\?c=/);
+    }
   });
 
-  test("does not offer an ops lead a number they cannot open", async ({ page }) => {
-    /*
-     * §07 puts `revenue.read` and `subscription.credit` with finance. The
-     * "Take the money" panel used to show a past-due count linking straight
-     * into a 404 for this seat — the two lists, nav capabilities and overview
-     * metrics, were maintained separately until the overview started reading
-     * the nav's.
-     */
-    const money = page
-      .getByRole("heading", { level: 2, name: "Take the money" })
-      .locator("xpath=..");
-    await expect(money.getByText(/Somebody else's row/)).toBeVisible();
-    await expect(money.getByRole("link")).toHaveCount(0);
+  test("draws the chart on one scale, with its figures in a table (B5)", async ({ page }) => {
+    await expect(page.getByRole("heading", { name: "Supply and demand" })).toBeVisible();
+    await page.getByText("Figures behind the chart").click();
+    const table = page.getByRole("table", { name: /Each month/ });
+    await expect(table.getByRole("rowheader")).toHaveCount(12);
   });
 
-  test("links a built screen and names an unbuilt one", async ({ page }) => {
-    const sidebar = page.getByRole("navigation", { name: "Staff navigation" });
-    // Built in steps 0 and 1.
-    await expect(sidebar.getByRole("link", { name: "Platform overview" })).toBeVisible();
-    await expect(sidebar.getByRole("link", { name: "Approval queue" })).toBeVisible();
-    await expect(sidebar.getByRole("link", { name: "Categories" })).toBeVisible();
-    /*
-     * Not yet. Named, not linked — the rule handoff 1 arrived at after the
-     * seller sidebar shipped a dozen dead links.
-     *
-     * This used to point at "Ranking & boosts", which board 12c built. The
-     * example has to be something still unbuilt or the assertion stops meaning
-     * anything, and `/admin/areas` is the one nobody has scheduled.
-     */
-    await expect(sidebar.getByRole("link", { name: "Emirates & areas" })).toHaveCount(0);
-    await expect(sidebar.getByText("Emirates & areas")).toBeVisible();
+  test("states the queues' service levels rather than leaving them implicit", async ({ page }) => {
+    await expect(page.getByText(/Late means past the queue's own service level/)).toBeVisible();
   });
 
   test("every admin link on the page resolves", async ({ page }) => {
     /*
-     * Board 4a's numbers link into the queue that fixes them, and only once
-     * that queue exists. A link here that 404s is the failure this test is for.
+     * Board 4a's numbers link into the queue that fixes them, and only where
+     * this seat may open it. A link here that 404s is the failure this test is
+     * for.
      */
     const links = await page.getByRole("main").getByRole("link").all();
     const hrefs = new Set<string>();
@@ -92,6 +162,31 @@ test.describe("board 4a — the console overview", () => {
     }
   });
 
+  test("returns the same view as JSON, every figure carrying its link (Phase 2)", async ({ page }) => {
+    const response = await page.request.get("/api/admin/overview");
+    expect(response.status()).toBe(200);
+    expect(response.headers()["cache-control"]).toContain("no-store");
+    const body = (await response.json()) as { tiles: { key: string; href: string | null }[]; figures: { mrr?: unknown } };
+    expect(body.tiles.map((figure) => figure.key)).toEqual(["listings", "claimed", "paid", "quoted", "queue"]);
+    for (const figure of body.tiles) expect(figure.href, figure.key).toMatch(/^\/admin/);
+    expect(body.figures.mrr).toBeUndefined();
+  });
+
+  test("links a built screen and names an unbuilt one", async ({ page }) => {
+    const sidebar = page.getByRole("navigation", { name: "Staff navigation" });
+    // Built in steps 0 and 1.
+    await expect(sidebar.getByRole("link", { name: "Platform overview" })).toBeVisible();
+    await expect(sidebar.getByRole("link", { name: "Approval queue" })).toBeVisible();
+    await expect(sidebar.getByRole("link", { name: "Categories" })).toBeVisible();
+    /*
+     * Not yet. Named, not linked — the rule handoff 1 arrived at after the
+     * seller sidebar shipped a dozen dead links. `/admin/areas` is the one
+     * nobody has scheduled.
+     */
+    await expect(sidebar.getByRole("link", { name: "Emirates & areas" })).toHaveCount(0);
+    await expect(sidebar.getByText("Emirates & areas")).toBeVisible();
+  });
+
   test("carries no fabricated badge counts in the sidebar", async ({ page }) => {
     /*
      * ADMIN_NAV shipped with `badge: 34` on the queue, `3` on reports and `5`
@@ -103,17 +198,12 @@ test.describe("board 4a — the console overview", () => {
   });
 
   test("is compact density", async ({ page }) => {
-    const density = await page
-      .locator("[data-density]")
-      .first()
-      .getAttribute("data-density");
+    const density = await page.locator("[data-density]").first().getAttribute("data-density");
     expect(density).toBe("compact");
   });
 
   test("is axe clean", async ({ page }) => {
-    const results = await new AxeBuilder({ page })
-      .disableRules(["color-contrast"])
-      .analyze();
+    const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
     expect(results.violations).toEqual([]);
   });
 });
@@ -125,6 +215,10 @@ test.describe("the console is staff-only", () => {
     const page = await context.newPage();
     const response = await page.goto("/admin");
     expect(response?.status()).toBe(404);
+    for (const path of ["/api/admin/overview", "/admin/quotes"]) {
+      const answer = await page.request.get(path);
+      expect(answer.status(), path).toBe(404);
+    }
     await context.close();
   });
 });

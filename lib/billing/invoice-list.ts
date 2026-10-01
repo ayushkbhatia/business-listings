@@ -38,8 +38,43 @@ export interface InvoiceRow {
 
 export interface InvoiceList {
   rows: InvoiceRow[];
-  /** Issued or overdue and not yet paid, in fils. */
+  /** Every invoice there is, not the rows this list carries. */
+  total: number;
+  /** Issued or overdue and not yet paid, in fils — across every invoice, not the rows listed. */
   outstandingFils: number;
+  /** How many invoices that outstanding figure is owed on. */
+  outstandingCount: number;
+}
+
+/** What "outstanding" means: sent and not settled. Overdue is still owed. */
+const OUTSTANDING_STATUSES = ["issued", "overdue"] as const;
+
+const TOTAL_SELECT = {
+  subtotalFils: true,
+  vatFils: true,
+  totalFils: true,
+  vatRate: true,
+  lines: { select: { amountAed: true, qty: true } },
+} as const;
+
+/**
+ * What is owed, across every invoice rather than the ones a list shows.
+ *
+ * The console's header summed the two hundred most recent rows and called it
+ * outstanding — a page cap wearing a total, the defect build plan 1.3 fixed on
+ * three other screens. Board 4a links its *Invoices outstanding* figure here, so
+ * the two now read one function: the count and the amount it states are what
+ * this header states.
+ */
+export async function outstandingInvoices(): Promise<{ count: number; fils: number }> {
+  const owed = await prisma.invoice.findMany({
+    where: { status: { in: [...OUTSTANDING_STATUSES] } },
+    select: TOTAL_SELECT,
+  });
+  return {
+    count: owed.length,
+    fils: owed.reduce((sum, invoice) => sum + storedTotals(invoice).totalFils, 0),
+  };
 }
 
 export async function invoiceList(limit = 200): Promise<InvoiceList> {
@@ -78,10 +113,12 @@ export async function invoiceList(limit = 200): Promise<InvoiceList> {
     isCreditNote: invoice.docType === "credit_note",
   }));
 
+  const [total, outstanding] = await Promise.all([prisma.invoice.count(), outstandingInvoices()]);
+
   return {
     rows,
-    outstandingFils: rows
-      .filter((row) => row.status === "issued" || row.status === "overdue")
-      .reduce((sum, row) => sum + row.totalFils, 0),
+    total,
+    outstandingFils: outstanding.fils,
+    outstandingCount: outstanding.count,
   };
 }
