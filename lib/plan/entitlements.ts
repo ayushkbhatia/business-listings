@@ -240,6 +240,19 @@ export const FROZEN_CAPS = [
 export type FrozenCap = (typeof FROZEN_CAPS)[number];
 
 /**
+ * The frozen fields this account keeps that its plan has since moved.
+ *
+ * What "grandfathered" means, decided once. `/admin/subscriptions` names these
+ * per row and `/admin/plans` counts the accounts with any — and each compared a
+ * hand-written list of six, so an account kept on its storage, services,
+ * categories or a switch counted as on the plan in both places.
+ */
+export function keptFields(plan: PlanCaps, snapshot: unknown): FrozenCap[] {
+  const effective = effectiveCaps(plan, snapshot);
+  return FROZEN_CAPS.filter((field) => effective[field] !== plan[field]);
+}
+
+/**
  * What this subscription is actually entitled to.
  *
  * The snapshot wins where there is one, so an account keeps the caps it signed

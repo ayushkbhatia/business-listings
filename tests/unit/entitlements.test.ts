@@ -6,6 +6,7 @@ import {
   cheapestPlanGranting,
   effectiveCaps,
   FROZEN_CAPS,
+  keptFields,
   monthStart,
   snapshotOf,
   type PlanCaps,
@@ -208,6 +209,14 @@ describe("what a snapshot freezes is what an account keeps", () => {
     const old = { ...snapshotOf(signedUpOn, SIGNED_UP) } as Record<string, unknown>;
     delete old["categoryLimit"];
     expect(effectiveCaps(edited, old).categoryLimit).toBe(edited.categoryLimit);
+  });
+
+  it("names every kept field, and none for an account with no snapshot", () => {
+    expect(keptFields(edited, snapshotOf(signedUpOn, SIGNED_UP))).toEqual([...FROZEN_CAPS]);
+    expect(keptFields(edited, snapshotOf(edited, SIGNED_UP))).toEqual([]);
+    expect(keptFields(edited, null)).toEqual([]);
+    // A snapshot of another plan is not this plan's grandfathering.
+    expect(keptFields(edited, snapshotOf({ ...signedUpOn, id: "pro" }, SIGNED_UP))).toEqual([]);
   });
 
   it("leaves the price, the name and the ranking to the plan, which are not frozen", () => {

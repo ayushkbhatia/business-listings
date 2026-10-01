@@ -1,12 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
-import {
-  effectiveCaps,
-  FROZEN_CAPS,
-  PLAN_CAPS_SELECT,
-  toCaps,
-  type FrozenCap,
-} from "@/lib/plan/entitlements";
+import { keptFields, PLAN_CAPS_SELECT, toCaps, type FrozenCap } from "@/lib/plan/entitlements";
 import { monthlyValueFils } from "./period";
 import { COUNTS_AS_MRR } from "./revenue";
 
@@ -48,7 +42,7 @@ export interface SubscriptionRow {
   /**
    * Caps that differ from the plan's current ones, by field name.
    *
-   * Every field the snapshot freezes, from `FROZEN_CAPS`. This compared its own
+   * Every field the snapshot freezes, from `keptFields`. This compared its own
    * list of six — storage was added late, and services, categories and the four
    * switches never were — so an account grandfathered on any of those six read
    * "on the plan".
@@ -67,16 +61,6 @@ export interface SubscriptionList {
   total: number;
   /** Every subscription on old numbers, across all of them, not the page. */
   grandfathered: number;
-}
-
-/** Which frozen fields this subscription keeps that its plan has since moved. */
-function keptFrom(
-  plan: Parameters<typeof toCaps>[0],
-  snapshot: unknown,
-): FrozenCap[] {
-  const caps = toCaps(plan);
-  const effective = effectiveCaps(caps, snapshot);
-  return FROZEN_CAPS.filter((field) => effective[field] !== caps[field]);
 }
 
 const COUNTED = new Set<string>(COUNTS_AS_MRR);
@@ -114,7 +98,7 @@ export async function subscriptionList(limit = 500): Promise<SubscriptionList> {
   );
   const grandfathered = everySnapshot.filter((subscription) => {
     const plan = plans.get(subscription.planId);
-    return plan !== undefined && keptFrom(plan, subscription.entitlementSnapshot).length > 0;
+    return plan !== undefined && keptFields(toCaps(plan), subscription.entitlementSnapshot).length > 0;
   }).length;
 
   const rows = subscriptions.map((subscription) => ({
@@ -139,7 +123,7 @@ export async function subscriptionList(limit = 500): Promise<SubscriptionList> {
     renewsAt: subscription.renewsAt,
     endsAt: subscription.endsAt,
     dunningStage: subscription.dunningStage,
-    grandfatheredFields: keptFrom(subscription.plan, subscription.entitlementSnapshot),
+    grandfatheredFields: keptFields(toCaps(subscription.plan), subscription.entitlementSnapshot),
   }));
 
   return { rows, total, grandfathered };
