@@ -45,6 +45,12 @@ function looksLikeAddress(value: string): boolean {
  * `to` absent means the billing address — 7e's setting, then the finance seat,
  * then the owner. Present, it is a one-off and nothing about the stored address
  * changes.
+ *
+ * Present and empty is a one-off with nothing in it, and is refused. It fell
+ * through to the billing address: `sendInvoice` passes `""` for a field that was
+ * opened and cleared, and says in a comment that this must not reach Settings —
+ * the `||` below it did exactly that. Somebody who typed an accountant's address
+ * and deleted it has not asked for the invoice to go to the owner instead.
  */
 export async function emailInvoice(
   actor: Actor,
@@ -53,6 +59,15 @@ export async function emailInvoice(
   to?: string | null,
 ): Promise<SendResult> {
   assertCanManageBilling(actor);
+  /*
+     A billing seat of this business, not any billing seat. Every other service
+     in `lib/billing` refuses a business that is not the actor's own; this one
+     checked the role and then trusted the id it was handed, which is a seat
+     sending another firm's invoice to an address of its choosing. Not found
+     rather than forbidden, the route's rule: an invoice that is not yours does
+     not exist.
+  */
+  if (actor.businessId !== businessId) return { ok: false, error: "not_found" };
 
   const invoice = await prisma.invoice.findUnique({
     where: { id: invoiceId },
@@ -61,7 +76,8 @@ export async function emailInvoice(
   if (!invoice || invoice.businessId !== businessId) return { ok: false, error: "not_found" };
   if (invoice.status === "draft") return { ok: false, error: "not_found" };
 
-  const address = (to?.trim() || (await billingRecipient(businessId)) || "").trim();
+  const address =
+    to === undefined || to === null ? ((await billingRecipient(businessId)) ?? "") : to.trim();
   if (!address || !looksLikeAddress(address)) return { ok: false, error: "no_address" };
 
   const sender = resolveNotificationSenders().email;
