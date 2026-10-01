@@ -4,6 +4,8 @@ import {
   capFor,
   cheapestPlanUnlocking,
   cheapestPlanGranting,
+  effectiveCaps,
+  FROZEN_CAPS,
   monthStart,
   snapshotOf,
   type PlanCaps,
@@ -154,5 +156,67 @@ describe("a snapshot freezes entitlements and nothing else", () => {
     expect(frozen.productLimit).toBe(PRO.productLimit);
     expect(frozen.teamSeats).toBe(PRO.teamSeats);
     expect(frozen.customDomain).toBe(PRO.customDomain);
+  });
+});
+
+describe("what a snapshot freezes is what an account keeps", () => {
+  /*
+     Three readers of one idea, held to one list. `snapshotOf` froze
+     `categoryLimit` and `effectiveCaps` never applied it, so a grandfathered
+     seller's category cap followed the live plan — and an edit with "apply to
+     existing" left unticked moved every account anyway.
+  */
+  const SIGNED_UP = new Date("2026-03-01T00:00:00Z");
+
+  /** BASIC with every frozen field moved, as an ops lead's edit might move it. */
+  const edited: PlanCaps = {
+    ...BASIC,
+    enquiriesPerMonth: 20,
+    productLimit: 100,
+    serviceLimit: 10,
+    locationLimit: 2,
+    photoLimit: 30,
+    categoryLimit: 3,
+    storageMb: 512,
+    teamSeats: 2,
+    customDomain: true,
+    analytics: false,
+    csvImport: false,
+    sponsoredEligible: true,
+  };
+  const signedUpOn: PlanCaps = { ...BASIC, categoryLimit: 5 };
+
+  it("freezes exactly the listed fields", () => {
+    const frozen = snapshotOf(signedUpOn, SIGNED_UP);
+    const keys = Object.keys(frozen).filter((key) => key !== "planId" && key !== "capturedAt");
+    expect(keys.sort()).toEqual([...FROZEN_CAPS].sort());
+  });
+
+  it("gives back every one of them against a plan that has since moved", () => {
+    const effective = effectiveCaps(edited, snapshotOf(signedUpOn, SIGNED_UP));
+    const kept = FROZEN_CAPS.filter((field) => effective[field] !== edited[field]);
+    expect(kept).toEqual([...FROZEN_CAPS]);
+    for (const field of FROZEN_CAPS) expect(effective[field]).toBe(signedUpOn[field]);
+  });
+
+  it("keeps the category cap the seller signed up on", () => {
+    const effective = effectiveCaps(edited, snapshotOf(signedUpOn, SIGNED_UP));
+    expect(effective.categoryLimit).toBe(5);
+  });
+
+  it("reads a snapshot from before categories were frozen as the live plan", () => {
+    const old = { ...snapshotOf(signedUpOn, SIGNED_UP) } as Record<string, unknown>;
+    delete old["categoryLimit"];
+    expect(effectiveCaps(edited, old).categoryLimit).toBe(edited.categoryLimit);
+  });
+
+  it("leaves the price, the name and the ranking to the plan, which are not frozen", () => {
+    const effective = effectiveCaps(
+      { ...edited, monthlyPriceAed: 399, name: "Basic+", rankingMultiplier: 1.2 },
+      snapshotOf(signedUpOn, SIGNED_UP),
+    );
+    expect(effective.monthlyPriceAed).toBe(399);
+    expect(effective.name).toBe("Basic+");
+    expect(effective.rankingMultiplier).toBe(1.2);
   });
 });

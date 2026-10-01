@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
-import { allowance, type Allowance, type PlanCaps } from "@/lib/plan/entitlements";
+import { allowance, effectiveCaps, toCaps, type Allowance } from "@/lib/plan/entitlements";
 import { photoPicks, type PhotoPicks } from "@/lib/listing/photos";
 import { recentRevisions } from "@/lib/listing/save";
 import type { ModeratedField } from "@/lib/listing/service";
@@ -135,6 +135,7 @@ export async function getListing(businessId: string): Promise<ListingView | null
       ratingOverall: true,
       reviewCount: true,
       plan: { select: PLAN_SELECT },
+      subscription: { select: { entitlementSnapshot: true } },
       primaryCategory: { select: { id: true, name: true, parent: { select: { name: true } } } },
       categories: {
         select: { category: { select: { id: true, name: true, parent: { select: { name: true } } } } },
@@ -229,10 +230,14 @@ export async function getListing(businessId: string): Promise<ListingView | null
     });
   }
 
-  const plan =
-    (business.plan as PlanCaps | null) ??
-    allPlans.find((row) => row.monthlyPriceAed === 0) ??
-    allPlans[0]!;
+  /*
+     Snapshot and all. `addCategory` refuses on `effectiveFor`, so the meter
+     beside the picker has to count against the same cap or a grandfathered
+     seller is told they are full while the save would take one more.
+  */
+  const plan = business.plan
+    ? effectiveCaps(toCaps(business.plan), business.subscription?.entitlementSnapshot)
+    : (allPlans.find((row) => row.monthlyPriceAed === 0) ?? allPlans[0]!);
 
   return {
     displayName: business.displayName,
