@@ -35,8 +35,8 @@ export interface DunningRowView {
   daysPastDue: number;
   next: string;
   attempts: number;
-  /** `AED 313.95`, VAT included, already formatted. */
-  amount: string;
+  /** `AED 313.95`, VAT included, already formatted. Null where nothing was charged. */
+  amount: string | null;
   /** What the provider said. Null where nothing was tried. */
   reason: string | null;
   /** `in 4 days`, or the date beyond a week. Null once it has dropped. */
@@ -84,7 +84,12 @@ export function DunningTable({ rows }: { rows: readonly DunningRowView[] }) {
       header: t("admin.dunning.col.amount"),
       numeric: true,
       width: "9rem",
-      render: (row) => <span className="font-mono tabular-nums">{row.amount}</span>,
+      render: (row) =>
+        row.amount === null ? (
+          <span className="text-faint">{t("admin.dunning.no_attempts")}</span>
+        ) : (
+          <span className="font-mono tabular-nums">{row.amount}</span>
+        ),
     },
     {
       key: "reason",

@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
   daysPastDue,
+  dropsToFreeAt,
+  episodeAttempts,
   FORBIDDEN_EFFECTS,
   GRACE_AFTER_FINAL_DAYS,
   nextAction,
   PERMITTED_ACCOUNT_EFFECTS,
   SCHEDULE,
+  summariseQueue,
   type DunningAction,
+  type DunningStage,
 } from "./dunning";
 
 /**
@@ -132,5 +136,77 @@ describe("what dunning may do to an account", () => {
     for (const forbidden of FORBIDDEN_EFFECTS) {
       expect([...seen]).not.toContain(forbidden);
     }
+  });
+});
+
+describe("which attempts belong to the failure on screen", () => {
+  /*
+     A subscription keeps every attempt it ever made, paid renewals included.
+     The queue counted all of them, so a year of renewals read "12 tried"
+     against an account that had failed once.
+  */
+  const at = (n: number, succeeded = true) => ({ attemptedAt: day(n), succeeded });
+
+  it("counts from the day it went past due, not from the day it signed up", () => {
+    const history = [at(-60), at(-30), at(0, false), at(0, false)];
+    expect(episodeAttempts(history, FAILED)).toEqual([at(0, false), at(0, false)]);
+  });
+
+  it("includes the renewal that failed, which is stamped with the same instant", () => {
+    // `runRenewals` writes the attempt and `pastDueSince` from one clock, so
+    // the first attempt of an episode sits exactly on its start.
+    expect(episodeAttempts([at(0, false)], FAILED)).toHaveLength(1);
+  });
+
+  it("does not read a failure from a lapse the account already recovered from", () => {
+    const history = [at(-40, false), at(-40), at(-10)];
+    expect(episodeAttempts(history, FAILED)).toEqual([]);
+  });
+
+  it("has no episode, and so no attempts, before there is a start date", () => {
+    expect(episodeAttempts([at(-1, false)], null)).toEqual([]);
+  });
+});
+
+describe("the figures the queue's header and the plans card both state", () => {
+  const NOW = day(5);
+  const row = (stage: DunningStage, amountFils: number | null, since = FAILED) => ({
+    stage,
+    amountFils,
+    dropsToFreeAt: stage === "dropped" ? null : dropsToFreeAt(since),
+  });
+
+  it("puts only what is still recoverable at risk", () => {
+    const summary = summariseQueue(
+      [row("retry", 36_645), row("emailed", 94_395), row("dropped", 36_645)],
+      NOW,
+    );
+    // Counted, but not valued: an account on Free has nothing left to lose.
+    expect(summary.count).toBe(3);
+    expect(summary.inSequence).toBe(2);
+    expect(summary.atRiskFils).toBe(36_645 + 94_395);
+  });
+
+  it("values a dropped account with nothing charged at nothing, and still counts it", () => {
+    const summary = summariseQueue([row("dropped", null)], NOW);
+    expect(summary).toEqual({ count: 1, inSequence: 0, atRiskFils: 0, droppingSoon: 0 });
+  });
+
+  it("counts a drop inside seven days, and one already overdue for the next run", () => {
+    // Failed on day 0: drops on day 15. On day 5 that is ten days out.
+    expect(summariseQueue([row("messaged", 1)], NOW).droppingSoon).toBe(0);
+    // Failed eleven days before NOW: drops in four days.
+    expect(summariseQueue([row("messaged", 1, day(-6))], NOW).droppingSoon).toBe(1);
+    // Failed twenty days before: the drop is due and the job has not run yet.
+    expect(summariseQueue([row("final", 1, day(-15))], NOW).droppingSoon).toBe(1);
+  });
+
+  it("says nothing at all about an empty queue", () => {
+    expect(summariseQueue([], NOW)).toEqual({
+      count: 0,
+      inSequence: 0,
+      atRiskFils: 0,
+      droppingSoon: 0,
+    });
   });
 });

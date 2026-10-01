@@ -1,6 +1,7 @@
 import type { PrismaClient } from "../lib/db/generated/client.js";
 import type { Authority, BillingTerm, CancelReason } from "../lib/db/generated/enums.js";
 import { monthlyValueFils } from "../lib/billing/period.js";
+import { vatOn } from "../lib/billing/proration.js";
 
 /**
  * Board 4g — a last month the revenue board can say something true about.
@@ -75,6 +76,12 @@ export async function seedRevenue(db: Db, now: Date): Promise<void> {
     ]),
   );
   const value = (planId: PlanId, term: BillingTerm = "monthly") => monthlyValueFils(plans.get(planId)!, term);
+  /*
+     What a card is asked for on a monthly renewal: the month and its VAT. An
+     attempt row records the charge, and the charge is the invoice's total —
+     the failed-payments column reading these is headed "incl. VAT".
+  */
+  const charged = (planId: PlanId) => value(planId) + vatOn(value(planId));
 
   /** Day `d` of last month, and of the months before it. */
   const last = (d: number, hour = 12) => dubai(now, 1, d, hour);
@@ -442,9 +449,11 @@ export async function seedRevenue(db: Db, now: Date): Promise<void> {
       },
       select: { id: true },
     });
-    for (const at of [last(7), last(10), last(14)]) {
+    // The renewal that failed, and dunning's one retry the same day. Every
+    // later step in the sequence is a notice rather than a charge.
+    for (const at of [last(7), last(7, 13)]) {
       await db.paymentAttempt.create({
-        data: { subscriptionId: subscription.id, amountFils: value("basic"), succeeded: false, providerMessage: "Card declined", attemptedAt: at },
+        data: { subscriptionId: subscription.id, amountFils: charged("basic"), succeeded: false, providerMessage: "Card declined", attemptedAt: at },
       });
     }
     await db.mrrMovement.create({
@@ -474,12 +483,12 @@ export async function seedRevenue(db: Db, now: Date): Promise<void> {
     await signup(businessId, "pro", startedAt);
     const subscription = await live(businessId, "pro", startedAt);
     await db.paymentAttempt.create({
-      data: { subscriptionId: subscription.id, amountFils: value("pro"), succeeded: false, providerMessage: "Insufficient funds", attemptedAt: last(27) },
+      data: { subscriptionId: subscription.id, amountFils: charged("pro"), succeeded: false, providerMessage: "Insufficient funds", attemptedAt: last(27) },
     });
     await db.paymentAttempt.create({
       data: {
         subscriptionId: subscription.id,
-        amountFils: value("pro"),
+        amountFils: charged("pro"),
         succeeded: true,
         attemptedAt: new Date(thisMonthStart.getTime() + 2 * 3_600_000),
       },

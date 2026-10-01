@@ -121,7 +121,25 @@ const noCommit = async (): Promise<ActionResult> => ({
   error: "The gallery does not write.",
 });
 
+/*
+   Two attempts at most in one episode: the renewal that failed and dunning's
+   one silent retry on day zero. Every later step is a notice, not a charge — so
+   a row reading "4 tried" is a state the sequence cannot reach.
+*/
 const DUNNING: DunningRowView[] = [
+  {
+    subscriptionId: "none",
+    businessName: "Mussafah Cold Stores",
+    planName: "Basic",
+    stage: "none",
+    daysPastDue: 0,
+    next: "Retry the card",
+    attempts: 0,
+    amount: "AED 366.45",
+    reason: null,
+    drops: "on 1 Oct 2026",
+    dropsTitle: "1 Oct 2026",
+  },
   {
     subscriptionId: "one",
     businessName: "Dana Printing & Signage",
@@ -129,7 +147,7 @@ const DUNNING: DunningRowView[] = [
     stage: "messaged",
     daysPastDue: 9,
     next: "Send the email notice",
-    attempts: 3,
+    attempts: 2,
     amount: "AED 943.95",
     reason: "Card expired",
     drops: "in 6 days",
@@ -155,9 +173,23 @@ const DUNNING: DunningRowView[] = [
     stage: "dropped",
     daysPastDue: 21,
     next: "Nothing due",
-    attempts: 4,
+    attempts: 2,
     amount: "AED 943.95",
     reason: "Bank declined",
+    drops: null,
+    dropsTitle: null,
+  },
+  {
+    // Dropped with no gateway: nothing was charged, so there is no amount.
+    subscriptionId: "four",
+    businessName: "Ras Al Khaimah Marine Supply",
+    planName: "Free",
+    stage: "dropped",
+    daysPastDue: 16,
+    next: "Nothing due",
+    attempts: 0,
+    amount: null,
+    reason: null,
     drops: null,
     dropsTitle: null,
   },

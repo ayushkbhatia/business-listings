@@ -65,7 +65,8 @@ export default async function DunningPage() {
     daysPastDue: row.daysPastDue,
     next: nextLabel(row.next),
     attempts: row.attempts,
-    amount: formatAED(row.amountFils / FILS_PER_AED, { style: "exact" }),
+    amount:
+      row.amountFils === null ? null : formatAED(row.amountFils / FILS_PER_AED, { style: "exact" }),
     reason: row.lastAttemptFailed,
     /*
        Relative inside the week, a date beyond it, and the full date as the
@@ -81,14 +82,11 @@ export default async function DunningPage() {
   }));
 
   /*
-     Only what is still recoverable. A row that has dropped is on Free with its
-     listing live: the sequence is finished with it, and adding its failed
-     payment to "at risk" would make the header a running total of everything
-     that ever failed.
+     Only what is still recoverable, and from `summariseQueue` — the function
+     the card on `/admin/plans` reads. This page summed the same two figures
+     inline, so the header and the card were one edit away from disagreeing.
   */
-  const stillDue = queue.rows.filter((row) => row.stage !== "dropped");
-  const live = stillDue.length;
-  const atRisk = stillDue.reduce((total, row) => total + row.amountFils, 0);
+  const { inSequence: live, atRiskFils: atRisk } = queue.summary;
 
   return (
     <AdminPage
