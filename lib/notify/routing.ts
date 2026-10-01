@@ -328,6 +328,17 @@ export const BUYER_DEFAULT: RoutingPreference = {
        today, so email and in-app, held by quiet hours like the rest.
     */
     enquiry_closing: ["email", "in_app"],
+    /*
+       Board `4c`. A person claiming a listing is addressed from their own
+       account, as a buyer is — a contested claim holds no seat and so no
+       matrix. Email and in-app: each is a decision about their business or a
+       request for a document, read at a desk, and held by quiet hours.
+    */
+    claim_conflict_opened: ["email", "in_app"],
+    claim_awarded: ["email", "in_app"],
+    claim_not_awarded: ["email", "in_app"],
+    claim_documents_requested: ["email", "in_app"],
+    claim_new_listing_created: ["email", "in_app"],
   },
   quiet: { enabled: true, fromHour: 21, toHour: 7, onSunday: true },
   highValueOverrideAed: null,

@@ -154,7 +154,12 @@ export async function mediaLibrary(
          Same shape as `reviewId: null` above, and the same reasoning: a row in
          `Document` is not automatically a file in the seller's library.
       */
-      where: { businessId, kind: { notIn: [...CHECKED_BY_US_KINDS] } },
+      /*
+         Board 4c: nor a claimant's evidence. A tenancy contract is held for a
+         conflict and nothing else, and any file a claim cites stays out of the
+         library — the library publishes, and claim evidence is never public.
+      */
+      where: { businessId, kind: { notIn: [...CHECKED_BY_US_KINDS, "tenancy_contract"] }, claims: { none: {} }, tenancyClaims: { none: {} } },
       select: {
         id: true,
         storagePath: true,

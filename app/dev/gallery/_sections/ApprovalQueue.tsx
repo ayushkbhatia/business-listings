@@ -28,12 +28,13 @@ const row = (over: Partial<BoardRow> & Pick<BoardRow, "ref" | "businessName">): 
   allPassed: false,
   action: "review",
   actionHref: "#approval-queue",
+  readOnly: false,
   waiting: "2 h",
   late: false,
+  escalated: null,
   docsWaiting: null,
   owner: null,
   href: "#approval-queue",
-  canOpen: true,
   decidesOnScreen: false,
   ...over,
 });
@@ -47,7 +48,7 @@ const ROWS: BoardRow[] = [
     summary: "Imran Sheikh and Yusuf Rahman both claim this listing",
     checks: [
       { outcome: "fail", text: "2 claims on one listing" },
-      { outcome: "pass", text: "Both claims uploaded a licence" },
+      { outcome: "pass", text: "Every claim uploaded a licence" },
     ],
     worst: "fail",
     waiting: "3 d 6 h",
@@ -141,7 +142,19 @@ export function ApprovalQueueGallery() {
       <States label="moderator on a conflict" stack>
         <div className="w-full">
           <ApprovalQueue
-            rows={[{ ...ROWS[0]!, ref: "conflict:gallery-moderator", actionHref: null, canOpen: false }]}
+            rows={[{ ...ROWS[0]!, ref: "conflict:gallery-moderator", readOnly: true }]}
+            staff={STAFF}
+            empty={null}
+            decide={inert}
+            bulk={inert}
+          />
+        </div>
+      </States>
+
+      <States label="escalated conflict — paused, not overdue" stack>
+        <div className="w-full">
+          <ApprovalQueue
+            rows={[{ ...ROWS[0]!, ref: "conflict:gallery-escalated", late: false, escalated: "Escalated to S. Nair" }]}
             staff={STAFF}
             empty={null}
             decide={inert}

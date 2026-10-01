@@ -32,6 +32,7 @@ import { crawlRel } from "@/lib/seo/crawl-policy";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { JsonLd } from "@/app/(public)/_json-ld";
 import { StorefrontHeader, storefrontCrumbs } from "../_storefront";
+import { publiclyClaimed } from "@/lib/claims/status";
 
 /**
  * Board `1f-s` — coverage, where branches and hours were.
@@ -91,7 +92,7 @@ export default async function StorefrontCoveragePage({ params, searchParams }: P
   }
   const movedTo = await absorbedInto(slug);
   if (movedTo) permanentRedirect(`/b/${movedTo}/coverage`);
-  if (business.claimStatus === "unclaimed") notFound();
+  if (!publiclyClaimed(business.claimStatus)) notFound();
   if (!sellsWork(business.sellsKind)) notFound();
 
   const emirate = emirateParam(await searchParams);

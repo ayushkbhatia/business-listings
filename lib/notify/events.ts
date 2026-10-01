@@ -29,6 +29,7 @@ import { absoluteUrl } from "@/lib/site";
 import { withParams } from "./params";
 import { reachabilityOf } from "@/lib/team/reachability";
 import { recordEvent } from "@/lib/telemetry/record";
+import { CONFLICT_SLA_HOURS } from "@/lib/claims/clock";
 
 /**
  * The events, wired to the things that cause them.
@@ -1427,7 +1428,16 @@ export async function onRamadanDatesMoved(input: {
 // ── Board `7b` — the buying company ─────────────────────────────────────────
 
 /** Buyer-side events that write their own delivery rows through `BUYER_DEFAULT`. */
-type BuyerEvent = "approval_requested" | "approval_decided" | "off_platform_flagged" | "enquiry_closing";
+type BuyerEvent =
+  | "approval_requested"
+  | "approval_decided"
+  | "off_platform_flagged"
+  | "enquiry_closing"
+  | "claim_conflict_opened"
+  | "claim_awarded"
+  | "claim_not_awarded"
+  | "claim_documents_requested"
+  | "claim_new_listing_created";
 
 const BUYER_RECIPIENT_SELECT = {
   id: true,
@@ -1799,4 +1809,154 @@ export async function onEnquiryClosing(input: { enquiryId: string; quotes: numbe
     written = (await deliverBuyerEvent(event, enquiry.buyer, params, enquiry.id, templates, tradeKind)) > 0;
   });
   return written;
+}
+
+// ── Board `4c` — the people claiming one listing ────────────────────────────
+
+/*
+   The rule every message below keeps, and the reason each carries so little:
+   **no message names, describes or carries the contact details of another
+   claimant** (`2a` AC5, criterion 4). A claimant is told about their own claim
+   on a listing they named themselves by claiming it — never who else is on it,
+   never what the other side submitted, and never the reviewer's internal note,
+   which can do both (`B4`). What a claimant who lost reads is one of four fixed
+   sentences, `ClaimSubmission.partyReason`.
+*/
+
+const CLAIMANT_SELECT = { claimant: { select: BUYER_RECIPIENT_SELECT } } as const;
+
+/** A conflict's claims, by id, with whom to tell. */
+async function conflictClaims(conflictId: string) {
+  const conflict = await prisma.claimConflict.findUnique({
+    where: { id: conflictId },
+    select: {
+      id: true,
+      resolution: true,
+      awardedSubmissionId: true,
+      secondSubmissionId: true,
+      submissionAId: true,
+      submissionBId: true,
+      business: { select: { id: true, displayName: true } },
+      producedBusiness: { select: { displayName: true } },
+    },
+  });
+  if (!conflict) return null;
+  const sides = [conflict.submissionAId, conflict.submissionBId].filter((id): id is string => id !== null);
+  const claims = await prisma.claimSubmission.findMany({
+    where: { OR: [{ conflictId }, { id: { in: sides } }] },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    select: { id: true, outcome: true, partyReason: true, decidedAt: true, ...CLAIMANT_SELECT },
+  });
+  return { conflict, claims };
+}
+
+/**
+ * A conflict opened, or another claim joined one — to every claimant on it
+ * when it opens, and to the newcomer when one joins (`2b` criterion 5). It
+ * says another claim exists, which `2a` and `2b` already say on screen, and
+ * nothing about whose.
+ */
+export async function onClaimConflictOpened(input: { conflictId: string; submissionIds: readonly string[] }): Promise<void> {
+  await safely("claim_conflict_opened", async () => {
+    const found = await conflictClaims(input.conflictId);
+    if (!found) return;
+    const event = "claim_conflict_opened" as const;
+    const templates = await resolveLiveTemplates(event, null);
+    const told = new Set<string>();
+    for (const claim of found.claims) {
+      if (!input.submissionIds.includes(claim.id) || told.has(claim.claimant.id)) continue;
+      told.add(claim.claimant.id);
+      await deliverBuyerEvent(
+        event,
+        claim.claimant,
+        withParams(event, {
+          businessName: found.conflict.business.displayName,
+          hours: CONFLICT_SLA_HOURS,
+          businessId: found.conflict.business.id,
+        }),
+        null,
+        templates,
+      );
+    }
+  });
+}
+
+/**
+ * A conflict was resolved, and every claimant hears how it went for them
+ * (`B3`): the winner `claim_awarded`; the side a split built a listing for
+ * `claim_new_listing_created`; everybody else `claim_not_awarded`, with their
+ * reason and the way to contest it. A claim withdrawn before the decision was
+ * its claimant's own act, and is not written to about it.
+ */
+export async function onClaimConflictResolved(input: { conflictId: string }): Promise<void> {
+  await safely("claim_resolved", async () => {
+    const found = await conflictClaims(input.conflictId);
+    if (!found || !found.conflict.resolution) return;
+    const { conflict } = found;
+    const listing = conflict.business.displayName;
+    const [awarded, created, notAwarded] = await Promise.all([
+      resolveLiveTemplates("claim_awarded", null),
+      resolveLiveTemplates("claim_new_listing_created", null),
+      resolveLiveTemplates("claim_not_awarded", null),
+    ]);
+
+    for (const claim of found.claims) {
+      if (claim.outcome === "withdrawn" || claim.decidedAt === null) continue;
+
+      if (claim.id === conflict.awardedSubmissionId) {
+        await deliverBuyerEvent("claim_awarded", claim.claimant, withParams("claim_awarded", { businessName: listing }), null, awarded);
+        continue;
+      }
+      if (claim.id === conflict.secondSubmissionId && conflict.resolution === "split_into_two" && conflict.producedBusiness) {
+        await deliverBuyerEvent(
+          "claim_new_listing_created",
+          claim.claimant,
+          withParams("claim_new_listing_created", { businessName: listing, newBusinessName: conflict.producedBusiness.displayName }),
+          null,
+          created,
+        );
+        continue;
+      }
+      const reason =
+        claim.id === conflict.secondSubmissionId && conflict.resolution === "merge_as_branches"
+          ? t("claim.decided.merged")
+          : claim.partyReason
+            ? t(`claim.party_reason.${claim.partyReason}`)
+            : null;
+      if (!reason) continue;
+      await deliverBuyerEvent(
+        "claim_not_awarded",
+        claim.claimant,
+        withParams("claim_not_awarded", { businessName: listing, reason, businessId: conflict.business.id }),
+        null,
+        notAwarded,
+      );
+    }
+  });
+}
+
+/**
+ * Every side still standing was asked for the registered tenancy contract for
+ * their unit (Q4). Each can get their own; none is asked for anything only the
+ * other could provide, which is what a no-objection letter would have been.
+ */
+export async function onClaimDocumentsRequested(input: { conflictId: string }): Promise<void> {
+  await safely("claim_documents_requested", async () => {
+    const found = await conflictClaims(input.conflictId);
+    if (!found) return;
+    const event = "claim_documents_requested" as const;
+    const templates = await resolveLiveTemplates(event, null);
+    const told = new Set<string>();
+    for (const claim of found.claims) {
+      if (claim.decidedAt !== null || told.has(claim.claimant.id)) continue;
+      told.add(claim.claimant.id);
+      await deliverBuyerEvent(
+        event,
+        claim.claimant,
+        withParams(event, { businessName: found.conflict.business.displayName, businessId: found.conflict.business.id }),
+        null,
+        templates,
+      );
+    }
+  });
 }

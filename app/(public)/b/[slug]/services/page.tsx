@@ -39,6 +39,7 @@ import { ServiceEnquireDrawer } from "../ServiceEnquireDrawer";
 import { OwnListingNote, isOwnListing } from "../_own";
 import { CatalogueFilters } from "../products/CatalogueFilters";
 import { ServicesFilterPanel } from "./_rail";
+import { publiclyClaimed } from "@/lib/claims/status";
 
 /**
  * Board `1e-s` — the services list: rows, not a photo grid.
@@ -105,7 +106,7 @@ export default async function StorefrontServicesPage({ params, searchParams }: P
   }
   const movedTo = await absorbedInto(slug);
   if (movedTo) permanentRedirect(`/b/${movedTo}/services`);
-  if (business.claimStatus === "unclaimed") notFound();
+  if (!publiclyClaimed(business.claimStatus)) notFound();
 
   /*
      B10, and the empty state. A firm that sells work has this page even with

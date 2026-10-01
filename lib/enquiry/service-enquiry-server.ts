@@ -104,7 +104,7 @@ export async function sendServiceEnquiry(
       id: input.businessId,
       publishedAt: { not: null },
       suspendedAt: null,
-      claimStatus: { not: "unclaimed" },
+      claimStatus: "claimed",
     },
     select: { id: true, primaryCategoryId: true, sellsKind: true },
   });

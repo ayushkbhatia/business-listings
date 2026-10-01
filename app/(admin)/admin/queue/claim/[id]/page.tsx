@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Alert, StatusBadge } from "@/components/display";
 import { KeyValuePanel, Panel } from "@/components/structure";
@@ -64,8 +65,10 @@ export default async function ClaimReviewPage({
         claimant: { select: { fullName: true, email: true, phone: true } },
         decidedBy: { select: { fullName: true } },
         document: { select: { filename: true, detectedKind: true } },
-        conflictsAsA: { where: { resolvedAt: null }, select: { id: true } },
-        conflictsAsB: { where: { resolvedAt: null }, select: { id: true } },
+        // Board 4c: the conflict a claim is a side of, however many sides it has.
+        conflict: { select: { id: true, resolvedAt: true, dissolvedAt: true } },
+        conflictsAsA: { where: { resolvedAt: null, dissolvedAt: null }, select: { id: true } },
+        conflictsAsB: { where: { resolvedAt: null, dissolvedAt: null }, select: { id: true } },
         business: {
           select: {
             id: true,
@@ -86,7 +89,8 @@ export default async function ClaimReviewPage({
   ]);
   if (!claim) notFound();
 
-  const conflictId = claim.conflictsAsA[0]?.id ?? claim.conflictsAsB[0]?.id ?? null;
+  const openConflict = claim.conflict && !claim.conflict.resolvedAt && !claim.conflict.dissolvedAt ? claim.conflict.id : null;
+  const conflictId = openConflict ?? claim.conflictsAsA[0]?.id ?? claim.conflictsAsB[0]?.id ?? null;
   const decided = claim.decidedAt !== null;
 
   return (
@@ -111,9 +115,14 @@ export default async function ClaimReviewPage({
           <Alert
             tone="info"
             action={
-              <a className="text-body-sm text-moss underline underline-offset-2" href={`/admin/queue/conflict/${conflictId}`}>
+              /*
+                 Every seat that opens this page can open the conflict: an ops
+                 lead decides it there, a moderator reads it and assigns it to
+                 one (board 4c B1). This link used to 404 for a moderator.
+              */
+              <Link className="text-body-sm text-moss underline underline-offset-2" href={`/admin/queue/conflict/${conflictId}`}>
                 {t("admin.claim_review.open_conflict")}
-              </a>
+              </Link>
             }
           >
             {t("admin.claim_review.in_conflict")}

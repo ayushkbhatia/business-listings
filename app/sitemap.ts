@@ -9,6 +9,7 @@ import { livePages } from "@/lib/seo/area";
 import { liveLists } from "@/lib/seo/curated";
 import { emiratePagePath, liveEmiratePages } from "@/lib/seo/emirate";
 import { categoryIndex } from "@/lib/seo/taxonomy";
+import { publiclyClaimed } from "@/lib/claims/status";
 
 /**
  * Published pages only.
@@ -266,10 +267,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       // An unclaimed listing is honest and thin by nature. It stays in the
       // sitemap — 30,000 of them are how a supplier first finds us — at a
       // lower priority than a claimed one.
-      priority: business.claimStatus === "unclaimed" ? 0.4 : 0.7,
+      priority: publiclyClaimed(business.claimStatus) ? 0.7 : 0.4,
     });
 
-    if (business.claimStatus !== "unclaimed") {
+    if (publiclyClaimed(business.claimStatus)) {
       /*
          Each tab only where it has something to render — and the list of tabs
          is `tabRoutes`, the same rule the header draws and every tab route

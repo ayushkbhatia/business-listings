@@ -69,7 +69,7 @@ const ACHIEVABLE_RUNGS = TIERS.filter((spec) => spec.tier > 0).length;
 export default async function VerificationPage() {
   const seat = await requireSellerSeat();
   const [view, badges, requests] = await Promise.all([
-    getVerification(seat.businessId),
+    getVerification(seat.businessId, new Date(), seat.actor.id),
     getNavBadges(seat.businessId),
     // Board 4b: a document our team asked for, answered by uploading one here.
     documentRequestsFor(seat.businessId),

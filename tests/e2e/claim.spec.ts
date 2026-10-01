@@ -135,13 +135,28 @@ test.describe("board 2a — find or add your business", () => {
     await page.goto("/onboarding/claim?q=Al+Marwan");
     const claimed = results(page).getByRole("listitem").filter({ hasText: "Claimed" }).first();
     await expect(claimed.getByRole("link", { name: "Report a dispute" })).toBeVisible();
-    await expect(
-      page.getByText(/our team asks both parties for the licence and decides in 48 hours/),
-    ).toBeVisible();
+    /*
+       Board 4c. This used to promise that "our team asks both parties for the
+       licence" — which nothing did. The promise now is the one the queue keeps:
+       a person decides between the claims within the 48 hours the conflict is
+       measured against.
+    */
+    await expect(page.getByText(/a person decides between them within 48 hours/)).toBeVisible();
 
     // The worst moment in this flow, and a privacy leak if it named the
     // incumbent. There is no owner on screen and no field to render one from.
     await expect(claimed).not.toContainText("@");
+  });
+
+  test("says a claim is pending when one is waiting, and never whose (board 4c)", async ({ page }) => {
+    // The board's own fixture: two undecided claims on one listing, nobody's yet.
+    await page.goto("/onboarding/claim?q=Zephyr+Cooling");
+    const row = results(page).getByRole("listitem").filter({ hasText: "Zephyr Cooling Technical Services LLC" });
+    await expect(row.getByText("Claim pending", { exact: true })).toBeVisible();
+    await expect(row.getByRole("link", { name: "This is us" })).toBeVisible();
+    await expect(page.getByText(/a person decides between them within 48 hours/).first()).toBeVisible();
+    // Neither claimant is named anywhere on the screen.
+    await expect(page.getByText(/Faisal|Siddiqui/)).toHaveCount(0);
   });
 
   test("says claiming carries history over, not a badge", async ({ page }) => {

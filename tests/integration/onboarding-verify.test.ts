@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
+import { deleteClaims } from "./claim-cleanup";
 import { claimCorrections, submitClaim } from "@/lib/onboarding/claim";
 import { clearDraft, readDraft, saveDraft } from "@/lib/onboarding/draft";
 import {
@@ -33,15 +34,32 @@ beforeAll(async () => {
     select: { id: true, roles: true },
   });
   claimant = { id: buyer.id, roles: buyer.roles };
+  // A run that died before its afterEach left its claims, and a claim left open is the next run's race.
+  await deleteClaims({ claimantId: claimant.id });
 
+  /*
+     Listings nobody else is waiting on. A claim beside another undecided one
+     opens a conflict, and a claim on an owned listing opens a challenge (board
+     4c) — neither is the claim these tests are about.
+  */
   unclaimed = await prisma.business.findFirstOrThrow({
-    where: { claimStatus: "unclaimed", mergedIntoId: null, verificationTier: { lt: VERIFIED_TIER } },
+    where: {
+      claimStatus: "unclaimed",
+      mergedIntoId: null,
+      verificationTier: { lt: VERIFIED_TIER },
+      claimSubmissions: { none: { decidedAt: null } },
+    },
     orderBy: { tradeName: "asc" },
     select: { id: true, licenceAuthority: true },
   });
 
   withPhone = await prisma.business.findFirstOrThrow({
-    where: { mergedIntoId: null, locations: { some: { phone: { not: null } } } },
+    where: {
+      claimStatus: "unclaimed",
+      mergedIntoId: null,
+      claimSubmissions: { none: { decidedAt: null } },
+      locations: { some: { phone: { not: null } } },
+    },
     orderBy: { tradeName: "asc" },
     select: { id: true },
   });
@@ -54,12 +72,12 @@ beforeAll(async () => {
 });
 
 afterEach(async () => {
-  await prisma.claimSubmission.deleteMany({ where: { claimantId: claimant.id } });
+  await deleteClaims({ claimantId: claimant.id });
   await prisma.onboardingDraft.deleteMany({ where: { userId: claimant.id } });
 });
 
 afterAll(async () => {
-  await prisma.claimSubmission.deleteMany({ where: { claimantId: claimant.id } });
+  await deleteClaims({ claimantId: claimant.id });
   await prisma.onboardingDraft.deleteMany({ where: { userId: claimant.id } });
   await prisma.$disconnect();
 });
@@ -145,7 +163,7 @@ describe("criterion 3 — OCR fills, the claimant corrects, the reviewer sees it
       expect(row.claimantRole).toBe("manager");
       expect(row.ocrConfidence).toBeCloseTo(0.9);
     } finally {
-      await prisma.claimSubmission.deleteMany({ where: { documentId: document.id } });
+      await deleteClaims({ documentId: document.id });
       await prisma.document.delete({ where: { id: document.id } });
     }
   });

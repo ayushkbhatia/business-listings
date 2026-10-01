@@ -196,10 +196,16 @@ describe("the other kinds", () => {
   });
 
   it("a conflict is never all passed and always opens for review", () => {
-    const checks = checksFor({ kind: "conflict", claims: [{ route: "licence_upload" }, { route: "licence_upload" }] }, DEFAULT_RULES, NOW);
+    const checks = checksFor({ kind: "conflict", claims: [{ route: "licence_upload" }, { route: "licence_upload" }], challenge: false }, DEFAULT_RULES, NOW);
     expect(allPassed(checks)).toBe(false);
     expect(rowAction("conflict", checks)).toBe("review");
-    expect(allPassed(checksFor({ kind: "conflict", claims: [] }, { ...DEFAULT_RULES, disabled: ["claim_evidence"] }, NOW))).toBe(false);
+    expect(allPassed(checksFor({ kind: "conflict", claims: [], challenge: false }, { ...DEFAULT_RULES, disabled: ["claim_evidence"] }, NOW))).toBe(false);
+  });
+
+  it("names a challenge to an owner for what it is, and it is never all passed either (board 4c)", () => {
+    const checks = checksFor({ kind: "conflict", claims: [{ route: "licence_upload" }], challenge: true }, DEFAULT_RULES, NOW);
+    expect(checks.find((check) => check.rule === "two_claims")?.sentence.key).toBe("admin.queue.check.two_claims.challenge");
+    expect(allPassed(checks)).toBe(false);
   });
 
   it("an expired credential is a rejection", () => {

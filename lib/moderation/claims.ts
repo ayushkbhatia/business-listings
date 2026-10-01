@@ -47,6 +47,12 @@ export interface ClaimDecisionInput {
   reason: string;
 }
 
+/** Part of a conflict nobody has settled: decided there, on both sides at once. */
+function inOpenConflict(claim: NonNullable<Awaited<ReturnType<typeof loadClaim>>>): boolean {
+  const viaField = claim.conflict !== null && claim.conflict.resolvedAt === null && claim.conflict.dissolvedAt === null;
+  return viaField || claim.conflictsAsA.length + claim.conflictsAsB.length > 0;
+}
+
 async function loadClaim(submissionId: string) {
   return prisma.claimSubmission.findUnique({
     where: { id: submissionId },
@@ -56,8 +62,10 @@ async function loadClaim(submissionId: string) {
       claimantId: true,
       decidedAt: true,
       route: true,
-      conflictsAsA: { where: { resolvedAt: null }, select: { id: true } },
-      conflictsAsB: { where: { resolvedAt: null }, select: { id: true } },
+      conflictsAsA: { where: { resolvedAt: null, dissolvedAt: null }, select: { id: true } },
+      conflictsAsB: { where: { resolvedAt: null, dissolvedAt: null }, select: { id: true } },
+      // Board 4c: a third claim joins a conflict here, not as its A or B.
+      conflict: { select: { resolvedAt: true, dissolvedAt: true } },
       claimant: { select: { id: true, businessId: true, roles: true } },
       business: {
         select: {
@@ -77,7 +85,7 @@ export async function approveClaim(input: ClaimDecisionInput, now = new Date()):
   if (!claim) return { ok: false, error: "not_found" };
   if (claim.decidedAt) return { ok: false, error: "already_decided" };
   // Two claims on one listing are settled on the conflict screen, four ways.
-  if (claim.conflictsAsA.length + claim.conflictsAsB.length > 0) return { ok: false, error: "in_conflict" };
+  if (inOpenConflict(claim)) return { ok: false, error: "in_conflict" };
   // Board 11i Q2: a closing business goes back to its licence holder only
   // through the closure screen, never by approving a claim.
   if (claim.business.closureRequestedAt) return { ok: false, error: "business_closing" };
@@ -151,7 +159,7 @@ export async function rejectClaim(input: ClaimDecisionInput, now = new Date()): 
   const claim = await loadClaim(input.submissionId);
   if (!claim) return { ok: false, error: "not_found" };
   if (claim.decidedAt) return { ok: false, error: "already_decided" };
-  if (claim.conflictsAsA.length + claim.conflictsAsB.length > 0) return { ok: false, error: "in_conflict" };
+  if (inOpenConflict(claim)) return { ok: false, error: "in_conflict" };
 
   let raced = false;
   await prisma.$transaction(async (tx) =>

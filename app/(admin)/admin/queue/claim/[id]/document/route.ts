@@ -17,18 +17,25 @@ import { signedReadUrl } from "@/lib/storage";
  */
 export const dynamic = "force-dynamic";
 
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const seat = await getStaffSeat();
   if (!seat || !can(seat.actor, "queue.decide")) return new NextResponse(null, { status: 404 });
 
   const { id } = await params;
+  /*
+     Board 4c Q4: `?file=tenancy` is the tenancy contract a claimant uploaded
+     when an ops lead asked every side of a conflict for one. Private on the
+     same terms as the licence (`B16`): this route, this seat, two minutes.
+  */
+  const tenancy = new URL(request.url).searchParams.get("file") === "tenancy";
   const claim = await prisma.claimSubmission.findUnique({
     where: { id },
-    select: { document: { select: { storagePath: true } } },
+    select: { document: { select: { storagePath: true } }, tenancyDocument: { select: { storagePath: true } } },
   });
-  if (!claim?.document) return new NextResponse(null, { status: 404 });
+  const file = tenancy ? claim?.tenancyDocument : claim?.document;
+  if (!file) return new NextResponse(null, { status: 404 });
 
-  const url = await signedReadUrl(claim.document.storagePath, 120);
+  const url = await signedReadUrl(file.storagePath, 120);
   if (!url) return new NextResponse(null, { status: 404 });
 
   return NextResponse.redirect(url, { status: 303, headers: { "Cache-Control": "no-store" } });

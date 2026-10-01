@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/client";
 import { Prisma, type PrismaClient, type QueueSubject } from "@/lib/db/generated/client";
 import type { Authority, Emirate } from "@/lib/db/generated/enums";
 import { SLA_DAYS } from "@/lib/console/overview";
+import { CONFLICT_SLA_MS } from "@/lib/claims/clock";
 import { AUTHORITY_EMIRATE } from "@/lib/ingest/sources";
 import { activityCovers } from "@/lib/onboarding/activity";
 import { loadTradeKinds } from "@/lib/taxonomy/service";
@@ -52,7 +53,12 @@ const DAY_MS = 86_400_000;
  */
 export const SLA_MS: Record<QueueKind, number> = {
   claim: SLA_DAYS.claim * DAY_MS,
-  conflict: SLA_DAYS.claim * DAY_MS,
+  /*
+     Board 4c `B8`: 48 hours, the window `2a` and `2b` promise both claimants,
+     from the one constant their copy reads. It was the plain claim's three days
+     while the screens promised two.
+  */
+  conflict: CONFLICT_SLA_MS,
   profile_edit: SLA_DAYS.moderation * DAY_MS,
   category_change: SLA_DAYS.moderation * DAY_MS,
   locations: SLA_DAYS.moderation * DAY_MS,
@@ -80,6 +86,11 @@ export interface QueueEntry {
   assignee: { id: string; name: string | null } | null;
   /** An outstanding request for a document: asked, and nothing back yet. */
   docsRequested: { at: Date; reason: string } | null;
+  /**
+   * Board 4c Q5. A conflict escalated to a named holder: shown as escalated,
+   * never as overdue, because its clock is paused while the holder has it.
+   */
+  escalated: { at: Date; to: string | null } | null;
   href: string;
 }
 
@@ -120,6 +131,29 @@ function authoritiesByEmirate(): Map<Emirate, Authority[]> {
 
 /* ── Reading every source ──────────────────────────────────────────────────── */
 
+const CONFLICT_SIDE = {
+  id: true,
+  route: true,
+  decidedAt: true,
+  claimantName: true,
+  claimant: { select: { fullName: true } },
+} as const;
+
+type ConflictSide = { id: string; route: "licence_upload" | "phone_callback"; decidedAt: Date | null; claimantName: string | null; claimant: { fullName: string | null } };
+
+/**
+ * A conflict's undecided sides: the claims that joined it, and its first two
+ * by name — which is all a conflict opened before board 4c recorded. Once,
+ * by id, in arrival order.
+ */
+function sidesOf(conflict: { claims: ConflictSide[]; submissionA: ConflictSide; submissionB: ConflictSide | null }): ConflictSide[] {
+  const byId = new Map<string, ConflictSide>();
+  for (const side of [conflict.submissionA, conflict.submissionB, ...conflict.claims]) {
+    if (side && side.decidedAt === null) byId.set(side.id, side);
+  }
+  return [...byId.values()];
+}
+
 interface Raw {
   subject: QueueSubject;
   id: string;
@@ -137,6 +171,12 @@ interface Raw {
    * on `queue_item`, because it is a review state the seller's screen reads.
    */
   waitingOnSeller?: { at: Date; reason: string } | null;
+  /**
+   * Board 4c. A conflict's own request for documents — shown on the row, and
+   * unlike every other kind's, it does not stop the clock (`4c-s` B6).
+   */
+  docsOnConflict?: { at: Date; reason: string } | null;
+  escalated?: { at: Date; to: string | null } | null;
 }
 
 /**
@@ -144,7 +184,7 @@ interface Raw {
  * unsorted; `loadQueue` does both.
  */
 export async function loadPending(db: Db = prisma): Promise<Raw[]> {
-  const openConflict = { resolvedAt: null } as const;
+  const openConflict = { resolvedAt: null, dissolvedAt: null } as const;
   const byEmirate = authoritiesByEmirate();
 
   const [changes, claims, conflicts, credentials, branches, registerCredentials] = await Promise.all([
@@ -172,6 +212,8 @@ export async function loadPending(db: Db = prisma): Promise<Raw[]> {
     db.claimSubmission.findMany({
       where: {
         decidedAt: null,
+        // A claim inside an open conflict is that conflict's row, not one of its own.
+        OR: [{ conflictId: null }, { conflict: { NOT: openConflict } }],
         conflictsAsA: { none: openConflict },
         conflictsAsB: { none: openConflict },
       },
@@ -212,9 +254,22 @@ export async function loadPending(db: Db = prisma): Promise<Raw[]> {
       select: {
         id: true,
         createdAt: true,
+        challenge: true,
+        escalatedAt: true,
+        escalatedTo: { select: { fullName: true } },
+        docsRequestedAt: true,
+        docsRequestNote: true,
+        docsReceivedAt: true,
         business: { select: { id: true, displayName: true, slug: true } },
-        submissionA: { select: { route: true, claimantName: true, claimant: { select: { fullName: true } } } },
-        submissionB: { select: { route: true, claimantName: true, claimant: { select: { fullName: true } } } },
+        // Two or more in a race, one in a challenge: never hard-code two (board 4c).
+        claims: {
+          where: { decidedAt: null },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+          select: CONFLICT_SIDE,
+        },
+        // A conflict written before `conflict_id` existed names its sides only here.
+        submissionA: { select: CONFLICT_SIDE },
+        submissionB: { select: CONFLICT_SIDE },
       },
     }),
     db.document.findMany({
@@ -436,7 +491,8 @@ export async function loadPending(db: Db = prisma): Promise<Raw[]> {
   }
 
   for (const conflict of conflicts) {
-    const name = (side: typeof conflict.submissionA) => side.claimantName ?? side.claimant.fullName ?? "";
+    const sides = sidesOf(conflict);
+    const names = sides.map((side) => side.claimantName ?? side.claimant.fullName ?? "").filter(Boolean);
     raws.push({
       subject: "conflict",
       id: conflict.id,
@@ -444,12 +500,19 @@ export async function loadPending(db: Db = prisma): Promise<Raw[]> {
       businessId: conflict.business.id,
       businessName: conflict.business.displayName,
       businessSlug: conflict.business.slug,
+      // B8: the clock starts when the conflict opened, which is when both were promised 48 hours.
       submittedAt: conflict.createdAt,
-      summary: {
-        key: "admin.queue.summary.conflict",
-        params: { a: name(conflict.submissionA), b: name(conflict.submissionB) },
-      },
-      facts: { kind: "conflict", claims: [conflict.submissionA, conflict.submissionB] },
+      summary: conflict.challenge
+        ? { key: "admin.queue.summary.conflict_challenge", params: { name: names[0] ?? "" } }
+        : names.length === 2
+          ? { key: "admin.queue.summary.conflict", params: { a: names[0]!, b: names[1]! } }
+          : { key: "admin.queue.summary.conflict_many", params: { count: sides.length, n: sides.length } },
+      facts: { kind: "conflict", claims: sides, challenge: conflict.challenge },
+      docsOnConflict:
+        conflict.docsRequestedAt && conflict.docsRequestNote && !conflict.docsReceivedAt
+          ? { at: conflict.docsRequestedAt, reason: conflict.docsRequestNote }
+          : null,
+      escalated: conflict.escalatedAt ? { at: conflict.escalatedAt, to: conflict.escalatedTo?.fullName ?? null } : null,
     });
   }
 
@@ -618,12 +681,21 @@ export function entriesFrom(
       const item = items.get(ref);
       const waitingMs = Math.max(0, now.getTime() - raw.submittedAt.getTime());
       const docsRequested =
-        raw.waitingOnSeller !== undefined
-          ? raw.waitingOnSeller
-          : item?.docsRequestedAt && item.docsRequestReason && !item.docsReceivedAt
-            ? { at: item.docsRequestedAt, reason: item.docsRequestReason }
-            : null;
+        raw.docsOnConflict !== undefined
+          ? raw.docsOnConflict
+          : raw.waitingOnSeller !== undefined
+            ? raw.waitingOnSeller
+            : item?.docsRequestedAt && item.docsRequestReason && !item.docsReceivedAt
+              ? { at: item.docsRequestedAt, reason: item.docsRequestReason }
+              : null;
       const slaMs = SLA_MS[raw.kind];
+      const escalated = raw.escalated ?? null;
+      /*
+         A row waiting on the seller is not late on us. A conflict is the
+         exception both ways (board 4c): asking every side for documents does
+         not stop its clock, and escalating it does.
+      */
+      const late = raw.kind === "conflict" ? escalated === null && waitingMs > slaMs : waitingMs > slaMs && docsRequested === null;
       return {
         ref,
         subject: raw.subject,
@@ -639,10 +711,10 @@ export function entriesFrom(
         submittedAt: raw.submittedAt,
         waitingMs,
         slaMs,
-        // A row waiting on the seller is not late on us.
-        late: waitingMs > slaMs && docsRequested === null,
+        late,
         assignee: item?.assigneeId ? { id: item.assigneeId, name: item.assigneeName } : null,
         docsRequested,
+        escalated,
         href: hrefFor(raw.subject, raw.id),
       };
     })

@@ -31,6 +31,8 @@ export interface ClaimMatchRow {
   categoryCode: string | null;
   meta: string;
   claimed: boolean;
+  /** Board 4c: a claim on it is with our team. Derived, and never whose. */
+  pending: boolean;
   href: string;
   /** Only the top unclaimed row carries the primary. One per view. */
   primary: boolean;
@@ -74,8 +76,8 @@ export function ClaimMatchList({
               <span className="mt-1 block text-caption text-muted">{row.meta}</span>
             </div>
 
-            <StatusBadge tone={row.claimed ? "ok" : "neutral"} shape="pill" size="sm">
-              {row.claimed ? t("claim.already_claimed") : t("claim.unclaimed")}
+            <StatusBadge tone={row.claimed ? "ok" : row.pending ? "warn" : "neutral"} shape="pill" size="sm">
+              {row.claimed ? t("claim.already_claimed") : row.pending ? t("claim.pending") : t("claim.unclaimed")}
             </StatusBadge>
 
             {/*

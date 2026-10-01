@@ -10,6 +10,7 @@ import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { StorefrontHeader, storefrontCrumbs } from "../_storefront";
+import { publiclyClaimed } from "@/lib/claims/status";
 
 /**
  * Board `1d-s` — the credentials tab, *all six* behind *see all credentials*.
@@ -57,7 +58,7 @@ export default async function StorefrontCredentialsPage({ params }: Params) {
   }
   const movedTo = await absorbedInto(slug);
   if (movedTo) permanentRedirect(`/b/${movedTo}/credentials`);
-  if (business.claimStatus === "unclaimed") notFound();
+  if (!publiclyClaimed(business.claimStatus)) notFound();
 
   const visible = storefrontTabs(business.sellsKind, {
     products: business._count.products,

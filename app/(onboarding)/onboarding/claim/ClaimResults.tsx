@@ -2,6 +2,7 @@ import Link from "next/link";
 import { buttonClassName } from "@/components/primitives";
 import { Alert, Eyebrow } from "@/components/display";
 import { t } from "@/lib/i18n";
+import { CONFLICT_SLA_HOURS } from "@/lib/claims/clock";
 import { EMIRATES } from "@/lib/uae";
 import { findClaimMatches, VISIBLE_MATCHES, type ClaimCandidate } from "@/lib/onboarding/claim";
 import { recordClaimSearch } from "@/lib/onboarding/search-log";
@@ -54,6 +55,7 @@ export async function ClaimResults({
 
   const rows = toRows(matches.results, signedIn);
   const anyClaimed = matches.results.some((r) => r.claimStatus === "claimed");
+  const anyPending = matches.results.some((r) => r.claimStatus !== "claimed" && r.pendingClaim);
 
   /*
      One string for the eyebrow and for the region's name. Two would drift, and
@@ -86,7 +88,17 @@ export async function ClaimResults({
       */}
       {anyClaimed && (
         <div className="mt-3">
-          <Alert tone="info">{t("claim.dispute_note")}</Alert>
+          <Alert tone="info">{t("claim.dispute_note", { hours: CONFLICT_SLA_HOURS })}</Alert>
+        </div>
+      )}
+      {/*
+        Board 4c. A claim already waiting on a listing is said out loud, so the
+        second claimant knows a person will decide between them — and never
+        who the first one is.
+      */}
+      {anyPending && (
+        <div className="mt-3">
+          <Alert tone="info">{t("claim.pending_note", { hours: CONFLICT_SLA_HOURS })}</Alert>
         </div>
       )}
 
@@ -135,6 +147,7 @@ function toRows(candidates: readonly ClaimCandidate[], signedIn: boolean): Claim
       categoryCode: candidate.categoryCode,
       meta: metaLine(candidate),
       claimed,
+      pending: !claimed && candidate.pendingClaim,
       href: funnelHref(
         `/onboarding/verify?business=${candidate.id}${claimed ? "&dispute=1" : ""}`,
         signedIn,

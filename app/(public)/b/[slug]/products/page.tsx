@@ -32,6 +32,7 @@ import { SpecTable } from "@/components/domain";
 import Link from "next/link";
 import { EMIRATES } from "@/lib/uae";
 import { getActor } from "@/lib/auth/session";
+import { publiclyClaimed } from "@/lib/claims/status";
 
 export const revalidate = 300;
 
@@ -109,7 +110,7 @@ export default async function CataloguePage({ params, searchParams }: Params) {
 
   // An unclaimed listing has no subpages. It is a licence record, not a
   // storefront, and there is nothing here for it to show.
-  if (business.claimStatus === "unclaimed") notFound();
+  if (!publiclyClaimed(business.claimStatus)) notFound();
 
   /*
      Board `1d-s` B1: a firm that sells work has no catalogue tab, and so no

@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
+import { deleteClaims } from "./claim-cleanup";
 import { findClaimCandidates, submitClaim, whatClaimingPreserves } from "@/lib/onboarding/claim";
 import { goLive, setupStateFor, TASK_POINTS } from "@/lib/onboarding/service";
 import { WEIGHTS } from "@/lib/metrics/profile-strength";
@@ -27,6 +28,8 @@ beforeAll(async () => {
     select: { id: true, roles: true },
   });
   claimant = { id: buyer.id, roles: buyer.roles };
+  // A run that died before its afterEach left its claims, and a claim left open is the next run's race.
+  await deleteClaims({ claimantId: claimant.id });
 
   const business = await prisma.business.findUniqueOrThrow({
     where: { slug: UNCLAIMED_SLUG },
@@ -36,11 +39,11 @@ beforeAll(async () => {
 });
 
 afterEach(async () => {
-  await prisma.claimSubmission.deleteMany({ where: { claimantId: claimant.id } });
+  await deleteClaims({ claimantId: claimant.id });
 });
 
 afterAll(async () => {
-  await prisma.claimSubmission.deleteMany({ where: { claimantId: claimant.id } });
+  await deleteClaims({ claimantId: claimant.id });
   await prisma.$disconnect();
 });
 
@@ -135,7 +138,7 @@ describe("criterion 2 — claiming preserves what is already there", () => {
      * licence claim cannot lose the licence it rests on, and this is what that
      * feels like from the other side.
      */
-    await prisma.claimSubmission.deleteMany({ where: { documentId: document.id } });
+    await deleteClaims({ documentId: document.id });
     await prisma.document.delete({ where: { id: document.id } });
   });
 
@@ -170,7 +173,12 @@ describe("criterion 2 — claiming preserves what is already there", () => {
       route: "phone_callback",
       phone: "+97145550000",
     });
-    expect(result).toMatchObject({ ok: true, contested: true });
+    expect(result).toMatchObject({ ok: true, contested: true, conflict: { opened: true, challenge: true } });
+
+    // Board 4c §Flagged 2: taken as a challenge, in the queue as a conflict,
+    // while the listing its owner pays for stays exactly as it is.
+    const listing = await prisma.business.findUniqueOrThrow({ where: { id: business.id }, select: { claimStatus: true } });
+    expect(listing.claimStatus).toBe("claimed");
   });
 
   it("refuses a second claim from the same person", async () => {

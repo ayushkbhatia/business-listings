@@ -247,6 +247,27 @@ export const EVENT_PARAMS = {
      rest, and at what price, travels nowhere (`1o` AC3).
   */
   quote_partly_accepted: ["ref", "quoteRef", "lines", "amount", "enquiryId", "shortLink"],
+  /*
+     Board `4c` `B3`. Five messages to the people claiming one listing, and the
+     shortest lists that will carry them, because each param is a thing
+     `render()` has to prove is not a leak and the rule here is stricter than
+     anywhere else on this page: **no message names, describes or carries the
+     contact details of another claimant** (`2a` AC5). So: the listing's name,
+     which every claimant already knows because they claimed it; the listing's
+     id, for the link back to their own claim; the 48 hours, from the one
+     constant the queue measures against (`B8`); and the reason — one of four
+     fixed sentences, never the reviewer's note (`B4`).
+  */
+  claim_conflict_opened: ["businessName", "hours", "businessId"],
+  claim_awarded: ["businessName"],
+  claim_not_awarded: ["businessName", "reason", "businessId"],
+  claim_documents_requested: ["businessName", "businessId"],
+  /*
+     A split built the claimant a listing of their own from their licence
+     record (`B12`). `newBusinessName` is theirs; `businessName` is the listing
+     they claimed, which they named themselves by claiming it.
+  */
+  claim_new_listing_created: ["businessName", "newBusinessName"],
 } as const satisfies Record<NotificationEvent, readonly string[]>;
 
 export type ParamsOf<E extends NotificationEvent> = (typeof EVENT_PARAMS)[E][number];
@@ -303,6 +324,13 @@ export const EVENT_SOURCES = {
   enquiry_closing: ["1n"],
   // `acceptSplit`, from the comparison and from an approved split request.
   quote_partly_accepted: ["1o", "7b"],
+  // `submitClaim`, from `2b`'s submit and `2a`'s *Report a dispute*, which lands there.
+  claim_conflict_opened: ["2b", "2a"],
+  // `resolveConflict` and `requestConflictDocuments`, from the conflict screen.
+  claim_awarded: ["4c"],
+  claim_not_awarded: ["4c"],
+  claim_documents_requested: ["4c"],
+  claim_new_listing_created: ["4c"],
 } as const satisfies Record<NotificationEvent, readonly string[]>;
 
 /**
@@ -340,7 +368,17 @@ export const EVENT_AUDIENCE = {
   enquiry_nudged: "seller",
   enquiry_closing: "buyer",
   quote_partly_accepted: "seller",
-} as const satisfies Record<NotificationEvent, "seller" | "buyer">;
+  /*
+     Board `4c`. Somebody claiming a listing is neither yet: a seller's matrix
+     belongs to a seat, and a contested claim holds none (`B9`). Addressed from
+     the person's own account, like a buyer, and labelled for what they are.
+  */
+  claim_conflict_opened: "claimant",
+  claim_awarded: "claimant",
+  claim_not_awarded: "claimant",
+  claim_documents_requested: "claimant",
+  claim_new_listing_created: "claimant",
+} as const satisfies Record<NotificationEvent, "seller" | "buyer" | "claimant">;
 
 export type Audience = (typeof EVENT_AUDIENCE)[NotificationEvent];
 
@@ -444,6 +482,9 @@ export function sampleParams<E extends NotificationEvent>(
     approvalId: "sample-approval",
     nextStep: "The quote is accepted and the supplier has your contact details.",
     quotes: "4 quotes",
+    businessId: "sample-business",
+    reason: "This listing was created from a different trade licence.",
+    newBusinessName: "Gulf Pump Maintenance Services",
   } as const;
   const params: Record<string, string | number> = {};
   for (const name of EVENT_PARAMS[event]) params[name] = all[name as keyof typeof all];

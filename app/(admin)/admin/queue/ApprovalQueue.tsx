@@ -104,12 +104,19 @@ export function ApprovalQueue({ rows, staff, empty, decide, bulk }: ApprovalQueu
       key: "waiting",
       header: t("admin.queue.col.waiting"),
       width: "7rem",
-      render: (row) => (
-        <span className={cn("tabular-nums", row.late ? "font-medium text-bad-ink" : "text-body")}>
-          {row.waiting}
-          {row.late && <span className="sr-only"> {t("admin.queue.late_label")}</span>}
-        </span>
-      ),
+      render: (row) =>
+        row.escalated ? (
+          // Board 4c Q5: the clock is paused while a named holder has it — escalated, not overdue.
+          <span className="flex flex-col gap-0.5">
+            <span className="tabular-nums text-body">{row.waiting}</span>
+            <span className="text-caption text-warn-ink">{row.escalated}</span>
+          </span>
+        ) : (
+          <span className={cn("tabular-nums", row.late ? "font-medium text-bad-ink" : "text-body")}>
+            {row.waiting}
+            {row.late && <span className="sr-only"> {t("admin.queue.late_label")}</span>}
+          </span>
+        ),
     },
     {
       key: "owner",
@@ -252,7 +259,20 @@ export function ApprovalQueue({ rows, staff, empty, decide, bulk }: ApprovalQueu
 
 function RowButton({ row, onOpen }: { row: BoardRow; onOpen: (op: Op) => void }) {
   if (row.action === "review" || row.kind === "conflict") {
-    if (!row.actionHref) return <span className="text-caption text-body">{t("admin.queue.ops_lead_decides")}</span>;
+    /*
+       Board 4c B1. A moderator opens a conflict to read the evidence and hand
+       it to an ops lead — so the control says Open, and says who decides.
+    */
+    if (row.readOnly) {
+      return (
+        <span className="flex flex-col items-start gap-1">
+          <Link href={row.actionHref} className={buttonClassName({ size: "sm", variant: "secondary" })}>
+            {t("admin.queue.action.open")}
+          </Link>
+          <span className="text-caption text-body">{t("admin.queue.ops_lead_decides")}</span>
+        </span>
+      );
+    }
     return (
       <Link
         href={row.actionHref}
@@ -262,7 +282,7 @@ function RowButton({ row, onOpen }: { row: BoardRow; onOpen: (op: Op) => void })
       </Link>
     );
   }
-  if (row.decidesOnScreen && row.actionHref) {
+  if (row.decidesOnScreen) {
     const label =
       row.action === "approve"
         ? "admin.queue.action.approve"

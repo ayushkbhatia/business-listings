@@ -52,6 +52,7 @@ import { seedCampaignLegal } from "./seed-campaign-legal.mjs";
 import { seedLicenceImports } from "./seed-licence-imports.mjs";
 import { seedDedupe } from "./seed-dedupe.mjs";
 import { seedQueue } from "./seed-queue.mjs";
+import { seedClaimConflict } from "./seed-claim-conflict.mjs";
 import { seedCredentialReview } from "./seed-credential-review.mjs";
 import { seedBlendedSearch } from "./seed-blended-search.mjs";
 import { seedServicesLanding } from "./seed-services-landing.mjs";
@@ -1101,6 +1102,8 @@ async function main() {
   // Board 4b: one queue row per argument the board makes, on new unpublished
   // listings so no existing fixture becomes contested or counted.
   await seedQueue(prisma, NOW);
+  // Board 4c: the conflict the board draws, on its own unpublished listing.
+  await seedClaimConflict(prisma, NOW);
   // Board 4c-s: one FTA credential per review state, built from the fixture
   // register, on new unpublished listings for the same reason as 4b's.
   await seedCredentialReview(prisma);
@@ -6821,6 +6824,8 @@ async function seedQueues(
         route: "phone_callback" as const,
         phone: "+97142678831",
         status: "claimed" as const,
+        outcome: "approved" as const,
+        decidedById: opsLeadId,
         decidedAt: days(-40),
         decisionReason:
           "Called the number on the DED record and reached the manager named on the licence. Ownership confirmed on the call.",
@@ -6833,6 +6838,9 @@ async function seedQueues(
         phone: "+97165331074",
         contested: true,
         status: "disputed" as const,
+        // Build plan 4.3's CHECK: a decided claim carries its outcome.
+        outcome: "rejected" as const,
+        decidedById: opsLeadId,
         decidedAt: days(-15),
         decisionReason:
           "Claimant could not name the licence holder and the number reached a different company. Listing stays with the existing holder; claimant told what evidence would change that.",
@@ -6886,7 +6894,7 @@ async function seedQueues(
     select: { id: true },
   });
 
-  await db.claimConflict.create({
+  const seededConflict = await db.claimConflict.create({
     data: {
       businessId: conflictTarget.id,
       submissionAId: contestedClaimId,
@@ -6896,6 +6904,11 @@ async function seedQueues(
       }),
       createdAt: days(-6),
     },
+  });
+  // Board 4c: a conflict's sides join it by `conflict_id`, the set every reader takes.
+  await db.claimSubmission.updateMany({
+    where: { id: { in: [contestedClaimId, rivalClaim.id] } },
+    data: { conflictId: seededConflict.id },
   });
 
   // ── The audit rows those decisions owe ────────────────────────────────────

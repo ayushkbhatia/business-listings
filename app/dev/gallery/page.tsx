@@ -15,6 +15,7 @@ import { Ingest } from "./_sections/Ingest";
 import { Dedupe } from "./_sections/Dedupe";
 import { ApprovalQueueGallery } from "./_sections/ApprovalQueue";
 import { CredentialReviewGallery } from "./_sections/CredentialReview";
+import { ConflictReviewGallery } from "./_sections/ConflictReview";
 import { Reviews } from "./_sections/Reviews";
 import { AuthGallery } from "./_sections/Auth";
 import { CloseAccountGallery } from "./_sections/CloseAccount";
@@ -212,6 +213,8 @@ const UNLISTED = [
   "approval-queue",
   // Board `4c-s`: a credential against the register, in every state.
   "credential-review",
+  // Board `4c`: two or more claims on one listing, scored on the same rows, in every state.
+  "conflict-review",
   // Board `7c-s`: the accepted proposal, the end of the services demand chain.
   "accepted-proposal",
   // Board `10e`: the buyer's inbox, its rail and the saved searches panel.
@@ -320,6 +323,7 @@ export default function Gallery() {
       <Dedupe />
       <ApprovalQueueGallery />
       <CredentialReviewGallery />
+      <ConflictReviewGallery />
       <Billing />
 
       <Reviews />
