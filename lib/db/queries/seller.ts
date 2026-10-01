@@ -290,13 +290,23 @@ export async function getLeadDetail(
       serviceBrief: { select: ENQUIRY_BRIEF_SELECT },
       quotes: {
         /*
-           Sent quotes only, for the same reason: the composer's eyebrow counts
-           these to name the next revision, and `SentQuotes` lists them under
-           "Sent already". With drafts included, opening a lead and typing one
-           price made the composer announce "Revision 2" of a quote nobody had
-           sent. The draft is read separately, by `findDraft`.
+           This seller's own quotes, and sent ones only.
+
+           Their own: the enquiry is shared, its quotes are not. Without
+           `businessId` here — lost on 5 Sep in PR 101, when the draft filter was
+           added and the two filters beside it kept theirs — a lead loaded every
+           supplier's sent quotes, so a seller opening an enquiry a competitor
+           had already answered saw the competitor's reference and total under
+           "Sent already", and had their note, validity and terms prefilled into
+           the composer as "Revision 2". Sellers never see another seller's
+           prices (`permissions.md`). `seller-queries.test.ts` holds it.
+
+           Sent: the composer's eyebrow counts these to name the next revision,
+           and with drafts included, opening a lead and typing one price made
+           the composer announce "Revision 2" of a quote nobody had sent. The
+           draft is read separately, by `findDraft`.
         */
-        where: { status: { not: "draft" } },
+        where: { businessId, status: { not: "draft" } },
         orderBy: { revision: "desc" },
         include: {
           lines: { orderBy: { sortOrder: "asc" } },
