@@ -1,11 +1,12 @@
 import Link from "next/link";
+import { StatusBadge } from "@/components/display";
 import { buttonClassName } from "@/components/primitives";
-import { formatCount } from "@/lib/format";
+import { formatCount, formatDuration } from "@/lib/format";
 import { t } from "@/lib/i18n";
-import { can } from "@/lib/auth/can";
 import type { Actor } from "@/lib/auth/roles";
 import { loadQueue } from "@/lib/moderation/queue";
 import { isQueueKind, type QueueKind } from "@/lib/moderation/rules";
+import { QueueKeys } from "./QueueKeys";
 
 /**
  * Where a submission sits in the queue, said on its own screen.
@@ -56,11 +57,29 @@ export async function QueuePosition({
   const mine = params.mine === "1";
   const triage = params.triage === "1";
   const view = await loadQueue({ kind, assigneeId: mine ? actor.id : null });
-  // A conflict is only a next step for a seat that may open one.
-  const workable = view.rows.filter((row) => row.kind !== "conflict" || can(actor, "claim.resolve"));
+  /*
+     The same list the queue shows, in the same order, so the position is
+     checkable against it (board 4c criterion 11: `1 of 318` under All,
+     Conflicts and Assigned to me alike). Every seat that can see a row can open
+     it — a moderator opens a conflict to hand it to an ops lead (B1) — so
+     nothing is filtered out of the count.
+  */
+  const workable = view.rows;
   const index = workable.findIndex((row) => row.ref === subject);
   const next = workable.find((row, position) => row.ref !== subject && (index === -1 || position > index)) ?? null;
+  const previous = index > 0 ? workable[index - 1]! : null;
   const query = queueQuery({ kind, mine, triage });
+  /*
+     Board 4c B15, the shell every review screen shares: the kind and how long
+     it has waited, red once it is past the kind's service level — or the word
+     escalated, whose clock is paused (Q5).
+  */
+  const entry = view.all.find((row) => row.ref === subject) ?? null;
+  const kindChip = entry
+    ? entry.escalated
+      ? t("admin.review.kind_escalated", { kind: t(`admin.queue.type.${entry.kind}`) })
+      : t("admin.review.kind_age", { kind: t(`admin.queue.type.${entry.kind}`), age: formatDuration(entry.waitingMs) })
+    : null;
 
   const scope = [
     kind ? t(`admin.queue.type.${kind}`) : t("admin.queue.position.everything"),
@@ -69,6 +88,12 @@ export async function QueuePosition({
 
   return (
     <nav aria-label={t("admin.queue.position.label")} className="flex flex-wrap items-center gap-3 text-caption text-muted">
+      <QueueKeys previous={previous ? `${previous.href}${query}` : null} next={next ? `${next.href}${query}` : null} />
+      {kindChip && (
+        <StatusBadge tone={entry!.late ? "bad" : entry!.escalated ? "warn" : "neutral"} shape="chip">
+          {kindChip}
+        </StatusBadge>
+      )}
       <Link href={queueHref({ kind, mine })} className="rounded-tag underline-offset-2 hover:underline focus-visible:shadow-focus focus-visible:outline-none">
         {t("admin.review.back")}
       </Link>
@@ -83,6 +108,7 @@ export async function QueuePosition({
         </Link>
       )}
       {(triage || skip) && !next && <span>{t("admin.queue.position.done")}</span>}
+      {(previous || next) && <span className="text-body">{t("admin.queue.position.keys")}</span>}
     </nav>
   );
 }

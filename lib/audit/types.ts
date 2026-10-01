@@ -73,6 +73,15 @@ export const AUDIT_ACTIONS = [
   "taxonomy_changed",
   "staff_changed",
   "claim_resolved",
+  /*
+     Board 4c. Escalating a conflict, asking every side for documents and
+     logging a call are things an ops lead does to a conflict without settling
+     it — each its own line in the decision log the screen reads back (B14), so
+     none of them can file as a resolution.
+  */
+  "claim_escalated",
+  "claim_docs_requested",
+  "claim_call_logged",
   "entitlements_changed",
   /*
      Board 12e Q3. A plan being added is not an entitlement changing: there is
@@ -289,6 +298,7 @@ export const PAIRED_ACTIONS = {
   "business.close": ["closure_noticed", "closure_withdrawn", "closure_reopened"],
   "account.suspend": ["account_suspended", "account_reinstated"],
   "queue.decide": ["queue_decided", "queue_docs_requested", "queue_reassigned"],
+  "claim.resolve": ["claim_resolved", "claim_escalated", "claim_docs_requested", "claim_call_logged"],
   "business.merge": [
     "merge",
     "pair_merged",

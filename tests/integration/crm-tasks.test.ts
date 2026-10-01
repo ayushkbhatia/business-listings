@@ -317,6 +317,7 @@ describe("B5, B6 and B10 — the board's counts", () => {
         route: "phone_callback",
         phone: "+97144470088",
         status: "claimed",
+        outcome: "approved",
         decidedAt: new Date(Date.now() + 1000),
         decisionReason: "Licence matches the register.",
       },

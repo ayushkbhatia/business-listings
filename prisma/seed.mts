@@ -6821,6 +6821,8 @@ async function seedQueues(
         route: "phone_callback" as const,
         phone: "+97142678831",
         status: "claimed" as const,
+        outcome: "approved" as const,
+        decidedById: opsLeadId,
         decidedAt: days(-40),
         decisionReason:
           "Called the number on the DED record and reached the manager named on the licence. Ownership confirmed on the call.",
@@ -6833,6 +6835,9 @@ async function seedQueues(
         phone: "+97165331074",
         contested: true,
         status: "disputed" as const,
+        // Build plan 4.3's CHECK: a decided claim carries its outcome.
+        outcome: "rejected" as const,
+        decidedById: opsLeadId,
         decidedAt: days(-15),
         decisionReason:
           "Claimant could not name the licence holder and the number reached a different company. Listing stays with the existing holder; claimant told what evidence would change that.",

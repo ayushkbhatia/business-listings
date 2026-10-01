@@ -157,6 +157,11 @@ model User {
   onboardingDrafts         OnboardingDraft[]        @relation("OnboardingDraftUser")
   categoryActivityCleared  BusinessCategory[]       @relation("CategoryActivityClearedBy")
   conflictsResolved        ClaimConflict[]          @relation("ConflictResolvedBy")
+  /// Board 4c. Challenges opened against a listing this person owned.
+  conflictsIncumbent       ClaimConflict[]          @relation("ConflictIncumbent")
+  conflictsEscalated       ClaimConflict[]          @relation("ConflictEscalatedBy")
+  conflictsHeld            ClaimConflict[]          @relation("ConflictEscalatedTo")
+  conflictsDocsRequested   ClaimConflict[]          @relation("ConflictDocsRequestedBy")
   licenceImports           LicenceImportRun[]       @relation("IngestActor")
   licenceImportsDecided    LicenceImportRun[]       @relation("IngestDecider")
   licenceImportsRolledBack LicenceImportRun[]       @relation("IngestRollbackActor")
@@ -3159,6 +3164,10 @@ enum DocumentKind {
   enquiry_attachment
   /// Sent in one thread, to one side. See `MessageAttachment`.
   thread_attachment
+  /// Board `4c` Q4. The registered tenancy contract for a claimant's unit
+  /// (Tawtheeq in Abu Dhabi), asked of every side of a claim conflict. Held,
+  /// never shown — like a trade licence, it has no public use.
+  tenancy_contract
 
   @@map("document_kind")
 }
@@ -3246,6 +3255,8 @@ model Document {
   /// Every product citing this document. Many-to-many since board 3i.
   products           ProductDocument[]
   claims             ClaimSubmission[]
+  /// Board 4c. A tenancy contract a claimant uploaded when an ops lead asked.
+  tenancyClaims      ClaimSubmission[]        @relation("ClaimTenancyDocument")
   credentials        Credential[]
   catalogueImports   CatalogueImportRequest[]
   quoteAttachments   QuoteAttachment[]
@@ -4035,19 +4046,64 @@ model ClaimSubmission {
 
   /// Board 4b. Which way the decision went. `status` describes the listing and
   /// could not: an award wrote `claimed` onto the losing submission too.
+  ///
+  /// Board 4c: paired with `decidedAt` by the `claim_submission_outcome_with_
+  /// decision` CHECK — undecided carries no outcome, decided always carries one.
   outcome     ClaimOutcome? @map("outcome")
   decidedById String?       @map("decided_by_id") @db.Uuid
 
-  business     Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  claimant     User            @relation("ClaimClaimant", fields: [claimantId], references: [id], onDelete: Cascade)
-  decidedBy    User?           @relation("ClaimDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
-  document     Document?       @relation(fields: [documentId], references: [id], onDelete: Restrict)
-  conflictsAsA ClaimConflict[] @relation("ConflictA")
-  conflictsAsB ClaimConflict[] @relation("ConflictB")
+  /// Board 4c. The conflict this claim is one side of, while it is and after.
+  ///
+  /// `ClaimConflict.submissionA/B` name the first two and nothing else, and
+  /// board 4c's data model is explicit: *two or more — never hard-code two*.
+  /// A third claim arriving while a conflict is open joins it here rather than
+  /// waiting in the queue as a plain claim somebody could approve over the
+  /// dispute's head.
+  conflictId String? @map("conflict_id")
+
+  /// Board 4c `B3`. What a claimant who was not awarded is told — one of four
+  /// fixed sentences, sent verbatim. Never the reviewer's internal note, which
+  /// can name the other party; that stays on `ClaimConflict.reason`. Set only
+  /// on a rejected claim, by CHECK.
+  partyReason ClaimPartyReason? @map("party_reason")
+
+  /// Board 4c Q4 (`D-DOCS`). The registered tenancy contract for the
+  /// claimant's unit, uploaded after an ops lead asked every side of a conflict
+  /// for one. Private, like the licence: fetched through an authenticated admin
+  /// route and hidden from every seat that is not this claimant's.
+  tenancyDocumentId String? @map("tenancy_document_id")
+
+  business         Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  claimant         User            @relation("ClaimClaimant", fields: [claimantId], references: [id], onDelete: Cascade)
+  decidedBy        User?           @relation("ClaimDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+  document         Document?       @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  tenancyDocument  Document?       @relation("ClaimTenancyDocument", fields: [tenancyDocumentId], references: [id], onDelete: SetNull)
+  conflict         ClaimConflict?  @relation("ConflictClaims", fields: [conflictId], references: [id], onDelete: SetNull)
+  conflictsAsA     ClaimConflict[] @relation("ConflictA")
+  conflictsAsB     ClaimConflict[] @relation("ConflictB")
+  conflictsAwarded ClaimConflict[] @relation("ConflictAwarded")
+  conflictsSecond  ClaimConflict[] @relation("ConflictSecond")
 
   @@index([businessId, status])
   @@index([status, createdAt])
+  @@index([conflictId], map: "claim_submission_conflict_idx")
   @@map("claim_submission")
+}
+
+/// Board 4c `B3`. What a claimant who lost a conflict is told, in four fixed
+/// sentences (`claim.party_reason.*`). Fixed so it can be sent verbatim: a
+/// reason staff type is a reason that can name the claimant who won.
+enum ClaimPartyReason {
+  /// "This listing was created from a different trade licence."
+  not_source_licence
+  /// "The name, address or phone on your licence does not match this listing."
+  details_do_not_match
+  /// "We could not confirm your claim on the number in the public licence record."
+  not_confirmed_by_phone
+  /// "The documents we asked for did not arrive in time."
+  documents_not_received
+
+  @@map("claim_party_reason")
 }
 
 enum ClaimRoute {
@@ -4112,27 +4168,45 @@ model OnboardingDraft {
 /// these four create or restructure businesses, so the resolution has to name
 /// what it produced or the audit row is unreadable a year later.
 enum ClaimResolution {
+  /// Legacy: written before board 4c, when a conflict had exactly two sides.
+  /// `award` with `awardedSubmissionId` is what the resolver writes now.
   award_to_a
+  /// Legacy, as above.
   award_to_b
   split_into_two
   merge_as_branches
+  /// Board 4c. One claim wins the listing; `awardedSubmissionId` says which.
+  award
+  /// Board 4c, the challenge case (§Flagged 2). Somebody claimed a listing that
+  /// already had an owner, and the owner keeps it. Award to the challenger is
+  /// refused until that case is drawn, so this and escalation are the two ways
+  /// a challenge ends.
+  keep_owner
 
   @@map("claim_resolution")
 }
 
-/// Two claims on one listing, and what staff did about it.
+/// Two or more claims on one listing, and what staff did about it.
 ///
-/// Opened by the claim service the moment a second undecided claim arrives on a
-/// business, so the queue has a row rather than staff having to notice a pair.
+/// Opened by the claim service the moment a contested claim arrives: a second
+/// undecided claim on a listing nobody owns (the *race*), or any claim on one
+/// that already has an owner (the *challenge*). A third claim joins the open
+/// conflict through `ClaimSubmission.conflictId`; `submissionA/B` name only the
+/// first two and are kept so the pair the queue was built on still reads.
 model ClaimConflict {
   id                 String           @id @default(cuid())
   businessId         String           @map("business_id")
+  /// The first claim. In a challenge, the challenger.
   submissionAId      String           @map("submission_a_id")
-  submissionBId      String           @map("submission_b_id")
+  /// The second claim in a race. Null in a challenge, where the other side is
+  /// the owner the listing already has and holds no claim to compare.
+  submissionBId      String?          @map("submission_b_id")
   resolution         ClaimResolution?
   resolvedById       String?          @map("resolved_by_id") @db.Uuid
   resolvedAt         DateTime?        @map("resolved_at")
-  /// NOT NULL once resolved, paired by a CHECK in the migration.
+  /// The internal note — NOT NULL once resolved, paired by a CHECK. Board 4c
+  /// `B4`: it is the audit row's reason and it never reaches a claimant. What a
+  /// claimant reads is `ClaimSubmission.partyReason`.
   reason             String?
   /// The second listing a split created, or null for the two award outcomes.
   producedBusinessId String?          @map("produced_business_id")
@@ -4144,12 +4218,48 @@ model ClaimConflict {
   buyersWaiting      Int              @default(0) @map("buyers_waiting")
   createdAt          DateTime         @default(now()) @map("created_at")
 
-  business         Business        @relation("ConflictBusiness", fields: [businessId], references: [id], onDelete: Cascade)
-  submissionA      ClaimSubmission @relation("ConflictA", fields: [submissionAId], references: [id], onDelete: Restrict)
-  submissionB      ClaimSubmission @relation("ConflictB", fields: [submissionBId], references: [id], onDelete: Restrict)
-  resolvedBy       User?           @relation("ConflictResolvedBy", fields: [resolvedById], references: [id], onDelete: SetNull)
-  producedBusiness Business?       @relation("ConflictProduced", fields: [producedBusinessId], references: [id], onDelete: SetNull)
-  producedLocation Location?       @relation("ConflictProducedLocation", fields: [producedLocationId], references: [id], onDelete: SetNull)
+  /// Board 4c §Flagged 2. A claim on a listing that already had an owner.
+  /// Award to the challenger is refused; keep the owner, or escalate.
+  challenge           Boolean   @default(false)
+  /// The owner the listing had when a challenge opened. Null in a race.
+  incumbentId         String?   @map("incumbent_id") @db.Uuid
+  /// The claim that won: the award, or the side that kept the listing on a
+  /// split or a merge. Null on `keep_owner`, where no claim won.
+  awardedSubmissionId String?   @map("awarded_submission_id")
+  /// The claim a split built a listing for, or whose licence a merge made a
+  /// branch. Null on an award.
+  secondSubmissionId  String?   @map("second_submission_id")
+  /// Board 4c Q5 (`D-ESCALATE`). Escalated to a named holder, with the service
+  /// level paused. No grant changes; the holder is staff who could already
+  /// resolve it. Paired, all or nothing, by CHECK.
+  escalatedAt         DateTime? @map("escalated_at")
+  escalatedById       String?   @map("escalated_by_id") @db.Uuid
+  escalatedToId       String?   @map("escalated_to_id") @db.Uuid
+  escalationNote      String?   @map("escalation_note")
+  /// Board 4c Q4 (`D-DOCS`). Every side asked for the registered tenancy
+  /// contract for their unit. The clock keeps running (`4c-s` B6).
+  docsRequestedAt     DateTime? @map("docs_requested_at")
+  docsRequestedById   String?   @map("docs_requested_by_id") @db.Uuid
+  docsRequestNote     String?   @map("docs_request_note")
+  /// Set when the last side still waiting uploaded theirs.
+  docsReceivedAt      DateTime? @map("docs_received_at")
+  /// Withdrawals left fewer than two sides, so nobody decided it: the claim
+  /// still standing went back to the queue as a plain claim, keeping its age.
+  dissolvedAt         DateTime? @map("dissolved_at")
+
+  business          Business          @relation("ConflictBusiness", fields: [businessId], references: [id], onDelete: Cascade)
+  submissionA       ClaimSubmission   @relation("ConflictA", fields: [submissionAId], references: [id], onDelete: Restrict)
+  submissionB       ClaimSubmission?  @relation("ConflictB", fields: [submissionBId], references: [id], onDelete: Restrict)
+  claims            ClaimSubmission[] @relation("ConflictClaims")
+  awardedSubmission ClaimSubmission?  @relation("ConflictAwarded", fields: [awardedSubmissionId], references: [id], onDelete: SetNull)
+  secondSubmission  ClaimSubmission?  @relation("ConflictSecond", fields: [secondSubmissionId], references: [id], onDelete: SetNull)
+  resolvedBy        User?             @relation("ConflictResolvedBy", fields: [resolvedById], references: [id], onDelete: SetNull)
+  incumbent         User?             @relation("ConflictIncumbent", fields: [incumbentId], references: [id], onDelete: SetNull)
+  escalatedBy       User?             @relation("ConflictEscalatedBy", fields: [escalatedById], references: [id], onDelete: SetNull)
+  escalatedTo       User?             @relation("ConflictEscalatedTo", fields: [escalatedToId], references: [id], onDelete: SetNull)
+  docsRequestedBy   User?             @relation("ConflictDocsRequestedBy", fields: [docsRequestedById], references: [id], onDelete: SetNull)
+  producedBusiness  Business?         @relation("ConflictProduced", fields: [producedBusinessId], references: [id], onDelete: SetNull)
+  producedLocation  Location?         @relation("ConflictProducedLocation", fields: [producedLocationId], references: [id], onDelete: SetNull)
 
   @@map("claim_conflict")
 }
@@ -9212,6 +9322,17 @@ enum NotificationEvent {
   /// rest from other suppliers. Names the lines and their amount — never who
   /// supplies the others, or at what price.
   quote_partly_accepted
+  /// Board `4c` `B3`. Five messages to the people claiming a listing, which
+  /// `2a` and `2b` promised and nothing sent: to every claimant when a second
+  /// claim lands, to the claim that won, to each that did not (with its fixed
+  /// reason and the way to contest it), to every side asked for a document,
+  /// and to the side a split built a listing for. No body names, describes or
+  /// carries the contact details of another claimant (`2a` AC5).
+  claim_conflict_opened
+  claim_awarded
+  claim_not_awarded
+  claim_documents_requested
+  claim_new_listing_created
 
   @@map("notification_event")
 }

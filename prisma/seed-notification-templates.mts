@@ -750,5 +750,122 @@ export const TEMPLATES: TemplateSeed[] = [
     actionPath: "/dashboard/leads/{enquiryId}",
     status: "live",
   },
-];
 
+  /*
+     Board `4c` `B3` — the five claim messages `2a` and `2b` promised and
+     nothing sent: a conflict opening, an award, a claim not awarded (with one
+     of four fixed reasons and the way to contest it), a request for tenancy
+     documents, and the listing a split built.
+
+     Neutral: a claim is about a licence, not a trade. Email and in-app only — a
+     claimant holds no seat, so no seller's channels, and each of these is read
+     at a desk. **No body names, describes or carries the contact details of
+     another claimant** (`2a` AC5): the listing's name, which every claimant
+     knows because they claimed it, and nothing about who else did.
+  */
+  {
+    event: "claim_conflict_opened",
+    channel: "email",
+    kind: "neutral",
+    subject: "Your claim on {businessName} is being reviewed with another",
+    body:
+      "Another claim on {businessName} reached us, so a person now decides between them. You will hear the outcome within {hours} hours. " +
+      "We may ask you for one more document; nothing else is needed from you now.",
+    actionLabel: "See your claim",
+    actionPath: "/onboarding/verify?business={businessId}",
+    status: "live",
+  },
+  {
+    event: "claim_conflict_opened",
+    channel: "in_app",
+    kind: "neutral",
+    body: "Another claim on {businessName} reached us. A person decides between them within {hours} hours.",
+    actionLabel: "See your claim",
+    actionPath: "/onboarding/verify?business={businessId}",
+    status: "live",
+  },
+  {
+    event: "claim_awarded",
+    channel: "email",
+    kind: "neutral",
+    subject: "Your claim on {businessName} was approved",
+    body:
+      "{businessName} is yours to manage. Its reviews, enquiries and search history stay with it, " +
+      "and checking the licence for the green badge is the next step.",
+    actionLabel: "Open your dashboard",
+    actionPath: "/dashboard",
+    status: "live",
+  },
+  {
+    event: "claim_awarded",
+    channel: "in_app",
+    kind: "neutral",
+    body: "Your claim on {businessName} was approved. The listing is yours to manage.",
+    actionLabel: "Open your dashboard",
+    actionPath: "/dashboard",
+    status: "live",
+  },
+  {
+    event: "claim_not_awarded",
+    channel: "email",
+    kind: "neutral",
+    subject: "Your claim on {businessName} was not approved",
+    body:
+      "We looked at every claim on {businessName}, and yours was not approved. {reason} " +
+      "If you think we got this wrong, raise a dispute with your trade licence and a person will look again.",
+    actionLabel: "Raise a dispute",
+    actionPath: "/onboarding/verify?business={businessId}&dispute=1",
+    status: "live",
+  },
+  {
+    event: "claim_not_awarded",
+    channel: "in_app",
+    kind: "neutral",
+    body: "Your claim on {businessName} was not approved. {reason}",
+    actionLabel: "Raise a dispute",
+    actionPath: "/onboarding/verify?business={businessId}&dispute=1",
+    status: "live",
+  },
+  {
+    event: "claim_documents_requested",
+    channel: "email",
+    kind: "neutral",
+    subject: "One more document for your claim on {businessName}",
+    body:
+      "To decide the claims on {businessName}, we ask every claimant for the registered tenancy contract for their unit — Tawtheeq in Abu Dhabi. " +
+      "Upload yours to your claim. The decision does not wait for it.",
+    actionLabel: "Upload it",
+    actionPath: "/onboarding/verify?business={businessId}",
+    status: "live",
+  },
+  {
+    event: "claim_documents_requested",
+    channel: "in_app",
+    kind: "neutral",
+    body: "Upload the registered tenancy contract for your unit to your claim on {businessName}.",
+    actionLabel: "Upload it",
+    actionPath: "/onboarding/verify?business={businessId}",
+    status: "live",
+  },
+  {
+    event: "claim_new_listing_created",
+    channel: "email",
+    kind: "neutral",
+    subject: "{newBusinessName} has a listing of its own",
+    body:
+      "Your claim on {businessName} was settled with a listing of its own for your licence: {newBusinessName}. " +
+      "It starts unpublished. Finish setting it up to put it in front of buyers.",
+    actionLabel: "Set it up",
+    actionPath: "/dashboard",
+    status: "live",
+  },
+  {
+    event: "claim_new_listing_created",
+    channel: "in_app",
+    kind: "neutral",
+    body: "{newBusinessName} now has a listing of its own, built from your licence. Finish setting it up to publish it.",
+    actionLabel: "Set it up",
+    actionPath: "/dashboard",
+    status: "live",
+  },
+];

@@ -128,7 +128,10 @@ export interface RegisterCredentialFacts {
 
 export interface ConflictFacts {
   kind: "conflict";
+  /** The claims still standing — two or more in a race, one in a challenge. */
   claims: readonly { route: "licence_upload" | "phone_callback" }[];
+  /** A claim on a listing that already has an owner (board 4c §Flagged 2). */
+  challenge: boolean;
 }
 
 export type SubmissionFacts =
@@ -525,10 +528,12 @@ function registerCredentialChecks(facts: RegisterCredentialFacts, now: Date): Ch
 function conflictChecks(facts: ConflictFacts, rules: CheckRules): Check[] {
   const checks: Check[] = [
     // Never switched off and never passed: who owns a company is a person's call.
-    fail("two_claims", "review", {
-      key: "admin.queue.check.two_claims.open",
-      params: { count: facts.claims.length, n: facts.claims.length },
-    }),
+    facts.challenge
+      ? fail("two_claims", "review", { key: "admin.queue.check.two_claims.challenge" })
+      : fail("two_claims", "review", {
+          key: "admin.queue.check.two_claims.open",
+          params: { count: facts.claims.length, n: facts.claims.length },
+        }),
   ];
   if (ruleEnabled(rules, "claim_evidence")) {
     const byPhone = facts.claims.filter((claim) => claim.route === "phone_callback").length;

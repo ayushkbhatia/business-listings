@@ -76,6 +76,18 @@ describe("what an event supplies", () => {
       "approval_decided",
       "approval_requested",
       /*
+         Board `4c`'s five, to the people claiming one listing: `submitClaim`
+         when a conflict opens or a claim joins one, `resolveConflict` for the
+         outcome, `requestConflictDocuments` for the tenancy contract. `2a` and
+         `2b` had promised both claimants they would be told, and nothing told
+         anybody. None names another claimant.
+      */
+      "claim_awarded",
+      "claim_conflict_opened",
+      "claim_documents_requested",
+      "claim_new_listing_created",
+      "claim_not_awarded",
+      /*
          Board 3e §5, and the fifth event sent from a schedule. It was declared
          in the enum and seeded with a live email template from handoff 1, and
          emitted by nothing for the whole of it — so the verification screen
@@ -172,7 +184,7 @@ describe("what an event supplies", () => {
   it("covers every event in the enum, so none is missing a row", () => {
     // `satisfies Record<NotificationEvent, …>` enforces this at compile time;
     // this fails loudly if somebody widens the enum and the type is loosened.
-    expect(Object.keys(EVENT_PARAMS)).toHaveLength(26);
+    expect(Object.keys(EVENT_PARAMS)).toHaveLength(31);
   });
 
   it("does not claim to emit the alert it only records", () => {

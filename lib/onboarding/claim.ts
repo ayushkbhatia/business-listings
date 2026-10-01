@@ -4,7 +4,9 @@ import { t } from "@/lib/i18n";
 import { prisma } from "@/lib/db/client";
 import type { Actor } from "@/lib/auth/roles";
 import { sameLicenceNumber } from "@/lib/verification/licence/number";
-import { openConflictIfContested } from "./conflict";
+import { joinOrOpenConflict, settleAfterWithdrawal, type Contest } from "@/lib/claims/claimant";
+import { lockListingClaims } from "@/lib/claims/lock";
+import { onClaimConflictOpened } from "@/lib/notify/events";
 
 /**
  * Finding a listing, and saying it is yours. Boards 2a and 2b.
@@ -329,7 +331,20 @@ export async function findClaimCandidates(query: string, limit = 8): Promise<Cla
 export type ClaimRoute = "licence_upload" | "phone_callback";
 
 export type ClaimResult =
-  | { ok: true; submissionId: string; contested: boolean }
+  | {
+      ok: true;
+      submissionId: string;
+      /**
+       * Somebody else is on this listing: it has an owner (a challenge), or
+       * another claim is waiting on it (a race). A contested claim is taken —
+       * blocking the second claimant would hand the listing to whoever arrived
+       * first — but it attaches no seat (board 4c): the seat comes with the
+       * award, or not at all.
+       */
+      contested: boolean;
+      /** The conflict the claim opened or joined, where it is contested. */
+      conflict: Contest | null;
+    }
   | { ok: false; error: string };
 
 export interface SubmitClaimInput {
@@ -434,44 +449,67 @@ export async function submitClaim(
     return { ok: false, error: "Choose the number on the licence record." };
   }
 
-  const mine = await prisma.claimSubmission.findFirst({
-    where: { businessId: input.businessId, claimantId: actor.id, decidedAt: null },
-    select: { id: true },
+  /*
+   * Board 4c. The claim and its conflict are written together, under the
+   * listing's claim lock, so two claims arriving at once are put in a line.
+   *
+   * Before this, a conflict opened only when the listing was already
+   * `claimed` — and then looked for two *undecided* claims, which a challenge
+   * never has, since the owner's claim was decided long ago. A race between two
+   * claims on a listing nobody owned never opened one at all. Board 4c's queue
+   * had a conflict body and nothing in the product that could fill it.
+   */
+  const outcome = await prisma.$transaction(async (tx) => {
+    await lockListingClaims(tx, input.businessId);
+
+    const mine = await tx.claimSubmission.findFirst({
+      where: { businessId: input.businessId, claimantId: actor.id, decidedAt: null },
+      select: { id: true },
+    });
+    if (mine) return null;
+
+    const created = await tx.claimSubmission.create({
+      data: {
+        businessId: input.businessId,
+        claimantId: actor.id,
+        route: input.route,
+        documentId: input.documentId ?? null,
+        phone: input.phone ?? null,
+        contested: false,
+        claimantName: input.claimantName?.trim() || null,
+        claimantRole: input.claimantRole ?? null,
+        statedLicenceNumber: input.statedLicenceNumber?.trim() || null,
+        statedLicenceExpiry: input.statedLicenceExpiry ?? null,
+        ocrLicenceNumber: input.ocrLicenceNumber?.trim() || null,
+        ocrLicenceExpiry: input.ocrLicenceExpiry ?? null,
+        ocrConfidence: input.ocrConfidence ?? null,
+      },
+      select: { id: true },
+    });
+
+    const conflict = await joinOrOpenConflict(tx, { businessId: input.businessId, submissionId: created.id });
+    return { submissionId: created.id, conflict };
   });
-  if (mine) {
+
+  if (!outcome) {
     return { ok: false, error: "You have already claimed this listing. We are looking at it." };
   }
 
-  const contested = business.claimStatus === "claimed";
+  // `2b` criterion 5: both parties are told when a conflict opens, and a side
+  // that joins one is told too. Never who else is claiming (`2a` AC5).
+  if (outcome.conflict) {
+    await onClaimConflictOpened({
+      conflictId: outcome.conflict.conflictId,
+      submissionIds: outcome.conflict.claimIds,
+    });
+  }
 
-  const created = await prisma.claimSubmission.create({
-    data: {
-      businessId: input.businessId,
-      claimantId: actor.id,
-      route: input.route,
-      documentId: input.documentId ?? null,
-      phone: input.phone ?? null,
-      contested,
-      claimantName: input.claimantName?.trim() || null,
-      claimantRole: input.claimantRole ?? null,
-      statedLicenceNumber: input.statedLicenceNumber?.trim() || null,
-      statedLicenceExpiry: input.statedLicenceExpiry ?? null,
-      ocrLicenceNumber: input.ocrLicenceNumber?.trim() || null,
-      ocrLicenceExpiry: input.ocrLicenceExpiry ?? null,
-      ocrConfidence: input.ocrConfidence ?? null,
-    },
-    select: { id: true },
-  });
-
-  /*
-   * A second undecided claim on one listing is a conflict, and board 4c needs a
-   * row to put in the queue. Opening it here rather than leaving staff to
-   * notice a pair: `contested` has been a flag since handoff 3 and flagged
-   * nothing to anybody.
-   */
-  if (contested) await openConflictIfContested(input.businessId);
-
-  return { ok: true, submissionId: created.id, contested };
+  return {
+    ok: true,
+    submissionId: outcome.submissionId,
+    contested: outcome.conflict !== null,
+    conflict: outcome.conflict,
+  };
 }
 
 /**
@@ -482,25 +520,33 @@ export async function submitClaim(
  * row leaves the queue because it is decided. The owner seat the claim attached
  * stays: the usual reason to withdraw is to send the right document, and
  * `submitClaim` takes a new claim straight away.
+ *
+ * Board 4c: a claim inside a conflict may be withdrawn too. Where that leaves
+ * one claim in a race, or none in a challenge, the conflict dissolves and the
+ * claim still standing is a plain claim again, keeping its age (§States).
  */
 export async function withdrawClaim(
   actor: Actor,
   businessId: string,
   reason: string,
   now = new Date(),
-): Promise<{ ok: true } | { ok: false; error: "nothing_to_withdraw" }> {
-  const { count } = await prisma.claimSubmission.updateMany({
-    // Not a claim inside an open conflict: that is settled on both sides at once.
-    where: {
-      businessId,
-      claimantId: actor.id,
-      decidedAt: null,
-      conflictsAsA: { none: { resolvedAt: null } },
-      conflictsAsB: { none: { resolvedAt: null } },
-    },
-    data: { outcome: "withdrawn", decidedAt: now, decisionReason: reason },
+): Promise<{ ok: true; dissolved: boolean } | { ok: false; error: "nothing_to_withdraw" }> {
+  return prisma.$transaction(async (tx) => {
+    await lockListingClaims(tx, businessId);
+    const claim = await tx.claimSubmission.findFirst({
+      where: { businessId, claimantId: actor.id, decidedAt: null },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      select: { id: true, conflictId: true },
+    });
+    if (!claim) return { ok: false as const, error: "nothing_to_withdraw" as const };
+
+    await tx.claimSubmission.update({
+      where: { id: claim.id },
+      data: { outcome: "withdrawn", decidedAt: now, decisionReason: reason },
+    });
+    const settled = claim.conflictId ? await settleAfterWithdrawal(tx, claim.conflictId, now) : "continues";
+    return { ok: true as const, dissolved: settled === "dissolved" };
   });
-  return count > 0 ? { ok: true } : { ok: false, error: "nothing_to_withdraw" };
 }
 
 /** What the claimant already has waiting on the listing, for the reassurance line. */

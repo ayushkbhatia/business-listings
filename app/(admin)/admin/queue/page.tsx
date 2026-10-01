@@ -58,7 +58,7 @@ export default async function QueuePage({
   const rows = boardRows(view.rows, { canResolveConflicts: can(seat.actor, "claim.resolve"), now, query: queueQuery({ kind, mine }) });
   const wholeQueue = view.all.length;
   const passRate = wholeQueue === 0 ? 0 : view.passing / wholeQueue;
-  const first = view.rows.find((row) => row.kind !== "conflict" || can(seat.actor, "claim.resolve"));
+  const first = view.rows[0];
 
   const empty =
     wholeQueue === 0 ? (

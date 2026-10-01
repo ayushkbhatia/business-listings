@@ -563,12 +563,15 @@ export async function deliverQueued(limit = 200): Promise<DeliverQueuedResult> {
   /*
      Buyers, addressed from the account. Board 12g: a buyer's held message was
      looked up in `SeatChannel`, where no buyer has a row, so it failed as
-     unaddressable at dawn even once it carried a payload.
+     unaddressable at dawn even once it carried a payload. Board 4c's claimants
+     are addressed the same way and for the same reason — a contested claim
+     holds no seat, so it has no channel row either.
   */
+  const fromAccount = (event: (typeof due)[number]["event"]) => EVENT_AUDIENCE[event] !== "seller";
   const buyerIds = [
     ...new Set(
       due
-        .filter((row) => EVENT_AUDIENCE[row.event] === "buyer" && row.recipientUserId)
+        .filter((row) => fromAccount(row.event) && row.recipientUserId)
         .map((row) => row.recipientUserId as string),
     ),
   ];
@@ -593,7 +596,7 @@ export async function deliverQueued(limit = 200): Promise<DeliverQueuedResult> {
     const buyer = row.recipientUserId ? buyers.get(row.recipientUserId) : undefined;
     const to = !row.recipientUserId
       ? null
-      : EVENT_AUDIENCE[row.event] === "buyer"
+      : fromAccount(row.event)
         ? buyer
           ? buyerAddress(row.channel, buyer)
           : null

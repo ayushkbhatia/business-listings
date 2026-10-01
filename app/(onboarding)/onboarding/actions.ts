@@ -103,7 +103,8 @@ export async function claimListing(formData: FormData): Promise<ClaimActionResul
   if (!result.ok) return result;
 
   /*
-   * The seat is attached now, not when staff approve.
+   * The seat is attached now, not when staff approve — for an uncontested
+   * claim, and only for one.
    *
    * Criterion 1 asks that a supplier reaches a dashboard without staff
    * involvement. Ownership still waits for a person — `claimStatus` does not
@@ -111,16 +112,24 @@ export async function claimListing(formData: FormData): Promise<ClaimActionResul
    * dashboard work. If the claim is rejected, handoff 4's queue detaches them;
    * making them wait first would mean nobody can fill in a listing until a
    * human has been at their desk.
+   *
+   * Board 4c: a contested claim gets no seat. On a listing somebody already
+   * owns, a seat here handed a stranger `seller_owner` on another company's
+   * business — its enquiries, its quotes and its team — the moment they pressed
+   * submit; in a race it made two strangers co-owners of one listing until
+   * somebody decided between them. The seat comes with the award.
    */
-  await prisma.user.update({
-    where: { id: actor.id },
-    data: {
-      businessId,
-      roles: actor.roles.includes("seller_owner")
-        ? [...actor.roles]
-        : [...actor.roles, "seller_owner"],
-    },
-  });
+  if (!result.contested) {
+    await prisma.user.update({
+      where: { id: actor.id },
+      data: {
+        businessId,
+        roles: actor.roles.includes("seller_owner")
+          ? [...actor.roles]
+          : [...actor.roles, "seller_owner"],
+      },
+    });
+  }
 
   // The step has produced its row, so the half-finished copy of it goes. A
   // draft that outlived its submission repopulates a form the supplier has

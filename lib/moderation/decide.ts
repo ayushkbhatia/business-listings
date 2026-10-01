@@ -46,6 +46,8 @@ export type DecisionError =
   | "business_closing"
   | "listing_claimed"
   | "not_staff"
+  /* Board 4c B1: a conflict is handed to somebody who can resolve it. */
+  | "needs_ops_lead"
   /* Board 4c-s: a credential checked against the register. */
   | "register_unread"
   | "register_disagrees"
@@ -338,6 +340,14 @@ export async function assignRef(
   if (input.assigneeId) {
     const assignee = await prisma.user.findUnique({ where: { id: input.assigneeId }, select: { id: true, roles: true } });
     if (!assignee || !can({ id: assignee.id, roles: assignee.roles }, "queue.decide")) return { ok: false, error: "not_staff" };
+    /*
+       Board 4c B1: a moderator may hand a conflict on, and only to somebody
+       who can resolve it. A conflict assigned to a seat without
+       `claim.resolve` is a row that looks owned and cannot move.
+    */
+    if (parsed.subject === "conflict" && !can({ id: assignee.id, roles: assignee.roles }, "claim.resolve")) {
+      return { ok: false, error: "needs_ops_lead" };
+    }
   }
 
   if (!(pending ?? (await pendingRefs())).has(input.ref)) return { ok: false, error: "not_pending" };
