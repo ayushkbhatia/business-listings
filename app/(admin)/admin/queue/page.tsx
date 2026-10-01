@@ -139,25 +139,29 @@ export default async function QueuePage({
     >
       <div className="flex flex-col gap-[var(--gutter)]">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-4">
-          <nav aria-label={t("admin.queue.chips_label")} className="flex flex-wrap items-center gap-2">
-            <ChipLink href={queueHref({ mine, overdue })} selected={kind === null}>
-              {t("admin.queue.chip.all", { n: formatCount(view.total) })}
-            </ChipLink>
-            {QUEUE_KINDS.map((key) => (
-              <ChipLink
-                key={key}
-                href={queueHref({ kind: key, mine, overdue })}
-                selected={kind === key}
-                tone={key === "conflict" && view.counts.conflict > 0 ? "bad" : "default"}
-              >
-                {t(`admin.queue.chip.${key}`, { n: formatCount(view.counts[key]) })}
+          <div className="flex flex-wrap items-center gap-2">
+            <nav aria-label={t("admin.queue.chips_label")} className="flex flex-wrap items-center gap-2">
+              <ChipLink href={queueHref({ mine, overdue })} selected={kind === null}>
+                {t("admin.queue.chip.all", { n: formatCount(view.total) })}
               </ChipLink>
-            ))}
+              {QUEUE_KINDS.map((key) => (
+                <ChipLink
+                  key={key}
+                  href={queueHref({ kind: key, mine, overdue })}
+                  selected={kind === key}
+                  tone={key === "conflict" && view.counts.conflict > 0 ? "bad" : "default"}
+                >
+                  {t(`admin.queue.chip.${key}`, { n: formatCount(view.counts[key]) })}
+                </ChipLink>
+              ))}
+            </nav>
             {/*
-               A toggle beside the kinds rather than a kind of its own: lateness
-               cuts across all six, and it combines with whichever is selected.
-               Counted off the same rows as the kinds, so under Assigned to me it
-               counts what is assigned to you.
+               A toggle beside the kinds, and outside their nav: the kinds split
+               the queue and add up to All (4b's criteria 4 and 5), where
+               lateness cuts across all six and combines with whichever is
+               selected — a seventh chip in that nav would be counted as a kind.
+               Counted off the same rows as the kinds, so under Assigned to me
+               it counts what is assigned to you.
             */}
             <ChipLink
               href={queueHref({ kind, mine, overdue: !overdue })}
@@ -166,7 +170,7 @@ export default async function QueuePage({
             >
               {t("admin.queue.chip.overdue", { n: formatCount(view.overdue) })}
             </ChipLink>
-          </nav>
+          </div>
           <span className="text-body-sm text-muted">{t("admin.queue.sort")}</span>
         </div>
 
