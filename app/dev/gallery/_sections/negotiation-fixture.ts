@@ -112,8 +112,14 @@ function railThread(overrides: Partial<RailThread> & Pick<RailThread, "businessI
     sellerHasWritten: false,
     unread: 0,
     deliveredAt: at("2026-08-19T08:00:00.000Z"),
+    releasedTo: null,
     ...overrides,
   };
+}
+
+/** Every row once one supplier was accepted: theirs reads accepted, the rest not chosen. */
+function decidedRail(rail: RailThread[], winner: string): RailThread[] {
+  return rail.map((thread) => ({ ...thread, releasedTo: winner }));
 }
 
 const RAIL: RailThread[] = [
@@ -161,6 +167,7 @@ export function boardNegotiation(): Negotiation {
       releasedTo: null,
       releasedAt: null,
       winnerName: null,
+      acceptedFromCount: 0,
       buyerCompanyId: null,
     },
     rail: RAIL,
@@ -286,9 +293,11 @@ export function acceptedElsewhereNegotiation(): Negotiation {
       releasedTo: "gb-ng",
       releasedAt: at("2026-08-21T07:00:00.000Z"),
       winnerName: "Northern Gulf Trading",
+      acceptedFromCount: 1,
       buyerCompanyId: null,
       closesAt: at("2026-08-21T07:00:00.000Z"),
     },
+    rail: decidedRail(board.rail, "gb-ng"),
     record: { ...board.record, quotes: [R1, { ...R2, status: "lost" }] },
   };
 }
@@ -307,7 +316,8 @@ export function acceptedHereNegotiation(): Negotiation {
   const board = boardNegotiation();
   return {
     ...board,
-    enquiry: { ...board.enquiry, ref: "ENQ-8848", releasedTo: "gb-aw", releasedAt: at("2026-08-21T05:25:00.000Z") },
+    enquiry: { ...board.enquiry, ref: "ENQ-8848", releasedTo: "gb-aw", releasedAt: at("2026-08-21T05:25:00.000Z"), acceptedFromCount: 1 },
+    rail: decidedRail(board.rail, "gb-aw"),
     record: { ...board.record, quotes: [R1, { ...R2, status: "accepted" }] },
   };
 }

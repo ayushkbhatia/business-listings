@@ -39,6 +39,7 @@ const line = (enquiryLineId: string, qty: number, unitPrice: string, leadTimeDay
   qty,
   unitPrice,
   leadTimeDays,
+  acceptedAt: null,
 });
 
 function quoted(who: ComparedSupplier, minutes: number, lines: QuotedLine[]): ComparedRecipient {
@@ -62,6 +63,7 @@ function quoted(who: ComparedSupplier, minutes: number, lines: QuotedLine[]): Co
       againstRevision: 1,
       paymentTerms: "net_30",
       delivery: "included",
+      allowsPartial: false,
       lines,
     },
   };

@@ -86,7 +86,48 @@ export const PLATFORM_FLOOR: Readonly<Partial<Record<NotificationEvent, readonly
   */
   quote_declined: ["in_app"],
   enquiry_nudged: ["in_app"],
+  /*
+     Board `1o`. Part of a quote accepted releases the buyer's contact details
+     to that supplier, as a whole acceptance does — the answer to a quote they
+     sent, so in-app whatever is switched off, like `1n`'s two. Every other
+     channel follows the seller's own choice for an accepted quote until they
+     choose for this one (`ROUTES_LIKE`).
+  */
+  quote_partly_accepted: ["in_app"],
 };
+
+/**
+ * Events that arrived after the stored matrices were written, routed by the
+ * seller's choice for the event each extends until the seller chooses for it.
+ *
+ * Board `1o`: part of a quote accepted is an acceptance. A seller who asked for
+ * WhatsApp when a quote is accepted wants it when some of their lines are, and
+ * one who switched email off for acceptances did not ask for it here either.
+ * The alerts screen shows the inherited choice, so saving it keeps it.
+ */
+export const ROUTES_LIKE: Readonly<Partial<Record<NotificationEvent, NotificationEvent>>> = {
+  quote_partly_accepted: "quote_accepted",
+};
+
+/** The channels a seller chose for an event: their own choice, or the one it inherits. */
+export function chosenChannels(
+  matrix: RoutingPreference["matrix"],
+  event: NotificationEvent,
+): readonly NotificationChannel[] {
+  const own = matrix[event];
+  if (own) return own;
+  const like = ROUTES_LIKE[event];
+  return like ? (matrix[like] ?? []) : [];
+}
+
+/** A stored matrix with each inherited choice written in, for a form that shows it. */
+export function withInheritedChoices<M extends Partial<Record<string, readonly string[]>>>(matrix: M): M {
+  const filled: Partial<Record<string, readonly string[]>> = { ...matrix };
+  for (const [event, like] of Object.entries(ROUTES_LIKE)) {
+    if (filled[event] === undefined && filled[like!] !== undefined) filled[event] = [...filled[like!]!];
+  }
+  return filled as M;
+}
 
 /** The channels quiet hours actually silence. */
 export const INTERRUPTING_CHANNELS: readonly NotificationChannel[] = ["whatsapp", "sms"];
@@ -217,7 +258,7 @@ export function route(
   context: RoutingContext,
 ): ChannelDecision[] {
   const timeZone = context.timeZone ?? UAE;
-  const chosen = preference.matrix[context.event] ?? [];
+  const chosen = chosenChannels(preference.matrix, context.event);
   const floor = PLATFORM_FLOOR[context.event] ?? [];
   const channels = [...chosen, ...floor.filter((channel) => !chosen.includes(channel))];
   if (channels.length === 0) return [];

@@ -240,6 +240,13 @@ export const EVENT_PARAMS = {
   quote_declined: ["ref", "quoteRef", "summary", "enquiryId", "shortLink"],
   enquiry_nudged: ["ref", "summary", "closesAt", "enquiryId", "shortLink"],
   enquiry_closing: ["ref", "quotes", "closesAt", "enquiryId", "shortLink"],
+  /*
+     Board `1o`. Some of a supplier's lines were accepted and the rest went
+     elsewhere. `lines` is the emitter's phrase for this supplier's own accepted
+     lines (*2 of your 3 lines: …*) and `amount` is theirs alone. Who supplies the
+     rest, and at what price, travels nowhere (`1o` AC3).
+  */
+  quote_partly_accepted: ["ref", "quoteRef", "lines", "amount", "enquiryId", "shortLink"],
 } as const satisfies Record<NotificationEvent, readonly string[]>;
 
 export type ParamsOf<E extends NotificationEvent> = (typeof EVENT_PARAMS)[E][number];
@@ -294,6 +301,8 @@ export const EVENT_SOURCES = {
   enquiry_nudged: ["1n", "1i", "10e"],
   // `sweepClosingEnquiries`, in the hourly sweep.
   enquiry_closing: ["1n"],
+  // `acceptSplit`, from the comparison and from an approved split request.
+  quote_partly_accepted: ["1o", "7b"],
 } as const satisfies Record<NotificationEvent, readonly string[]>;
 
 /**
@@ -330,6 +339,7 @@ export const EVENT_AUDIENCE = {
   quote_declined: "seller",
   enquiry_nudged: "seller",
   enquiry_closing: "buyer",
+  quote_partly_accepted: "seller",
 } as const satisfies Record<NotificationEvent, "seller" | "buyer">;
 
 export type Audience = (typeof EVENT_AUDIENCE)[NotificationEvent];
@@ -411,6 +421,7 @@ export function sampleParams<E extends NotificationEvent>(
     revision: 2,
     quoteRef: "Q-48213-2",
     amount: "AED 15,344",
+    lines: "2 of your 3 lines: rigid grooved coupling ×120 and EPDM gasket ×120",
     planName: "Basic",
     renewsAt: "14 Oct 2026",
     taskList: "photos, opening hours and a second contact",

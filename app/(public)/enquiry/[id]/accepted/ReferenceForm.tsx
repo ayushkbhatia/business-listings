@@ -21,10 +21,13 @@ export function ReferenceForm({
   enquiryId,
   token,
   current,
+  supplierId = null,
 }: {
   enquiryId: string;
   token: string | null;
   current: string | null;
+  /** Board `1o`: whose record, after a split — each supplier holds their own PO number. */
+  supplierId?: string | null;
 }) {
   const [opening, setOpening] = useState(0);
   const [editing, setEditing] = useState(false);
@@ -53,6 +56,7 @@ export function ReferenceForm({
         key={opening}
         enquiryId={enquiryId}
         token={token}
+        supplierId={supplierId}
         initial={current ?? ""}
         onDone={close}
       />
@@ -88,11 +92,13 @@ export function ReferenceForm({
 function ReferenceEditor({
   enquiryId,
   token,
+  supplierId,
   initial,
   onDone,
 }: {
   enquiryId: string;
   token: string | null;
+  supplierId: string | null;
   initial: string;
   onDone: (message: string | null) => void;
 }) {
@@ -119,6 +125,7 @@ function ReferenceEditor({
     <form action={action} className="mt-1 flex max-w-md flex-col gap-2">
       <input type="hidden" name="enquiryId" value={enquiryId} />
       {token ? <input type="hidden" name="t" value={token} /> : null}
+      {supplierId ? <input type="hidden" name="supplier" value={supplierId} /> : null}
       <label htmlFor={inputId} className="text-body-sm text-ink">
         {t("accepted.reference.input")}
       </label>

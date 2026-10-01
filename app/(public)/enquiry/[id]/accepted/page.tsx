@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache } from "react";
 import { Breadcrumb, PublicShell } from "@/components/structure";
-import { getAcceptedRecord } from "@/lib/db/queries/accepted-record";
+import { getAcceptedRecordFor } from "@/lib/db/queries/accepted-record";
+import { recordSupplierQuery } from "@/lib/enquiry/accepted-record";
 import { t } from "@/lib/i18n";
 import { DirectoryFooter } from "@/app/(public)/_chrome";
 import { ViewerNav } from "@/app/(public)/_account-menu";
@@ -42,6 +43,10 @@ import { ReportForm } from "./ReportForm";
  *
  * `B6` is enforced by the loader, not here: a null record and somebody else's
  * enquiry are the same 404.
+ *
+ * Board `1o` D4: after a split each supplier has a record of its own, named by
+ * `?supplier=<slug>`. Without it the page is the main supplier's; a supplier the
+ * buyer accepted nothing from is the same 404.
  */
 export const dynamic = "force-dynamic";
 
@@ -52,18 +57,21 @@ type Search = Promise<Record<string, string | string[] | undefined>>;
  * One read per request for the metadata and the page. Keyed on the id and the
  * token as strings, so `cache` can match them.
  */
-const loadRecord = cache(async (id: string, tokenParam: string | null) => {
+const loadRecord = cache(async (id: string, tokenParam: string | null, supplier: string | null) => {
   const buyerId = await resolveBuyerId(tokenParam);
   if (!buyerId) return null;
-  const record = await getAcceptedRecord(buyerId, id);
+  const record = await getAcceptedRecordFor(buyerId, id, supplier);
   return record ? { buyerId, record } : null;
 });
 
 const tokenOf = (query: Record<string, string | string[] | undefined>) =>
   typeof query["t"] === "string" ? query["t"] : null;
+const supplierOf = (query: Record<string, string | string[] | undefined>) =>
+  typeof query["supplier"] === "string" && query["supplier"] ? query["supplier"] : null;
 
 export async function generateMetadata({ params, searchParams }: { params: Params; searchParams: Search }): Promise<Metadata> {
-  const loaded = await loadRecord((await params).id, tokenOf(await searchParams));
+  const query = await searchParams;
+  const loaded = await loadRecord((await params).id, tokenOf(query), supplierOf(query));
   return {
     // Board `7c-s`: the tab names what the buyer holds.
     title: loaded?.record.quote.proposal ? t("accepted.meta_title_proposal") : t("accepted.meta_title"),
@@ -81,9 +89,12 @@ export default async function AcceptedPage({
   searchParams: Search;
 }) {
   const { id } = await params;
-  const loaded = await loadRecord(id, tokenOf(await searchParams));
+  const query = await searchParams;
+  const loaded = await loadRecord(id, tokenOf(query), supplierOf(query));
   if (!loaded) notFound();
   const { buyerId, record } = loaded;
+  // Board `1o`: after a split, links and forms on this page are about this record's supplier.
+  const split = record.acceptedFrom.length > 1;
 
   // Null once the buyer has an account; the session carries them then.
   const token = await trackingTokenFor(buyerId);
@@ -128,9 +139,11 @@ export default async function AcceptedPage({
           />
         }
         links={{
-          pdf: withToken(`${base}/accepted/pdf`),
+          pdf: withToken(`${base}/accepted/pdf${recordSupplierQuery(record)}`),
           thread: withToken(`${base}/thread/${record.supplier.slug}`),
-          review: withToken(`/review/new?enq=${record.enquiryId}`),
+          review: withToken(
+            `/review/new?${new URLSearchParams({ enq: record.enquiryId, ...(split ? { about: record.supplier.id } : {}) })}`,
+          ),
           /*
              Board `7c-s` Q3: a renewal is a new brief, never an extension of this
              record. To the same firm through `1h-s`'s pinned brief — its service
@@ -150,9 +163,14 @@ export default async function AcceptedPage({
             : null,
         }}
         referenceForm={
-          <ReferenceForm enquiryId={record.enquiryId} token={token} current={record.buyerReference} />
+          <ReferenceForm
+            enquiryId={record.enquiryId}
+            token={token}
+            current={record.buyerReference}
+            supplierId={split ? record.supplier.id : null}
+          />
         }
-        reportForm={<ReportForm enquiryId={record.enquiryId} token={token} />}
+        reportForm={<ReportForm enquiryId={record.enquiryId} token={token} supplierId={split ? record.supplier.id : null} />}
       />
     </PublicShell>
   );

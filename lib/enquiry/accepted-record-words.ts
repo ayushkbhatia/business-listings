@@ -1,4 +1,4 @@
-import { formatAED, formatDate } from "@/lib/format";
+import { formatAED, formatDate, formatList } from "@/lib/format";
 import { feeOnBasis } from "@/lib/quote/proposal-words";
 import { t } from "@/lib/i18n";
 import { windowExpired, type AcceptedRecord } from "./accepted-record";
@@ -72,4 +72,24 @@ export function reviewRefusalWords(refusal: ReviewRefusal, supplierName: string)
   return refusal === "own_business"
     ? t("accepted.review.own_business", { supplier: supplierName })
     : t("reviewwrite.error.not_permitted");
+}
+
+/**
+ * Who else the buyer's contact went to, said beside *Contact details released*.
+ *
+ * *Only to this supplier* is the claim on an ordinary record. After a split
+ * (board `1o` D4) it would be false — every supplier accepted from has the
+ * buyer's details for the lines taken from them — so the record names them.
+ */
+export function releaseLine(record: Pick<AcceptedRecord, "acceptedFrom" | "supplier" | "declinedCount">): string {
+  const others = record.acceptedFrom.filter((supplier) => supplier.businessId !== record.supplier.id);
+  if (others.length > 0) {
+    const names = formatList(others.map((supplier) => supplier.displayName));
+    return record.declinedCount > 0
+      ? t("accepted.released_split_declined", { others: names, count: record.declinedCount })
+      : t("accepted.released_split", { others: names });
+  }
+  return record.declinedCount > 0
+    ? t("accepted.released_declined", { count: record.declinedCount })
+    : t("accepted.released_only");
 }

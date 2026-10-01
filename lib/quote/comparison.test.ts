@@ -39,6 +39,7 @@ const priced = (enquiryLineId: string | null, qty: number | null, unitPrice: str
   qty,
   unitPrice,
   leadTimeDays,
+  acceptedAt: null,
 });
 
 function quoted(
@@ -67,6 +68,7 @@ function quoted(
       againstRevision: 1,
       paymentTerms: "net_30",
       delivery: "included",
+      allowsPartial: false,
       lines,
       ...over,
     },

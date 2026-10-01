@@ -5,7 +5,17 @@ import { mayWriteReview } from "@/lib/auth/guards";
 import { requirementHeadline } from "@/lib/enquiry/inbox-status";
 import { quoteTotalFils } from "@/lib/quote/money";
 import { toProposalFigure, PROPOSAL_FIGURE_SELECT } from "@/lib/quote/proposal";
-import { canReview, isEditable, provenanceOf, reviewableReplies, reviewWindowFor } from "./eligibility";
+import { coveredLines } from "@/lib/enquiry/release";
+import {
+  acceptedAcrossSuppliers,
+  acceptedSuppliers,
+  canReview,
+  isEditable,
+  PROVENANCE_ENQUIRY_SELECT,
+  provenanceOf,
+  reviewableSubjects,
+  reviewWindowFor,
+} from "./eligibility";
 import { reviewPhotoStorage, type ReviewPhotoStorage } from "./photos";
 import { ENQUIRY_FOR_REVIEW_SELECT, toEnquiryForReview } from "./service";
 import { EMPTY_REVIEW_FIELDS, parsePhotoRefs, type ReviewFields } from "./write";
@@ -102,18 +112,34 @@ export async function loadReviewWrite(input: {
   const gate = toEnquiryForReview(row);
   const company = row.buyer.buyerCompany?.name ?? null;
 
-  const baseEnquiry = async (subjectId: string | null): Promise<ReviewWriteEnquiry> => ({
-    id: row.id,
-    ref: row.ref,
-    headline: requirementHeadline(row.requirement),
-    place: row.area?.name ?? row.deliverToArea ?? null,
-    acceptedAt: subjectId && gate.contactReleasedToBusinessId === subjectId ? gate.contactReleasedAt : null,
-    value: subjectId && gate.contactReleasedToBusinessId === subjectId ? await acceptedValue(row.id, subjectId) : null,
-  });
+  const split = acceptedAcrossSuppliers(gate);
 
-  /* ── Already reviewed: the buyer's own copy, whatever the gate says now. ── */
-  const existing = await prisma.review.findUnique({
-    where: { enquiryId: row.id },
+  const baseEnquiry = async (subjectId: string | null): Promise<ReviewWriteEnquiry> => {
+    // Board `1o` D4: accepted from this supplier, when the buyer's contact went to them.
+    const accepted = subjectId ? acceptedSuppliers(gate).find((supplier) => supplier.businessId === subjectId) : undefined;
+    return {
+      id: row.id,
+      ref: row.ref,
+      headline: requirementHeadline(row.requirement),
+      place: row.area?.name ?? row.deliverToArea ?? null,
+      acceptedAt: accepted ? accepted.contactReleasedAt : null,
+      value: accepted ? await acceptedValue(row.id, accepted.businessId) : null,
+      ...(split ? { split: true } : {}),
+    };
+  };
+
+  /*
+     ── Already reviewed: the buyer's own copy, whatever the gate says now. ──
+
+     Board `1o` D6: an enquiry accepted across suppliers carries one review per
+     supplier. Its copy is the one about the supplier named; with none named, a
+     supplier still to review comes first, and only once every one is written is
+     the latest of them shown.
+  */
+  const ownCopy = !split ? {} : input.about ? { businessId: input.about } : reviewableSubjects(gate).length === 0 ? {} : null;
+  const existing = ownCopy && await prisma.review.findFirst({
+    where: { enquiryId: row.id, ...ownCopy },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     select: {
       id: true,
       businessId: true,
@@ -133,7 +159,7 @@ export async function loadReviewWrite(input: {
       replyRemovedAt: true,
       media: { select: { id: true, storagePath: true, alt: true, width: true, height: true, bytes: true }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }] },
       business: { select: SUPPLIER_SELECT },
-      enquiry: { select: { contactReleasedToBusinessId: true } },
+      enquiry: { select: PROVENANCE_ENQUIRY_SELECT },
       _count: { select: { revisions: true } },
     },
   });
@@ -222,7 +248,7 @@ export async function loadReviewWrite(input: {
       case "ambiguous_subject": {
         const suppliers = await prisma.business.findMany({
           // The gate's list: never the buyer's own business, which it would refuse.
-          where: { id: { in: [...reviewableReplies(gate)] } },
+          where: { id: { in: [...reviewableSubjects(gate)] } },
           orderBy: [{ displayName: "asc" }, { id: "asc" }],
           select: SUPPLIER_SELECT,
         });
@@ -230,6 +256,7 @@ export async function loadReviewWrite(input: {
           kind: "choose",
           enquiry: await baseEnquiry(null),
           suppliers: suppliers.map(toSupplier),
+          split,
           others,
         };
       }
@@ -332,11 +359,11 @@ export async function writeReviewLinkFor(
   const candidates = await prisma.enquiry.findMany({
     where: {
       buyerId,
-      review: null,
-      OR: [
-        { contactReleasedToBusinessId: businessId },
-        { recipients: { some: { businessId, firstReplyAt: { not: null } } } },
-      ],
+      // Not yet reviewed about this supplier. Whether the enquiry takes another
+      // review at all is the gate's to say below — one, or one per supplier
+      // accepted from (board `1o` D6).
+      reviews: { none: { businessId } },
+      recipients: { some: { businessId, OR: [{ firstReplyAt: { not: null } }, { contactReleasedAt: { not: null } }] } },
     },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: 5,
@@ -375,17 +402,19 @@ async function acceptedValue(enquiryId: string, businessId: string): Promise<Rev
     where: { enquiryId, businessId, status: "accepted" },
     orderBy: [{ acceptedAt: "desc" }, { revision: "desc" }, { id: "asc" }],
     select: {
-      lines: { select: { qty: true, unitPrice: true } },
+      lines: { select: { qty: true, unitPrice: true, acceptedAt: true }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }] },
       proposal: { select: PROPOSAL_FIGURE_SELECT },
     },
   });
   if (!quote) return null;
   const proposal = toProposalFigure(quote.proposal);
   if (proposal) return { kind: "proposal", feeAed: proposal.feeAed, feeBasisLabel: proposal.feeBasisLabel };
-  if (quote.lines.length === 0) return null;
+  // Board `1o` D2: the lines accepted from this supplier, which after a split is part of their quote.
+  const lines = coveredLines(quote.lines);
+  if (lines.length === 0) return null;
   return {
     kind: "goods",
-    fils: quoteTotalFils(quote.lines.map((line) => ({ qty: line.qty, unitPrice: line.unitPrice.toString() }))),
+    fils: quoteTotalFils(lines.map((line) => ({ qty: line.qty, unitPrice: line.unitPrice.toString() }))),
   };
 }
 
@@ -419,7 +448,10 @@ async function otherEnquiries(
       requirement: true,
       createdAt: true,
       reviewDraft: { select: { businessId: true } },
-      review: { select: { id: true, createdAt: true, business: { select: { displayName: true } } } },
+      reviews: {
+        select: { id: true, businessId: true, createdAt: true, business: { select: { displayName: true } } },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      },
     },
     }),
   ]);
@@ -434,8 +466,15 @@ async function otherEnquiries(
     return { row, gate, verdict: canReview(buyerId, gate, undefined, now) };
   });
   const subjectIds = new Set<string>();
+  /*
+     Reviewed is the row's state once nothing is left to write: the enquiry's one
+     review, or after a split every supplier accepted from (board `1o` D6). A
+     split with a review written and one to go is still open, and says so.
+  */
+  const reviewedRow = (row: (typeof rows)[number], verdict: (typeof judged)[number]["verdict"]) =>
+    row.reviews.length > 0 && !verdict.ok && verdict.reason === "already_reviewed" ? row.reviews[0]! : null;
   for (const { row, gate, verdict } of judged) {
-    if (row.review) continue;
+    if (reviewedRow(row, verdict)) continue;
     if ("businessId" in verdict) subjectIds.add(verdict.businessId);
     else if (verdict.reason === "not_yet_open" && gate.contactReleasedToBusinessId) {
       subjectIds.add(gate.contactReleasedToBusinessId);
@@ -452,10 +491,11 @@ async function otherEnquiries(
 
   const listed: (OtherEnquiry & { sortKey: [number, number] })[] = judged.map(({ row, gate, verdict }) => {
     const base = { id: row.id, ref: row.ref, headline: requirementHeadline(row.requirement) };
-    if (row.review) {
+    const reviewed = reviewedRow(row, verdict);
+    if (reviewed) {
       return {
         ...base,
-        state: { kind: "reviewed", on: row.review.createdAt, supplierName: row.review.business.displayName },
+        state: { kind: "reviewed", on: reviewed.createdAt, supplierName: reviewed.business.displayName },
         sortKey: [1, -row.createdAt.getTime()],
       };
     }
@@ -474,7 +514,11 @@ async function otherEnquiries(
     }
     switch (verdict.reason) {
       case "ambiguous_subject":
-        return { ...base, state: { kind: "choose", count: reviewableReplies(gate).length }, sortKey: [0, Number.MAX_SAFE_INTEGER] };
+        return {
+          ...base,
+          state: { kind: "choose", count: reviewableSubjects(gate).length, split: acceptedAcrossSuppliers(gate) },
+          sortKey: [0, Number.MAX_SAFE_INTEGER],
+        };
       case "window_closed":
         return {
           ...base,

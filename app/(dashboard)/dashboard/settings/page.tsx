@@ -6,6 +6,7 @@ import { mayCloseAccount } from "@/lib/auth/guards";
 import { prisma } from "@/lib/db/client";
 import { t } from "@/lib/i18n";
 import { defaultAutoReplyBody } from "@/lib/messaging/auto-reply";
+import { withInheritedChoices } from "@/lib/notify/routing";
 import { resolveNotificationSenders } from "@/lib/notify/senders";
 import { channelsFor, ADDABLE_KINDS } from "@/lib/team/channels";
 import { maySeeOtherSeats, reachabilityFor } from "@/lib/team/reachability";
@@ -55,6 +56,7 @@ const DEFAULTS: AlertsValue = {
     enquiry_received: ["whatsapp", "in_app"],
     enquiry_escalated: ["whatsapp", "email", "in_app"],
     quote_accepted: ["whatsapp", "email", "in_app"],
+    quote_partly_accepted: ["whatsapp", "email", "in_app"],
     quote_expiring: ["in_app"],
     review_posted: ["email", "in_app"],
     document_expiring: ["email", "in_app"],
@@ -125,7 +127,8 @@ export default async function SettingsPage({
 
   const value: AlertsValue = preference
     ? {
-        routing: (preference.routing ?? {}) as Record<string, string[]>,
+        // Board `1o`: an event the seller has not chosen for shows the choice it inherits, which `route()` reads.
+        routing: withInheritedChoices((preference.routing ?? {}) as Record<string, string[]>),
         quietHoursEnabled: preference.quietHoursEnabled,
         quietFromHour: preference.quietFromHour,
         quietToHour: preference.quietToHour,

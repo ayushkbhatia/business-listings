@@ -27,9 +27,13 @@ import type { RecordFormState } from "./_state";
 
 function fields(formData: FormData) {
   const token = formData.get("t");
+  const supplier = formData.get("supplier");
   return {
     enquiryId: String(formData.get("enquiryId") ?? ""),
     token: typeof token === "string" && token ? token : null,
+    // Board `1o`: which supplier's record, after a split. Checked by the service
+    // against the suppliers accepted from; absent, the main one.
+    businessId: typeof supplier === "string" && supplier ? supplier : undefined,
   };
 }
 
@@ -37,12 +41,12 @@ export async function saveReferenceAction(
   _previous: RecordFormState,
   formData: FormData,
 ): Promise<RecordFormState> {
-  const { enquiryId, token } = fields(formData);
+  const { enquiryId, token, businessId } = fields(formData);
   const buyerId = await resolveBuyerId(token);
   if (!buyerId) return { status: "error", message: t("accepted.error.not_found") };
 
   const value = String(formData.get("reference") ?? "");
-  const result = await setBuyerReference({ buyerId, refOrId: enquiryId, value });
+  const result = await setBuyerReference({ buyerId, refOrId: enquiryId, value, businessId });
 
   if (!result.ok) {
     const message =
@@ -70,7 +74,7 @@ export async function reportProblemAction(
   _previous: RecordFormState,
   formData: FormData,
 ): Promise<RecordFormState> {
-  const { enquiryId, token } = fields(formData);
+  const { enquiryId, token, businessId } = fields(formData);
   const buyerId = await resolveBuyerId(token);
   if (!buyerId) return { status: "error", message: t("accepted.error.not_found") };
 
@@ -78,6 +82,7 @@ export async function reportProblemAction(
     buyerId,
     refOrId: enquiryId,
     detail: String(formData.get("detail") ?? ""),
+    businessId,
   });
 
   if (!result.ok) {

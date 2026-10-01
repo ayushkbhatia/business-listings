@@ -106,7 +106,9 @@ export function QuoteComparisonView({
   const base = `/enquiry/${encodeURIComponent(enquiry.ref)}`;
   const style = moneyStyle(model);
   const quotedRows = model.rows.filter((row): row is QuotedRow => row.kind === "quoted");
-  const accepted = model.phase === "accepted" ? quotedRows.find((row) => row.state === "accepted") ?? null : null;
+  // Board `1o`: one supplier, or several after a split — each named, each with a record.
+  const acceptedRows = model.phase === "accepted" ? quotedRows.filter((row) => row.state === "accepted") : [];
+  const accepted = acceptedRows[0] ?? null;
   const messageable = model.phase === "open" && model.rows.some((row) => row.kind !== "no_quote" || !row.declinedBySupplier);
   // Said before the button is pressed, not after — and only where there is one. The record keeps it.
   const explainsAccept = mayAccept || model.phase === "accepted";
@@ -183,10 +185,15 @@ export function QuoteComparisonView({
               </Link>
             }
           >
-            {t("compare_quotes.accepted_notice", {
-              supplier: accepted.supplier.displayName,
-              date: formatDate(enquiry.acceptedAt ?? accepted.quote.sentAt),
-            })}
+            {acceptedRows.length > 1
+              ? t("compare_quotes.accepted_notice_split", {
+                  suppliers: formatList(acceptedRows.map((row) => row.supplier.displayName)),
+                  date: formatDate(enquiry.acceptedAt ?? accepted.quote.sentAt),
+                })
+              : t("compare_quotes.accepted_notice", {
+                  supplier: accepted.supplier.displayName,
+                  date: formatDate(enquiry.acceptedAt ?? accepted.quote.sentAt),
+                })}
           </Alert>
         ) : null}
         {approvalNotice}
@@ -675,13 +682,16 @@ function RowActions({
   );
 
   if (row.state === "accepted") {
+    // Board `1o` D4: after a split, each supplier's own record.
+    const split = model.rows.filter((other) => other.kind === "quoted" && other.state === "accepted").length > 1;
+    const query = new URLSearchParams({ ...(split ? { supplier: row.supplier.slug } : {}), ...(token ? { t: token } : {}) });
     return (
       <span className="flex flex-col items-start gap-1.5">
         <StatusBadge tone="ok" shape="chip">
           {t("compare_quotes.state.accepted")}
         </StatusBadge>
         <Link
-          href={`${base}/accepted${carry}`}
+          href={`${base}/accepted${query.size > 0 ? `?${query}` : ""}`}
           className="rounded-tag text-caption text-moss underline-offset-2 hover:underline focus-visible:shadow-focus focus-visible:outline-none"
         >
           {t("compare_quotes.view_record")}

@@ -6,6 +6,7 @@ import {
   overridesQuietHours,
   quietLiftsAt,
   route,
+  withInheritedChoices,
   type RoutingPreference,
 } from "./routing";
 
@@ -207,5 +208,37 @@ describe("board 12g B7 — what a seller cannot switch off", () => {
     for (const channels of Object.values(PLATFORM_FLOOR)) {
       for (const channel of channels ?? []) expect(["email", "in_app"]).toContain(channel);
     }
+  });
+});
+
+describe("board 1o — part of a quote accepted routes as an acceptance", () => {
+  it("follows the seller's choice for an accepted quote until they choose for it", () => {
+    const seller: RoutingPreference = { ...PREFERENCE, matrix: { quote_accepted: ["whatsapp", "email", "in_app"] } };
+    expect(route(seller, { event: "quote_partly_accepted", now: MONDAY_1000 }).map((d) => d.channel)).toEqual([
+      "whatsapp",
+      "email",
+      "in_app",
+    ]);
+  });
+
+  it("sends no email to a seller who switched it off for acceptances: in-app only, from the floor", () => {
+    const quiet: RoutingPreference = { ...PREFERENCE, matrix: { quote_accepted: [] } };
+    expect(actions(route(quiet, { event: "quote_partly_accepted", now: MONDAY_1000 }))).toEqual({ in_app: "send" });
+  });
+
+  it("reads the seller's own choice once there is one", () => {
+    const own: RoutingPreference = { ...PREFERENCE, matrix: { quote_accepted: ["whatsapp"], quote_partly_accepted: ["email"] } };
+    expect(route(own, { event: "quote_partly_accepted", now: MONDAY_1000 }).map((d) => d.channel)).toEqual(["email", "in_app"]);
+  });
+
+  it("shows the inherited choice on the form, so saving it keeps it", () => {
+    expect(withInheritedChoices({ quote_accepted: ["whatsapp", "in_app"] })).toEqual({
+      quote_accepted: ["whatsapp", "in_app"],
+      quote_partly_accepted: ["whatsapp", "in_app"],
+    });
+    expect(withInheritedChoices({ quote_accepted: ["whatsapp"], quote_partly_accepted: [] })).toEqual({
+      quote_accepted: ["whatsapp"],
+      quote_partly_accepted: [],
+    });
   });
 });

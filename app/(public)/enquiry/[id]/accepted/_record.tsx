@@ -13,6 +13,7 @@ import { t } from "@/lib/i18n";
 import {
   leadTime,
   recordSummaryParts,
+  releaseLine,
   reviewRefusalWords,
   totalLabel,
   windowLine,
@@ -140,11 +141,7 @@ export function AcceptedRecordView({
           <Card padded>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
               <StatusBadge tone="ok">{t("accepted.released")}</StatusBadge>
-              <p className="text-body-sm text-body">
-                {record.declinedCount > 0
-                  ? t("accepted.released_declined", { count: record.declinedCount })
-                  : t("accepted.released_only")}
-              </p>
+              <p className="text-body-sm text-body">{releaseLine(record)}</p>
             </div>
 
             <dl className="mt-5 grid gap-5 @xl:grid-cols-3">
@@ -250,7 +247,8 @@ export function AcceptedRecordView({
           ) : (
           <Card padded={false}>
             <div className="flex flex-wrap items-baseline justify-between gap-2 px-[var(--card-pad)] pb-3 pt-[var(--card-pad)]">
-              <h2 className="text-h3 text-ink">{t("accepted.quoted.title")}</h2>
+              {/* Board `1o`: part of a quote is said as the part, not as what was quoted. */}
+              <h2 className="text-h3 text-ink">{t(record.partOfQuote ? "accepted.quoted.title_part" : "accepted.quoted.title")}</h2>
               <p
                 className={
                   expired
@@ -287,7 +285,7 @@ export function AcceptedRecordView({
             >
               <table className="w-full min-w-[40rem] border-collapse text-left">
                 <caption className="sr-only">
-                  {t("accepted.quoted.caption", { supplier: supplier.displayName })}
+                  {t(record.partOfQuote ? "accepted.quoted.caption_part" : "accepted.quoted.caption", { supplier: supplier.displayName })}
                 </caption>
                 <thead>
                   <tr className="border-y border-line bg-paper-sunk">

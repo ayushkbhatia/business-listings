@@ -9,6 +9,7 @@ import {
   type Ask,
   type Seat,
 } from "./authority";
+import { readSplit, sameParts, splitAsk, type AskPart } from "./split-request";
 import { companySeats, lockCompany, quoteAsk, writeCompanyEvent, type MonthSpend } from "./store";
 
 /**
@@ -85,7 +86,7 @@ export async function readPolicy(tx: Prisma.TransactionClient, companyId: string
  */
 export async function evaluateGate(
   tx: Prisma.TransactionClient,
-  input: { companyId: string; raiserId: string; quoteId: string; now: Date },
+  input: GateSubject,
 ): Promise<GateEvaluation> {
   await lockCompany(tx, input.companyId);
   const gate = await assessGate(tx, input);
@@ -100,16 +101,29 @@ export async function evaluateGate(
  */
 export async function assessGate(
   db: Prisma.TransactionClient,
-  input: { companyId: string; raiserId: string; quoteId: string; now: Date },
+  input: GateSubject,
 ): Promise<GateEvaluation | null> {
   const [policy, team, ask] = await Promise.all([
     readPolicy(db, input.companyId),
     companySeats(db, input.companyId, input.now),
-    quoteAsk(db, input.quoteId),
+    input.parts ? splitAsk(db, input.parts) : quoteAsk(db, input.quoteId),
   ]);
   const raiser = team.seats.find((seat) => seat.userId === input.raiserId);
   if (!raiser || !ask) return null;
   return { ...team, policy, raiser, ask, need: approvalNeed(policy, raiser, ask) };
+}
+
+/**
+ * What the rule is asked about: one quote, or — board `1o` D5 — the parts of a
+ * split, checked once on their combined value. `quoteId` is then the split's
+ * main supplier's quote, which the request and the history name.
+ */
+export interface GateSubject {
+  companyId: string;
+  raiserId: string;
+  quoteId: string;
+  now: Date;
+  parts?: readonly AskPart[];
 }
 
 /** A PO number or cost code, trimmed and length-checked; blank is absent. */
@@ -124,8 +138,12 @@ export function readReference(value: string | null | undefined): string | null |
 export function requireReferences(
   policy: Pick<CompanyPolicy, "requirePoNumber" | "requireCostCode">,
   refs: { poNumber: string | null; costCode: string | null },
+  /** Board `1o` D5: a split's PO numbers, one per supplier, each required where the rule requires one. */
+  parts?: readonly Pick<AskPart, "poNumber">[],
 ): void {
-  if (policy.requirePoNumber && !refs.poNumber) throw new GateRefused("po_required");
+  if (policy.requirePoNumber && (parts ? parts.some((part) => !part.poNumber) : !refs.poNumber)) {
+    throw new GateRefused("po_required");
+  }
   if (policy.requireCostCode && !refs.costCode) throw new GateRefused("cost_code_required");
 }
 
@@ -133,18 +151,22 @@ export interface AcceptanceGateInput {
   companyId: string;
   enquiryId: string;
   quoteId: string;
-  /** For the history line, which people read. */
+  /** For the history line, which people read. A split names every quote in it. */
   quoteRef: string;
   raiserId: string;
   now: Date;
   poNumber: string | null;
   costCode: string | null;
   approval: { id: string; approverId: string } | null;
+  /** Board `1o` D5: a split's parts, each with its own PO number. Absent for one quote. */
+  parts?: readonly AskPart[];
 }
 
 export interface AcceptanceGateOutcome {
   poNumber: string | null;
   costCode: string | null;
+  /** Board `1o` D5: each part's PO number, by quote, where this was a split. */
+  poNumbers: ReadonlyMap<string, string | null>;
   /** Whose authority committed it. */
   committedById: string;
 }
@@ -166,6 +188,7 @@ export async function gateCompanyAcceptance(
   const gate = await evaluateGate(tx, input);
 
   let refs = { poNumber: input.poNumber, costCode: input.costCode };
+  let parts = input.parts ?? null;
   let committedById = input.raiserId;
 
   if (input.approval) {
@@ -179,6 +202,7 @@ export async function gateCompanyAcceptance(
         valueFils: true,
         poNumber: true,
         costCode: true,
+        split: true,
       },
     });
     if (
@@ -188,6 +212,11 @@ export async function gateCompanyAcceptance(
       request.raisedById !== input.raiserId ||
       request.status !== "pending"
     ) {
+      throw new GateRefused("approval_closed");
+    }
+    // A split approves exactly the lines that were asked about, from exactly those quotes.
+    const asked = readSplit(request.split);
+    if (Boolean(asked) !== Boolean(input.parts) || (asked && input.parts && !sameParts(asked, input.parts))) {
       throw new GateRefused("approval_closed");
     }
     if (request.valueFils !== gate.ask.valueFils) throw new GateRefused("approval_changed");
@@ -201,7 +230,8 @@ export async function gateCompanyAcceptance(
     if (approver.userId === input.raiserId) throw new GateRefused("not_approver");
 
     refs = { poNumber: request.poNumber, costCode: request.costCode };
-    requireReferences(gate.policy, refs);
+    parts = asked;
+    requireReferences(gate.policy, refs, parts ?? undefined);
 
     const decided = await tx.quoteApproval.updateMany({
       where: { id: input.approval.id, status: "pending" },
@@ -224,7 +254,7 @@ export async function gateCompanyAcceptance(
       at: input.now,
     });
   } else {
-    requireReferences(gate.policy, refs);
+    requireReferences(gate.policy, refs, parts ?? undefined);
     if (gate.need.required) throw new GateRefused("approval_required");
     await writeCompanyEvent(tx, {
       companyId: input.companyId,
@@ -246,7 +276,11 @@ export async function gateCompanyAcceptance(
     at: input.now,
   });
 
-  return { ...refs, committedById };
+  return {
+    ...refs,
+    poNumbers: new Map((parts ?? []).map((part) => [part.quoteId, part.poNumber])),
+    committedById,
+  };
 }
 
 /**

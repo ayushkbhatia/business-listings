@@ -324,6 +324,8 @@ async function LeadDetailPane({
         outcomeAt: true,
         outcomeReason: true,
         outcomeBy: { select: { fullName: true } },
+        // Board `1o` D4: accepted from this supplier — one of several after a split.
+        contactReleasedAt: true,
         enquiry: { select: { contactReleasedToBusinessId: true, _count: { select: { recipients: true } } } },
       },
     }),
@@ -331,7 +333,7 @@ async function LeadDetailPane({
   ]);
   if (!lead || !recipient) notFound();
 
-  const observedWin = recipient.enquiry.contactReleasedToBusinessId === seat.businessId;
+  const observedWin = recipient.contactReleasedAt !== null;
   const observedLoss = lead.state === "declined";
   const outcome = recipient.outcome ?? (observedWin ? "won" : observedLoss ? "lost" : null);
   const observed = recipient.outcome === null && (observedWin || observedLoss);
@@ -350,6 +352,7 @@ async function LeadDetailPane({
     {
       businessId: seat.businessId,
       contactReleasedToBusinessId: recipient.enquiry.contactReleasedToBusinessId,
+      releasedToThis: observedWin,
       recipientState: lead.state,
       outcome: recipient.outcome,
       suspended,

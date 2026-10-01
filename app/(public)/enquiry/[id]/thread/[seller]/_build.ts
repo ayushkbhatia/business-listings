@@ -63,7 +63,8 @@ export function buildNegotiationView(
   const rows: (RailRowView & { order: number; delivered: number })[] = rail.map((thread) => {
     const facts = {
       businessId: thread.businessId,
-      releasedTo: enquiry.releasedTo,
+      // Board `1o`: each row's own release, so every supplier accepted from reads accepted.
+      releasedTo: thread.releasedTo,
       declinedAt: thread.declinedAt,
       latestQuote: thread.latestQuote,
       lastMessage: thread.lastMessage,
@@ -221,7 +222,9 @@ export function buildNegotiationView(
     };
     leadingChips.push({ label: t("thread.chip.new_revision"), text: t("thread.chip.new_revision_text") });
   } else if (offer.kind === "accepted_here") {
-    accept = { kind: "record", href: withToken(`${base}/accepted`), label: t("negotiation.accept.view_record") };
+    // Board `1o` D4: after a split, this supplier's own record.
+    const record = enquiry.acceptedFromCount > 1 ? `?${new URLSearchParams({ supplier: supplier.slug })}` : "";
+    accept = { kind: "record", href: withToken(`${base}/accepted${record}`), label: t("negotiation.accept.view_record") };
   }
   /*
      Build plan 9.4: a person the service would refuse is offered no accept of

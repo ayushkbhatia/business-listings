@@ -35,6 +35,9 @@ const TYPICAL: AcceptedRecord = {
   acceptedAt: ACCEPTED,
   isBrief: true,
   declinedCount: 3,
+  acceptedFrom: [],
+  partOfQuote: false,
+  linesNotAccepted: [],
   quote: {
     id: "q-7cs",
     ref: "PR-40812-R1",

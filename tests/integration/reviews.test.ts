@@ -42,7 +42,7 @@ beforeAll(async () => {
   // ENQ-8802 is seeded already accepted, and its review is seeded too — so a
   // fresh accepted enquiry is made here rather than fighting the fixture.
   const open = await prisma.enquiry.findFirstOrThrow({
-    where: { contactReleasedToBusinessId: null, review: null },
+    where: { contactReleasedToBusinessId: null, reviews: { none: {} } },
     select: { id: true, buyerId: true, recipients: { select: { businessId: true }, take: 1 } },
   });
   openEnquiryId = open.id;
@@ -450,9 +450,13 @@ describe("asking for a review", () => {
 
   it("is refused once the deal is older than ninety days", async () => {
     const id = await acceptedEnquiry();
-    await prisma.enquiry.update({
-      where: { id },
-      data: { contactReleasedAt: new Date(Date.now() - 91 * 86_400_000) },
+    // An acceptance ninety-one days old: the enquiry's stamp and, since board `1o`,
+    // the supplier's own release, which the request window runs from.
+    const old = new Date(Date.now() - 91 * 86_400_000);
+    await prisma.enquiry.update({ where: { id }, data: { contactReleasedAt: old } });
+    await prisma.enquiryRecipient.update({
+      where: { enquiryId_businessId: { enquiryId: id, businessId } },
+      data: { contactReleasedAt: old },
     });
     expect(await requestReview({ businessId, enquiryId: id })).toEqual({ ok: false, error: "too_old" });
   });

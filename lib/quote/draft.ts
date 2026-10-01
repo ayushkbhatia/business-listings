@@ -60,6 +60,8 @@ export interface SaveDraftInput {
   /** As chosen so far; anything that is not a value saves as *not stated*. */
   paymentTerms?: string | null;
   delivery?: string | null;
+  /** Board `1o` D1: whether the prices hold for part of the quote. Off unless ticked. */
+  allowsPartial?: boolean;
   lines: DraftLineInput[];
 }
 
@@ -175,6 +177,7 @@ export async function findDraft(enquiryId: string, businessId: string) {
       validityDays: true,
       paymentTerms: true,
       delivery: true,
+      allowsPartial: true,
       updatedAt: true,
       lines: {
         orderBy: { sortOrder: "asc" },
@@ -271,6 +274,7 @@ export async function saveDraft(
     validityDays,
     paymentTerms,
     delivery,
+    allowsPartial: input.allowsPartial === true,
     lines: { create: lines },
   };
 

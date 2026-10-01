@@ -159,19 +159,32 @@ describe("the buyer's own history (B8)", () => {
   it("takes the median over answered enquiries only", () => {
     const history = historyOf(
       [
-        { createdAt: new Date("2026-03-01T08:00:00Z"), firstQuoteAt: new Date("2026-03-01T09:00:00Z"), acceptedBusinessId: "b1" },
-        { createdAt: new Date("2026-04-01T08:00:00Z"), firstQuoteAt: new Date("2026-04-01T11:00:00Z"), acceptedBusinessId: "b1" },
-        { createdAt: new Date("2026-05-01T08:00:00Z"), firstQuoteAt: null, acceptedBusinessId: null },
-        { createdAt: new Date("2026-06-01T08:00:00Z"), firstQuoteAt: new Date("2026-06-01T10:00:00Z"), acceptedBusinessId: "b2" },
+        { createdAt: new Date("2026-03-01T08:00:00Z"), firstQuoteAt: new Date("2026-03-01T09:00:00Z"), acceptedBusinessIds: ["b1"] },
+        { createdAt: new Date("2026-04-01T08:00:00Z"), firstQuoteAt: new Date("2026-04-01T11:00:00Z"), acceptedBusinessIds: ["b1"] },
+        { createdAt: new Date("2026-05-01T08:00:00Z"), firstQuoteAt: null, acceptedBusinessIds: [] },
+        { createdAt: new Date("2026-06-01T08:00:00Z"), firstQuoteAt: new Date("2026-06-01T10:00:00Z"), acceptedBusinessIds: ["b2"] },
         // Last year: not in the window.
-        { createdAt: new Date("2025-11-01T08:00:00Z"), firstQuoteAt: new Date("2025-11-01T08:10:00Z"), acceptedBusinessId: "b2" },
+        { createdAt: new Date("2025-11-01T08:00:00Z"), firstQuoteAt: new Date("2025-11-01T08:10:00Z"), acceptedBusinessIds: ["b2"] },
       ],
       since,
     );
     expect(history).toEqual({ sent: 4, medianFirstQuoteMs: 2 * HOUR, answered: 3, accepted: 3, repeatSuppliers: 1 });
   });
 
+  it("board 1o: counts a split once as accepted, and each supplier in it toward repeats", () => {
+    const history = historyOf(
+      [
+        { createdAt: new Date("2026-03-01T08:00:00Z"), firstQuoteAt: null, acceptedBusinessIds: ["b1", "b2"] },
+        { createdAt: new Date("2026-04-01T08:00:00Z"), firstQuoteAt: null, acceptedBusinessIds: ["b2"] },
+      ],
+      since,
+    );
+    expect(history.accepted).toBe(2);
+    // b2 twice; b1 once.
+    expect(history.repeatSuppliers).toBe(1);
+  });
+
   it("has no median rather than a zero when nothing was answered", () => {
-    expect(historyOf([{ createdAt: NOW, firstQuoteAt: null, acceptedBusinessId: null }], since).medianFirstQuoteMs).toBeNull();
+    expect(historyOf([{ createdAt: NOW, firstQuoteAt: null, acceptedBusinessIds: [] }], since).medianFirstQuoteMs).toBeNull();
   });
 });

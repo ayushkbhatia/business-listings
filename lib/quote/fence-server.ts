@@ -73,6 +73,7 @@ async function withRecipient(
       state: true,
       outcome: true,
       declinedAt: true,
+      contactReleasedAt: true,
       business: { select: { suspendedAt: true } },
     },
   });
@@ -81,6 +82,7 @@ async function withRecipient(
   return {
     businessId,
     contactReleasedToBusinessId: enquiry.contact_released_to_business_id,
+    releasedToThis: recipient.contactReleasedAt !== null,
     recipientState: recipient.state,
     outcome: recipient.outcome,
     declinedBySeller: recipient.declinedAt !== null,

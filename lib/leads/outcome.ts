@@ -33,8 +33,8 @@ import { recordEvent } from "@/lib/telemetry/record";
  * the buyer simply stopped replying.
  *
  * They may not contradict the buyer. Once the buyer has accepted this supplier's
- * quote, `contactReleasedToBusinessId` says so and the contact details have been
- * released on the strength of it; marking that lead lost would put a different
+ * quote — or part of it, board `1o` — its own `EnquiryRecipient.contactReleasedAt`
+ * says so and the contact details have been released on the strength of it; marking that lead lost would put a different
  * word on the same event. The refusal is explicit rather than silent.
  */
 
@@ -70,7 +70,7 @@ export async function markOutcome(
     select: {
       state: true,
       assignedToId: true,
-      enquiry: { select: { contactReleasedToBusinessId: true } },
+      contactReleasedAt: true,
     },
   });
   if (!recipient) return { ok: false, error: "not_your_lead" };
@@ -81,7 +81,8 @@ export async function markOutcome(
      details on the strength of it. A seller marking it lost would leave two
      words on one event and a released phone number explained by neither.
   */
-  if (recipient.enquiry.contactReleasedToBusinessId === businessId && input.outcome === "lost") {
+  const acceptedHere = recipient.contactReleasedAt !== null;
+  if (acceptedHere && input.outcome === "lost") {
     return { ok: false, error: "buyer_decided" };
   }
 
@@ -90,7 +91,7 @@ export async function markOutcome(
      deal done off the record, which the product cannot see and should not
      pretend to — and `Won` is the tab board 3a's quoted-value card reads.
   */
-  if (recipient.state !== "quoted" && recipient.enquiry.contactReleasedToBusinessId !== businessId) {
+  if (recipient.state !== "quoted" && !acceptedHere) {
     return { ok: false, error: "not_quoted" };
   }
 

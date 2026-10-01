@@ -12,6 +12,7 @@ import { extractCommitments } from "@/lib/quote/commitments";
 import { PROPOSAL_RECORD_SELECT, toProposalRecord } from "@/lib/quote/proposal";
 import { familyFor } from "@/lib/services/service";
 import { ENQUIRY_BRIEF_SELECT, toEnquiryBrief } from "./enquiry-brief";
+import { acceptedInPart, coveredLines } from "@/lib/enquiry/release";
 
 /**
  * Board `7c` — read the accepted record for the buyer who accepted it.
@@ -23,6 +24,12 @@ import { ENQUIRY_BRIEF_SELECT, toEnquiryBrief } from "./enquiry-brief";
  * enquiry are the same null, so the route cannot be used to find out which
  * references exist.
  *
+ * **Board `1o` D4: one record per supplier.** An enquiry accepted across
+ * suppliers has a record for each; `businessId` names whose, and without it the
+ * enquiry's main supplier is read. The record is that supplier's alone — their
+ * lines, their PO number, their contact, their review and report — and a
+ * supplier the buyer's contact did not go to has no record, the same null.
+ *
  * **AC9: the record survives the supplier being suspended or unverified.**
  * Nothing here filters on `suspendedAt` or `verificationTier`. The lines are
  * the `QuoteLine` rows as quoted; rewriting them because the supplier's standing
@@ -31,6 +38,8 @@ import { ENQUIRY_BRIEF_SELECT, toEnquiryBrief } from "./enquiry-brief";
 export async function getAcceptedRecord(
   buyerId: string,
   refOrId: string,
+  /** Board `1o` D4: whose record, after a split. Absent: the enquiry's main supplier. */
+  businessId?: string,
 ): Promise<AcceptedRecord | null> {
   const enquiry = await prisma.enquiry.findFirst({
     where: {
@@ -61,9 +70,13 @@ export async function getAcceptedRecord(
       },
       quotes: {
         where: { status: "accepted" },
-        // One accepted quote per enquiry since `acceptQuote` claims the row
-        // conditionally. Ordered anyway, so a pre-fix double accept still reads
-        // the same row every time rather than whichever Postgres returns.
+        /*
+           One accepted quote per supplier: `commitAcceptance` claims the row
+           conditionally, and a split accepts one quote from each supplier it
+           takes lines from (board `1o`). Ordered anyway, so a pre-fix double
+           accept still reads the same row every time rather than whichever
+           Postgres returns.
+        */
         orderBy: [{ acceptedAt: "desc" }, { revision: "desc" }, { id: "asc" }],
         select: {
           id: true,
@@ -77,6 +90,7 @@ export async function getAcceptedRecord(
           sentAt: true,
           expiresAt: true,
           acceptedAt: true,
+          buyerReference: true,
           lines: {
             orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
             select: {
@@ -86,6 +100,8 @@ export async function getAcceptedRecord(
               unitPrice: true,
               leadTimeDays: true,
               productId: true,
+              enquiryLineId: true,
+              acceptedAt: true,
               product: { select: { sku: true } },
             },
           },
@@ -99,25 +115,35 @@ export async function getAcceptedRecord(
         },
       },
       recipients: {
-        /*
-           Declined *by this acceptance*. A supplier who declined the enquiry
-           themselves (board `3j-s`) was not declined for the buyer, and
-           *the other 3 were declined for you* would count them as if they were.
-        */
-        where: { state: "declined", declinedAt: null },
-        select: { businessId: true },
+        orderBy: [{ createdAt: "asc" }, { businessId: "asc" }],
+        select: {
+          businessId: true,
+          state: true,
+          declinedAt: true,
+          contactReleasedAt: true,
+          business: { select: { slug: true, displayName: true } },
+        },
       },
-      review: { select: { createdAt: true, heldAt: true, removedAt: true } },
-      supplierReport: {
-        select: { createdAt: true, outcome: true, outcomeReason: true, resolvedAt: true },
+      // Board `1o` D6 and D4: one review and one report per supplier; this record's is picked below.
+      reviews: { select: { businessId: true, createdAt: true, heldAt: true, removedAt: true } },
+      supplierReports: {
+        select: { subjectBusinessId: true, createdAt: true, outcome: true, outcomeReason: true, resolvedAt: true },
       },
     },
   });
   if (!enquiry) return null;
 
-  const releasedTo = enquiry.contactReleasedToBusinessId!;
+  /*
+     Board `1o` D4: whose record. Only a supplier the buyer's contact went to has
+     one — their own recipient row says so — and anybody else is the same null
+     as a reference that does not exist.
+  */
+  const released = enquiry.recipients.filter((recipient) => recipient.contactReleasedAt !== null);
+  const releasedTo = businessId ?? enquiry.contactReleasedToBusinessId!;
+  if (!released.some((recipient) => recipient.businessId === releasedTo)) return null;
   const quote = enquiry.quotes.find((q) => q.businessId === releasedTo);
   if (!quote) return null;
+  const acceptedIds = new Set(released.map((recipient) => recipient.businessId));
 
   const proposal = toProposalRecord(quote.proposal);
   const categoryId = enquiry.serviceBrief?.categoryId ?? enquiry.lines[0]?.service?.categoryId ?? null;
@@ -179,8 +205,14 @@ export async function getAcceptedRecord(
     team.find((member) => member.locationId === null) ??
     null;
 
+  /*
+     The lines this acceptance covered: the whole quote, or — board `1o` — the
+     lines taken from this supplier with the lines they added (D7). A line the
+     buyer did not take from them is not theirs to supply and is not on it.
+  */
+  const covered = coveredLines(quote.lines);
   const { lines, totalAed } = recordLines(
-    quote.lines.map((line) => ({
+    covered.map((line) => ({
       id: line.id,
       description: line.description,
       qty: line.qty,
@@ -191,16 +223,49 @@ export async function getAcceptedRecord(
     })),
   );
 
+  /*
+     AC6: the buyer's lines no acceptance covered. Only acceptances since `1o`
+     mark their lines, so a record from before it has nothing to compare and
+     says nothing rather than guessing.
+  */
+  const marked = enquiry.quotes.flatMap((q) => q.lines.filter((line) => line.acceptedAt !== null));
+  const linesNotAccepted =
+    marked.length > 0
+      ? (
+          await prisma.enquiryLine.findMany({
+            where: { enquiryId: enquiry.id, id: { notIn: marked.flatMap((line) => (line.enquiryLineId ? [line.enquiryLineId] : [])) } },
+            orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
+            select: { description: true },
+          })
+        ).map((line) => line.description)
+      : [];
+
   return {
     enquiryId: enquiry.id,
     ref: enquiry.ref,
-    buyerReference: enquiry.buyerReference,
+    // Board `1o` D5: the PO issued to this supplier; acceptances before it wrote the enquiry's.
+    buyerReference: quote.buyerReference ?? enquiry.buyerReference,
     costCode: enquiry.costCode,
     delivery: parseSnapshot(enquiry.deliverySnapshot),
     // The quote's own stamp first, then the release — the pair the tracking page reads.
     acceptedAt: quote.acceptedAt ?? enquiry.contactReleasedAt,
     isBrief: enquiry.serviceBrief !== null,
-    declinedCount: enquiry.recipients.filter((r) => r.businessId !== releasedTo).length,
+    /*
+       Declined *by this acceptance*. A supplier who declined the enquiry
+       themselves (board `3j-s`) was not declined for the buyer, and *the other
+       3 were declined for you* would count them as if they were — nor is a
+       supplier accepted from in the same split.
+    */
+    declinedCount: enquiry.recipients.filter(
+      (r) => r.state === "declined" && r.declinedAt === null && !acceptedIds.has(r.businessId),
+    ).length,
+    acceptedFrom: released.map((recipient) => ({
+      businessId: recipient.businessId,
+      slug: recipient.business.slug,
+      displayName: recipient.business.displayName,
+    })),
+    partOfQuote: acceptedInPart(quote.lines),
+    linesNotAccepted,
     quote: {
       id: quote.id,
       ref: quote.ref,
@@ -251,8 +316,8 @@ export async function getAcceptedRecord(
         : null,
     },
     commitments: extractCommitments(messages),
-    review: reviewState(enquiry.review),
-    report: reportState(enquiry.supplierReport),
+    review: reviewState(enquiry.reviews.find((review) => review.businessId === releasedTo) ?? null),
+    report: reportState(enquiry.supplierReports.find((report) => report.subjectBusinessId === releasedTo) ?? null),
   };
 }
 
@@ -284,4 +349,21 @@ function reportState(
     };
   }
   return { kind: "open", filedAt: report.createdAt };
+}
+
+/**
+ * Board `1o` D4 — the record `?supplier=` names, by the slug the buyer's links
+ * carry. The main supplier's record without one, or with theirs; another
+ * supplier's only where the buyer accepted from them, and otherwise the same
+ * null as a record that does not exist.
+ */
+export async function getAcceptedRecordFor(
+  buyerId: string,
+  refOrId: string,
+  supplierSlug: string | null,
+): Promise<AcceptedRecord | null> {
+  const main = await getAcceptedRecord(buyerId, refOrId);
+  if (!main || !supplierSlug || supplierSlug === main.supplier.slug) return main;
+  const other = main.acceptedFrom.find((supplier) => supplier.slug === supplierSlug);
+  return other ? getAcceptedRecord(buyerId, refOrId, other.businessId) : null;
 }

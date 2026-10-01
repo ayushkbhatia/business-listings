@@ -1,7 +1,8 @@
 import "server-only";
 import { Prisma } from "@/lib/db/generated/client";
 import { prisma } from "@/lib/db/client";
-import { CRITICAL_AT_OR_BELOW, DIMENSIONS } from "@/lib/reviews/eligibility";
+import { releasedToBusiness } from "@/lib/enquiry/release";
+import { CRITICAL_AT_OR_BELOW, DIMENSIONS, PROVENANCE_ENQUIRY_SELECT } from "@/lib/reviews/eligibility";
 
 /**
  * Board 1m — everything behind one seller's Reviews tab.
@@ -113,8 +114,10 @@ function filterOnly(businessId: string, filter: ReviewFilter): Prisma.ReviewWher
     case "accepted":
       // The strongest rung, read off the enquiry rather than off a column on
       // the review — the fact is already stored once, and a second copy of a
-      // fact is a copy that can disagree with it.
-      return { enquiry: { contactReleasedToBusinessId: businessId } };
+      // fact is a copy that can disagree with it. Off this supplier's own
+      // recipient row, which a split sets for each supplier accepted from
+      // (board `1o` D4) where the enquiry's column names only one.
+      return { enquiry: releasedToBusiness(businessId) };
     case "photos":
       return { media: { some: {} } };
     case "critical":
@@ -141,10 +144,13 @@ function heldWhere(businessId: string, filter: ReviewFilter): Prisma.ReviewWhere
 function filterSql(businessId: string, filter: ReviewFilter): Prisma.Sql {
   switch (filter) {
     case "accepted":
+      // `releasedToBusiness`, rendered: the supplier's own release, which a split
+      // sets for every supplier accepted from (board `1o` D4).
       return Prisma.sql`and exists (
-        select 1 from "enquiry" e
-        where e."id" = r."enquiry_id"
-          and e."contact_released_to_business_id" = ${businessId}
+        select 1 from "enquiry_recipient" er
+        where er."enquiry_id" = r."enquiry_id"
+          and er."business_id" = ${businessId}
+          and er."contact_released_at" is not null
       )`;
     case "photos":
       return Prisma.sql`and exists (select 1 from "media" m where m."review_id" = r."id")`;
@@ -199,7 +205,7 @@ const REVIEW_INCLUDE = {
     },
   },
   media: { select: { id: true, storagePath: true, alt: true }, orderBy: { sortOrder: "asc" } },
-  enquiry: { select: { contactReleasedToBusinessId: true } },
+  enquiry: { select: PROVENANCE_ENQUIRY_SELECT },
 } as const satisfies Prisma.ReviewInclude;
 
 export type ReviewRow = Prisma.ReviewGetPayload<{ include: typeof REVIEW_INCLUDE }>;
@@ -242,10 +248,11 @@ export interface ReviewBoard {
 /**
  * Board 1m's data requirements, in one round trip's worth of queries.
  *
- * The provenance of each row is derived from `enquiry.contactReleasedToBusinessId`
- * rather than stored, so the badge on a row and the count in the chip above it
- * cannot disagree: they are the same predicate, asked once per row and once in
- * aggregate.
+ * The provenance of each row is derived from whether the enquiry released the
+ * buyer's contact to this supplier — `provenanceOf` per row, `releasedToBusiness`
+ * in the chip's count — rather than stored, so the badge on a row and the count
+ * in the chip above it cannot disagree: they are the same predicate, asked once
+ * per row and once in aggregate.
  */
 export async function getReviewBoard(
   businessId: string,

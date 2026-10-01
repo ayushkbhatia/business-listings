@@ -371,7 +371,7 @@ describe("reportAcceptedQuote — B8", () => {
     expect(again).toMatchObject({ ok: false, error: "already_reported" });
 
     const report = await prisma.supplierReport.findUniqueOrThrow({
-      where: { enquiryId: e.id },
+      where: { enquiryId_subjectBusinessId: { enquiryId: e.id, subjectBusinessId: a.id } },
       select: { id: true, kind: true, subjectBusinessId: true, reporterId: true, outcome: true },
     });
     expect(report).toMatchObject({ kind: "accepted_quote", subjectBusinessId: a.id, reporterId: buyerId, outcome: null });

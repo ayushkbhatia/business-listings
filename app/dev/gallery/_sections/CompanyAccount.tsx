@@ -127,6 +127,7 @@ const BOARD_ROW: RequestCard = {
   approverNames: ["Rami Haddad"],
   viewerMayApprove: true,
   viewerIsRaiser: false,
+  split: null,
 };
 
 const CONTEXT = {

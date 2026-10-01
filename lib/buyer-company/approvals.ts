@@ -4,6 +4,9 @@ import { Prisma } from "@/lib/db/generated/client";
 import { actorFor } from "@/lib/auth/actor";
 import { assertCanAcceptQuote } from "@/lib/auth/guards";
 import { acceptQuote, type AcceptQuoteResult } from "@/lib/enquiry/service";
+import { acceptRequestedSplit, prepareSplit, type AcceptSplitError } from "@/lib/enquiry/accept";
+import { formatList } from "@/lib/format";
+import type { SplitPick } from "@/lib/quote/split";
 import { onApprovalDecided, onApprovalRequested } from "@/lib/notify/events";
 import { eligibleApprovers, type ApprovalReason } from "./authority";
 import {
@@ -16,6 +19,7 @@ import {
   type GateRefusal,
 } from "./gate";
 import { lockCompany, activeMembership, writeCompanyEvent } from "./store";
+import { readSplit, splitJson, type StoredPart } from "./split-request";
 
 /**
  * Board `7b` — a quote held for a colleague's approval.
@@ -187,6 +191,147 @@ export async function requestApproval(
   }
 }
 
+export type SplitRequestError = RequestError | AcceptSplitError;
+
+export type SplitRequestResult = { ok: true; approvalId: string } | { ok: false; error: SplitRequestError; lineId?: string; quoteId?: string };
+
+/**
+ * Board `1o` D5 — ask for a split, once.
+ *
+ * The rule is checked on the parts together: their combined value excl. VAT,
+ * verified only if every supplier is. One request, one approver's decision,
+ * and a PO number per supplier, each required where the company requires one.
+ * The request stores the parts as asked (`QuoteApproval.split`), and approving
+ * it accepts exactly those (`acceptRequestedSplit`).
+ *
+ * One supplier's whole quote is not a split (AC7): it is the ordinary request.
+ */
+export async function requestSplitApproval(
+  buyerId: string,
+  enquiryRefOrId: string,
+  picks: readonly SplitPick[],
+  input: { poNumbers?: Readonly<Record<string, string | null>>; costCode?: string | null; note?: string | null },
+  now: Date = new Date(),
+): Promise<SplitRequestResult> {
+  // Build plan 9.4, as `requestApproval` asks it. Throws `PermissionError`.
+  assertCanAcceptQuote(await actorFor(buyerId));
+
+  const costCode = readReference(input.costCode);
+  if (costCode === "too_long" || costCode === "invalid") return { ok: false, error: "reference_invalid" };
+  const note = (input.note ?? "").trim() || null;
+  if (note && note.length > NOTE_MAX) return { ok: false, error: "note_too_long" };
+
+  const prepared = await prepareSplit(buyerId, enquiryRefOrId, picks, now);
+  if (!prepared.ok) return prepared;
+  const { enquiry, plan, parts } = prepared;
+  if (!enquiry.buyerCompanyId) return { ok: false, error: "personal" };
+  if (plan.single) {
+    return requestApproval(buyerId, parts[0]!.quoteId, { poNumber: input.poNumbers?.[parts[0]!.quoteId] ?? null, costCode: input.costCode, note: input.note }, now);
+  }
+  const companyId = enquiry.buyerCompanyId;
+
+  const asked: StoredPart[] = [];
+  for (const part of parts) {
+    const poNumber = readReference(input.poNumbers?.[part.quoteId]);
+    if (poNumber === "too_long" || poNumber === "invalid") return { ok: false, error: "reference_invalid", quoteId: part.quoteId };
+    asked.push({ quoteId: part.quoteId, quoteRevision: part.revision, enquiryLineIds: part.enquiryLineIds, poNumber });
+  }
+  const primary = parts.find((part) => part.businessId === plan.primaryBusinessId) ?? parts[0]!;
+  const quoteRef = formatList(parts.map((part) => part.quoteRef));
+
+  try {
+    const approvalId = await prisma.$transaction(async (tx) => {
+      // The enquiry first, then the company: the order every acceptance takes.
+      const [locked] = await tx.$queryRaw<{ closes_at: Date; contact_released_to_business_id: string | null }[]>`
+        SELECT closes_at, contact_released_to_business_id FROM enquiry WHERE id = ${enquiry.id} FOR UPDATE
+      `;
+      if (!locked) throw new RequestRefused("not_found");
+      if (locked.contact_released_to_business_id) throw new RequestRefused("already_accepted");
+      if (locked.closes_at.getTime() <= now.getTime()) throw new RequestRefused("enquiry_closed");
+
+      for (const part of parts) {
+        const current = await tx.quote.findUniqueOrThrow({
+          where: { id: part.quoteId },
+          select: { status: true, expiresAt: true, business: { select: { closureRequestedAt: true } } },
+        });
+        if (current.status !== "sent" && current.status !== "read") throw new RequestRefused("not_open");
+        if (current.expiresAt && current.expiresAt.getTime() < now.getTime()) throw new RequestRefused("quote_expired");
+        if (current.business.closureRequestedAt) throw new RequestRefused("supplier_closed");
+        const later = await tx.quote.count({
+          where: { enquiryId: enquiry.id, businessId: part.businessId, revision: { gt: part.revision }, status: { not: "draft" } },
+        });
+        if (later > 0) throw new RequestRefused("revised");
+      }
+
+      const gate = await evaluateGate(tx, { companyId, raiserId: buyerId, quoteId: primary.quoteId, now, parts: asked });
+      requireReferences(gate.policy, { poNumber: null, costCode }, asked);
+      if (!gate.need.required) throw new RequestRefused("not_needed");
+      const approvers = eligibleApprovers(gate.need.route, gate.seats, buyerId, gate.ask.valueFils);
+      if (approvers.length === 0) throw new RequestRefused("no_approver");
+
+      // One open request per enquiry. Asking about a split replaces the first question.
+      const replaced = await closeOpenRequests(tx, {
+        companyId,
+        enquiryId: enquiry.id,
+        actorId: buyerId,
+        why: "replaced",
+        except: null,
+        at: now,
+      });
+
+      const request = await tx.quoteApproval.create({
+        data: {
+          companyId,
+          enquiryId: enquiry.id,
+          // The main supplier's quote, which the request trigger fixes with the rest.
+          quoteId: primary.quoteId,
+          quoteRevision: primary.revision,
+          valueFils: gate.ask.valueFils,
+          split: splitJson(asked),
+          raisedById: buyerId,
+          reasons: gate.need.reasons,
+          approverId: gate.need.route.kind === "named" ? gate.need.route.approverId : null,
+          // A PO number is issued to one supplier: each is on its part.
+          poNumber: null,
+          costCode,
+          note,
+          createdAt: now,
+          updatedAt: now,
+        },
+        select: { id: true },
+      });
+      await writeCompanyEvent(tx, {
+        companyId,
+        actorId: buyerId,
+        kind: "approval_requested",
+        subject: `approval:${request.id}`,
+        after: {
+          enquiryId: enquiry.id,
+          enquiryRef: enquiry.ref,
+          quoteId: primary.quoteId,
+          quoteRef,
+          quoteIds: parts.map((part) => part.quoteId),
+          valueFils: valueJson(gate.ask.valueFils),
+          reasons: gate.need.reasons,
+          replaced,
+        },
+        note,
+        at: now,
+      });
+      return request.id;
+    });
+    await onApprovalRequested({ approvalId });
+    return { ok: true, approvalId };
+  } catch (error) {
+    if (error instanceof RequestRefused) return { ok: false, error: error.code };
+    if (error instanceof GateRefused) return { ok: false, error: error.code as RequestError };
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return { ok: false, error: "not_open" };
+    }
+    throw error;
+  }
+}
+
 // ── Deciding ─────────────────────────────────────────────────────────────────
 
 export type DecideError =
@@ -197,7 +342,9 @@ export type DecideError =
   | "approval_changed"
   | "note_required"
   | "note_too_long"
-  | Extract<AcceptQuoteResult, { ok: false }>["error"];
+  | Extract<AcceptQuoteResult, { ok: false }>["error"]
+  /** Board `1o`: a split's own refusals, found when its parts are planned again. */
+  | AcceptSplitError;
 
 export type DecideResult =
   | { ok: true; outcome: "approved"; enquiryId: string }
@@ -214,6 +361,12 @@ const TERMINAL: ReadonlySet<string> = new Set([
   "enquiry_closed",
   "approval_changed",
   "not_member",
+  // Board `1o`: a split's lines no longer plan as asked.
+  "unknown_quote",
+  "unknown_line",
+  "not_quoted",
+  "other_quantity",
+  "all_or_nothing",
 ]);
 
 /**
@@ -243,6 +396,7 @@ export async function approveRequest(
       status: true,
       poNumber: true,
       costCode: true,
+      split: true,
       quote: { select: { ref: true } },
     },
   });
@@ -251,12 +405,20 @@ export async function approveRequest(
   if (!seat || seat.companyId !== request.companyId) return { ok: false, error: "not_found" };
   if (request.status !== "pending") return { ok: false, error: "approval_closed" };
 
-  const result = await acceptQuote(request.raisedById, request.quoteId, now, {
-    poNumber: request.poNumber,
-    costCode: request.costCode,
-    approval: { id: request.id, approverId },
-    source: "approval",
-  });
+  // Board `1o` D5: a split is approved as it was asked — every part, in one decision.
+  const parts = readSplit(request.split);
+  const result = parts
+    ? await acceptRequestedSplit(request.raisedById, request.enquiryId, parts, now, {
+        costCode: request.costCode,
+        approval: { id: request.id, approverId },
+        source: "approval",
+      })
+    : await acceptQuote(request.raisedById, request.quoteId, now, {
+        poNumber: request.poNumber,
+        costCode: request.costCode,
+        approval: { id: request.id, approverId },
+        source: "approval",
+      });
 
   if (!result.ok) {
     if (TERMINAL.has(result.error)) {
@@ -311,7 +473,7 @@ export async function queryRequest(
 
   const request = await prisma.quoteApproval.findUnique({
     where: { id: approvalId },
-    select: { id: true, companyId: true, raisedById: true, quoteId: true, quote: { select: { ref: true } } },
+    select: { id: true, companyId: true, raisedById: true, quoteId: true, split: true, quote: { select: { ref: true } } },
   });
   if (!request) return { ok: false, error: "not_found" };
 
@@ -328,11 +490,14 @@ export async function queryRequest(
       if (current.status !== "pending") throw new GateRefused("approval_closed");
 
       if (seat.role !== "company_admin") {
+        // Board `1o` D5: a split is judged on its parts together, as it was asked.
+        const parts = readSplit(request.split);
         const gate = await evaluateGate(tx, {
           companyId: request.companyId,
           raiserId: request.raisedById,
           quoteId: request.quoteId,
           now,
+          ...(parts ? { parts } : {}),
         });
         const may = gate.need.required
           ? eligibleApprovers(gate.need.route, gate.seats, request.raisedById, gate.ask.valueFils).some(

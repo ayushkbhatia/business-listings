@@ -1,6 +1,8 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
 import { PROPOSAL_RECORD_SELECT, toProposalRecord } from "@/lib/quote/proposal";
+import { coveredLines } from "@/lib/enquiry/release";
+import { PROVENANCE_ENQUIRY_SELECT, provenanceOf } from "@/lib/reviews/eligibility";
 import "@/lib/audit/prisma-writer";
 import { staffMutation } from "@/lib/audit/staff-mutation";
 import { auditScopeFor } from "@/lib/auth/subject";
@@ -522,7 +524,7 @@ export async function disputeDetail(disputeId: string) {
           replyRemovedAt: true,
           businessId: true,
           buyer: { select: { fullName: true } },
-          enquiry: { select: { ref: true, contactReleasedToBusinessId: true } },
+          enquiry: { select: { ref: true, ...PROVENANCE_ENQUIRY_SELECT } },
         },
       },
     },
@@ -544,8 +546,7 @@ export async function disputeDetail(disputeId: string) {
   return {
     dispute,
     incentiveFinding,
-    fromAcceptedQuote:
-      dispute.review.enquiry.contactReleasedToBusinessId === dispute.review.businessId,
+    fromAcceptedQuote: provenanceOf(dispute.review) === "accepted_quote",
   };
 }
 
@@ -647,7 +648,7 @@ export async function reportEvidence(reportId: string) {
         note: true,
         lines: {
           orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
-          select: { id: true, description: true, qty: true, unitPrice: true, leadTimeDays: true },
+          select: { id: true, description: true, qty: true, unitPrice: true, leadTimeDays: true, acceptedAt: true },
         },
         // Board `3j-s`: a report about an accepted proposal is judged against the
         // scope and the exclusions, which are the whole of what was agreed.
@@ -671,7 +672,8 @@ export async function reportEvidence(reportId: string) {
   return {
     report,
     enquiry: report.enquiry,
-    quote: quote ? { ...quote, proposal: toProposalRecord(quote.proposal) } : null,
+    // Board `1o` D2: what was accepted from this supplier — after a split, part of their quote.
+    quote: quote ? { ...quote, lines: coveredLines(quote.lines), proposal: toProposalRecord(quote.proposal) } : null,
     messages: messages.map((message) => ({
       id: message.id,
       body: message.body,

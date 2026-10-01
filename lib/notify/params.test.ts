@@ -123,6 +123,8 @@ describe("what an event supplies", () => {
          other three, because `notify()` deduplicates nothing.
       */
       "quote_expiring",
+      // Board `1o`: some of a supplier's lines accepted, the rest taken elsewhere.
+      "quote_partly_accepted",
       "quote_received",
       "quote_revised",
       /*
@@ -170,7 +172,7 @@ describe("what an event supplies", () => {
   it("covers every event in the enum, so none is missing a row", () => {
     // `satisfies Record<NotificationEvent, …>` enforces this at compile time;
     // this fails loudly if somebody widens the enum and the type is loosened.
-    expect(Object.keys(EVENT_PARAMS)).toHaveLength(25);
+    expect(Object.keys(EVENT_PARAMS)).toHaveLength(26);
   });
 
   it("does not claim to emit the alert it only records", () => {

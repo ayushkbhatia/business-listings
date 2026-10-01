@@ -17,7 +17,16 @@ import { IDLE, type RecordFormState } from "./_state";
  * the page revalidates and the panel shows the case instead of this form —
  * *"the report control does not re-offer"*.
  */
-export function ReportForm({ enquiryId, token }: { enquiryId: string; token: string | null }) {
+export function ReportForm({
+  enquiryId,
+  token,
+  supplierId = null,
+}: {
+  enquiryId: string;
+  token: string | null;
+  /** Board `1o`: whose record, after a split — a report is about one supplier. */
+  supplierId?: string | null;
+}) {
   const [open, setOpen] = useState(false);
   const openerId = useId();
   const returnFocus = useRef(false);
@@ -41,6 +50,7 @@ export function ReportForm({ enquiryId, token }: { enquiryId: string; token: str
     <ReportEditor
       enquiryId={enquiryId}
       token={token}
+      supplierId={supplierId}
       onCancel={() => {
         returnFocus.current = true;
         setOpen(false);
@@ -52,10 +62,12 @@ export function ReportForm({ enquiryId, token }: { enquiryId: string; token: str
 function ReportEditor({
   enquiryId,
   token,
+  supplierId,
   onCancel,
 }: {
   enquiryId: string;
   token: string | null;
+  supplierId: string | null;
   onCancel: () => void;
 }) {
   const [detail, setDetail] = useState("");
@@ -75,6 +87,7 @@ function ReportEditor({
     <form action={action} className="flex flex-col gap-2" aria-busy={pending || undefined}>
       <input type="hidden" name="enquiryId" value={enquiryId} />
       {token ? <input type="hidden" name="t" value={token} /> : null}
+      {supplierId ? <input type="hidden" name="supplier" value={supplierId} /> : null}
       <label htmlFor={fieldId} className="text-body-sm text-bad-ink">
         {t("accepted.report.label")}
       </label>

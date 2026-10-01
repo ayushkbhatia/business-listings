@@ -58,6 +58,12 @@ export interface QuotedLine {
   /** A Decimal string — `"198.00"`. */
   unitPrice: string;
   leadTimeDays: number | null;
+  /**
+   * Board `1o`: set on the lines an acceptance covers. Null on every line of an
+   * open quote, and on the lines of an acceptance made before `1o`, which
+   * covered the whole quote.
+   */
+  acceptedAt: Date | null;
 }
 
 export interface ComparedSupplier {
@@ -90,6 +96,8 @@ export interface ComparedQuote {
   againstRevision: number;
   paymentTerms: string | null;
   delivery: string | null;
+  /** Board `1o` D1: the supplier's prices hold if the buyer takes only some lines. */
+  allowsPartial: boolean;
   lines: QuotedLine[];
 }
 
@@ -159,6 +167,8 @@ export type Cell =
       leadTimeDays: number | null;
       /** The lowest comparable cell in its column among acceptable quotes (`B2`). */
       winner: boolean;
+      /** Board `1o`: this line was accepted from this supplier. */
+      accepted: boolean;
     }
   | { kind: "not_quoted"; lineId: string };
 
@@ -372,6 +382,7 @@ function cellFor(line: RequestedLine, parts: QuotedLine[]): Cell {
     parts: parts.length,
     leadTimeDays: stated.length > 0 ? Math.max(...stated) : null,
     winner: false,
+    accepted: parts.some((part) => part.acceptedAt !== null),
   };
 }
 

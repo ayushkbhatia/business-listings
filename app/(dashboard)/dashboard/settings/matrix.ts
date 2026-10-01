@@ -42,6 +42,7 @@ export const EVENTS = [
      does not drop them from the stored matrix.
   */
   "quote_declined",
+  "quote_partly_accepted",
   "enquiry_nudged",
 ] as const;
 
@@ -85,6 +86,7 @@ export const GOES_TO: Readonly<Record<AlertEvent, Recipient>> = {
   setup_nudge: "owner",
   weekly_digest: "owner",
   quote_declined: "assigned",
+  quote_partly_accepted: "assigned_and_owner",
   enquiry_nudged: "assigned",
 };
 

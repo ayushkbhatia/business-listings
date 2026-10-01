@@ -1,4 +1,5 @@
 import "server-only";
+import { coveredLines } from "@/lib/enquiry/release";
 import type { Prisma } from "@/lib/db/generated/client";
 import { monthStart } from "@/lib/enquiry/fanout";
 import { isVerified } from "@/lib/verification";
@@ -110,9 +111,10 @@ export async function monthSpend(db: Prisma.TransactionClient, companyId: string
       quotes: {
         where: { status: "accepted" },
         select: {
-          lines: { select: { qty: true, unitPrice: true } },
+          lines: { select: { qty: true, unitPrice: true, acceptedAt: true } },
           proposal: { select: { feeBasis: true, feeAed: true, mobilisationAed: true } },
         },
+        orderBy: { id: "asc" },
       },
       approvals: { where: { status: "approved" }, select: { decidedById: true } },
     },
@@ -123,27 +125,32 @@ export async function monthSpend(db: Prisma.TransactionClient, companyId: string
   let withoutTotal = 0;
   let accepted = 0;
   for (const row of rows) {
-    const quote = row.quotes[0];
-    if (!quote) continue;
-    accepted += 1;
-    const value = commitmentFils({
-      lines: quote.lines.map((line) => ({ qty: line.qty, unitPrice: line.unitPrice.toString() })),
-      proposal: quote.proposal
-        ? {
-            feeBasis: quote.proposal.feeBasis,
-            feeAed: quote.proposal.feeAed?.toString() ?? null,
-            mobilisationAed: quote.proposal.mobilisationAed?.toString() ?? null,
-          }
-        : null,
-    });
-    if (value === null) {
-      withoutTotal += 1;
-      continue;
-    }
-    totalFils += value;
     const approval = row.approvals[0];
     const committer = approval ? approval.decidedById : row.buyerId;
-    if (committer) byPerson.set(committer, (byPerson.get(committer) ?? 0n) + value);
+    /*
+       Every accepted quote on the enquiry — several after a split (board `1o`),
+       each counted for the lines its acceptance covered, never the whole quote.
+       One decision, one committer: the split was approved or accepted once.
+    */
+    for (const quote of row.quotes) {
+      accepted += 1;
+      const value = commitmentFils({
+        lines: coveredLines(quote.lines).map((line) => ({ qty: line.qty, unitPrice: line.unitPrice.toString() })),
+        proposal: quote.proposal
+          ? {
+              feeBasis: quote.proposal.feeBasis,
+              feeAed: quote.proposal.feeAed?.toString() ?? null,
+              mobilisationAed: quote.proposal.mobilisationAed?.toString() ?? null,
+            }
+          : null,
+      });
+      if (value === null) {
+        withoutTotal += 1;
+        continue;
+      }
+      totalFils += value;
+      if (committer) byPerson.set(committer, (byPerson.get(committer) ?? 0n) + value);
+    }
   }
   return { byPerson, totalFils, withoutTotal, accepted };
 }

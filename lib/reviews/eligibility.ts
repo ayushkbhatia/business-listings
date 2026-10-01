@@ -44,12 +44,28 @@ export type Provenance = (typeof PROVENANCE)[number];
  */
 export function provenanceOf(review: {
   businessId: string;
-  enquiry: { contactReleasedToBusinessId: string | null };
+  enquiry: {
+    contactReleasedToBusinessId: string | null;
+    /**
+     * Board `1o` D4: the suppliers the buyer's contact went to, from their own
+     * recipient rows — several after a split, where the enquiry's column names
+     * only the main one. Read where given; a caller without it compares the
+     * column, which is exact for every enquiry accepted from one supplier.
+     */
+    recipients?: readonly { businessId: string; contactReleasedAt: Date | null }[];
+  };
 }): Provenance {
-  return review.enquiry.contactReleasedToBusinessId === review.businessId
-    ? "accepted_quote"
-    : "verified_enquiry";
+  const accepted = review.enquiry.recipients
+    ? review.enquiry.recipients.some((recipient) => recipient.businessId === review.businessId && recipient.contactReleasedAt !== null)
+    : review.enquiry.contactReleasedToBusinessId === review.businessId;
+  return accepted ? "accepted_quote" : "verified_enquiry";
 }
+
+/** The select `provenanceOf` reads, with the releases a split needs. */
+export const PROVENANCE_ENQUIRY_SELECT = {
+  contactReleasedToBusinessId: true,
+  recipients: { where: { contactReleasedAt: { not: null } }, select: { businessId: true, contactReleasedAt: true } },
+} as const;
 
 /** Board 1m: at or below this the review answers the Critical filter. */
 export const CRITICAL_AT_OR_BELOW = 3;
@@ -305,12 +321,13 @@ const DAY_MS = 86_400_000;
 export function reviewWindowFor(
   enquiry: Pick<
     EnquiryForReview,
-    "contactReleasedToBusinessId" | "contactReleasedAt" | "reviewOpensOn" | "repliedAt" | "engagement"
+    "contactReleasedToBusinessId" | "contactReleasedAt" | "accepted" | "reviewOpensOn" | "repliedAt" | "engagement"
   >,
   businessId: string,
 ): ReviewWindow | null {
-  if (enquiry.contactReleasedToBusinessId === businessId) {
-    return acceptedWindow(enquiry.contactReleasedAt, enquiry.reviewOpensOn, enquiry.engagement);
+  const accepted = acceptedSuppliers(enquiry).find((supplier) => supplier.businessId === businessId);
+  if (accepted) {
+    return acceptedWindow(accepted.contactReleasedAt, enquiry.reviewOpensOn, enquiry.engagement);
   }
   const replied = enquiry.repliedAt?.[businessId];
   if (!replied) return null;
@@ -364,9 +381,16 @@ export interface EnquiryForReview {
    * because a fixture that leaves it out is a gate that forgot the rule.
    */
   buyerBusinessId: string | null;
-  /** Set on acceptance. The strongest rung, and the default subject. */
+  /** Set on acceptance. The strongest rung, and the default subject. For a split: the main supplier. */
   contactReleasedToBusinessId: string | null;
   contactReleasedAt: Date | null;
+  /**
+   * Board `1o` D4: every supplier the buyer's contact went to, with when. One
+   * for an ordinary accept; several after a split, each reviewable once (D6).
+   * Optional so a fixture of an enquiry nobody accepted need not say so; absent,
+   * the enquiry's own column stands in for it.
+   */
+  accepted?: readonly { businessId: string; contactReleasedAt: Date | null }[];
   /**
    * Recipients of this enquiry that actually replied.
    *
@@ -384,8 +408,12 @@ export interface EnquiryForReview {
   repliedAt?: Readonly<Record<string, Date>>;
   /** Board `7c-s`: an ongoing engagement's window runs to the end of its term. Absent for goods. */
   engagement?: EngagementFacts | null;
-  /** True when a review already exists for this enquiry. */
-  alreadyReviewed: boolean;
+  /**
+   * The suppliers already reviewed on this enquiry. One review per enquiry —
+   * except an enquiry accepted across suppliers (board `1o` D6), which carries
+   * one about each supplier accepted from.
+   */
+  reviewedBusinessIds: readonly string[];
   /**
    * Board `7c-s` `B10`: the calendar day a review of the accepted supplier opens
    * — acceptance for a goods quote, a delivery cycle into an ongoing engagement.
@@ -430,6 +458,54 @@ export function reviewableReplies(
 }
 
 /**
+ * The suppliers this enquiry was accepted from, with when the buyer's contact
+ * went to each: none until something is accepted, one for an ordinary accept,
+ * several after a split (board `1o`).
+ */
+export function acceptedSuppliers(
+  enquiry: Pick<EnquiryForReview, "contactReleasedToBusinessId" | "contactReleasedAt" | "accepted">,
+): readonly { businessId: string; contactReleasedAt: Date | null }[] {
+  if (enquiry.accepted && enquiry.accepted.length > 0) return enquiry.accepted;
+  return enquiry.contactReleasedToBusinessId
+    ? [{ businessId: enquiry.contactReleasedToBusinessId, contactReleasedAt: enquiry.contactReleasedAt }]
+    : [];
+}
+
+/** Whether the buyer accepted lines from more than one supplier here — board `1o`'s split. */
+export function acceptedAcrossSuppliers(
+  enquiry: Pick<EnquiryForReview, "contactReleasedToBusinessId" | "contactReleasedAt" | "accepted">,
+): boolean {
+  return acceptedSuppliers(enquiry).length > 1;
+}
+
+/**
+ * The suppliers the buyer can still be asked to choose between.
+ *
+ * Ordinarily every supplier that replied, bar their own business: the enquiry
+ * carries one review, about whichever of them the buyer dealt with. Board `1o`
+ * D6: an enquiry accepted from several suppliers carries one review about each
+ * of them, and the choice is between the ones not yet reviewed. A supplier the
+ * buyer took nothing from is not among them — the extra reviews are for the
+ * extra deals, not a second go at the fan-out.
+ *
+ * The gate, the page that asks which supplier and the rail's count all read
+ * this, so none of them offers a subject another refuses.
+ */
+export function reviewableSubjects(
+  enquiry: Pick<
+    EnquiryForReview,
+    "repliedBusinessIds" | "buyerBusinessId" | "contactReleasedToBusinessId" | "contactReleasedAt" | "accepted" | "reviewedBusinessIds"
+  >,
+): readonly string[] {
+  if (!acceptedAcrossSuppliers(enquiry)) return reviewableReplies(enquiry);
+  const own = enquiry.buyerBusinessId;
+  const reviewed = new Set(enquiry.reviewedBusinessIds);
+  return acceptedSuppliers(enquiry)
+    .map((supplier) => supplier.businessId)
+    .filter((id) => id !== own && !reviewed.has(id));
+}
+
+/**
  * May this buyer review this enquiry, and about which supplier?
  *
  * Board 1m: *"a review requires a confirmed enquiry or an accepted quote on
@@ -442,11 +518,17 @@ export function reviewableReplies(
  * its own is not confirmation of anything: eight suppliers receive a fan-out,
  * and a buyer who heard from two of them has met two suppliers.
  *
- * One review per enquiry regardless of rung — `Review.enquiryId` is unique, and
- * a buyer with three enquiries to one seller leaves three reviews, each tied to
- * its own. So where a fan-out drew replies from several sellers the caller has
- * to name the one being reviewed; naming none is only unambiguous when a quote
- * was accepted, or when exactly one supplier replied.
+ * One review per enquiry regardless of rung, and a buyer with three enquiries
+ * to one seller leaves three reviews, each tied to its own. So where a fan-out
+ * drew replies from several sellers the caller has to name the one being
+ * reviewed; naming none is only unambiguous when a quote was accepted, or when
+ * exactly one supplier replied.
+ *
+ * **Board `1o` D6: an enquiry accepted from several suppliers carries one review
+ * about each of them**, all on the accepted-quote rung. Each supplier was its own
+ * deal with its own record, and a review of one says nothing about the others.
+ * The database holds it as one review per enquiry and supplier; the rule above
+ * holds the rest.
  *
  * **No supplier reviews itself**, from any seat on its team. A seller's account
  * holds `buyer` too, so its owner could enquire to their own storefront, reply
@@ -469,7 +551,8 @@ export function canReview(
 ): EligibilityVerdict {
   // A missing enquiry and somebody else's are the same answer.
   if (!enquiry || enquiry.buyerId !== buyerId) return { ok: false, reason: "not_your_enquiry" };
-  if (enquiry.alreadyReviewed) return { ok: false, reason: "already_reviewed" };
+  const split = acceptedAcrossSuppliers(enquiry);
+  if (!split && enquiry.reviewedBusinessIds.length > 0) return { ok: false, reason: "already_reviewed" };
 
   // Their own business is out of the running before anyone is chosen.
   const own = enquiry.buyerBusinessId;
@@ -499,6 +582,19 @@ export function canReview(
       ? { ok: true, businessId: subject, provenance }
       : { ok: false, reason: "window_closed", businessId: subject, window: window! };
   };
+
+  if (split) {
+    // D6: each supplier accepted from, once. Nobody else on a split enquiry.
+    const remaining = reviewableSubjects(enquiry);
+    if (businessId) {
+      if (enquiry.reviewedBusinessIds.includes(businessId)) return { ok: false, reason: "already_reviewed" };
+      if (!remaining.includes(businessId)) return { ok: false, reason: "no_confirmed_enquiry" };
+      return notYet ?? open(businessId, "accepted_quote");
+    }
+    if (remaining.length === 1) return notYet ?? open(remaining[0]!, "accepted_quote");
+    if (remaining.length > 1) return { ok: false, reason: "ambiguous_subject" };
+    return { ok: false, reason: "already_reviewed" };
+  }
 
   if (businessId) {
     if (accepted === businessId) return notYet ?? open(businessId, "accepted_quote");
@@ -579,6 +675,23 @@ export function isEditable(
   if ((review.heldAt ?? null) !== null) return false;
   if ((review.sellerReply ?? null) !== null) return false;
   return review.editableUntil.getTime() > now.getTime();
+}
+
+/**
+ * Whether the buyer has written the review this supplier could ask them for:
+ * any review on the enquiry, since it carries one — or, where it was accepted
+ * from several suppliers (board `1o` D6), one about this supplier.
+ *
+ * `requestReview` refuses on it and the request panel filters by it, so a buyer
+ * the panel lists is a buyer the button can ask.
+ */
+export function reviewedForRequest(
+  enquiry: { reviewedBusinessIds: readonly string[]; acceptedCount: number },
+  businessId: string,
+): boolean {
+  return enquiry.acceptedCount > 1
+    ? enquiry.reviewedBusinessIds.includes(businessId)
+    : enquiry.reviewedBusinessIds.length > 0;
 }
 
 export interface RequestEligibility {
