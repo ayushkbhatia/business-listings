@@ -37,9 +37,9 @@ import { ClaimSearchForm } from "./ClaimSearchForm";
  * ## Why it is `noindex, follow`
  *
  * A funnel step, not a landing page. It is reached from `1l`, the `1a` call to
- * action, the claim prompt on an unclaimed listing, and outbound recruitment
- * links from the ops CRM that carry a pre-filled `q`. `follow`, because the
- * links out of it are worth crawling.
+ * action, the claim prompt on an unclaimed listing — which carries the
+ * `licence` — and outbound recruitment links from the ops CRM that carry a
+ * pre-filled `q`. `follow`, because the links out of it are worth crawling.
  */
 export const metadata: Metadata = {
   title: t("claim.meta_title"),
@@ -51,10 +51,18 @@ export const dynamic = "force-dynamic";
 export default async function ClaimPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string | string[] }>;
+  searchParams: Promise<{ q?: string | string[]; licence?: string | string[] }>;
 }) {
-  const [{ q }, actor] = await Promise.all([searchParams, getActor()]);
-  const query = (Array.isArray(q) ? q[0] : q)?.trim() ?? "";
+  const [{ q, licence }, actor] = await Promise.all([searchParams, getActor()]);
+  /*
+     `licence` is the claim link on an unclaimed listing (board 10g `B10`): the
+     number rather than the name, because a licence number is the one query
+     `findClaimMatches` answers with a single `EXACT LICENCE MATCH` row. It is
+     searched exactly as if typed into the box, which is also what the box then
+     shows, so the claimant can see what was looked up and change it.
+  */
+  const first = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value);
+  const query = (first(licence) ?? first(q))?.trim() ?? "";
 
   /*
      A seller who already holds a claimed listing is sent to their dashboard,

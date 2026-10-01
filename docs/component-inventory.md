@@ -4,8 +4,9 @@ The authoritative list. 64 components in four tiers, plus the four approved addi
 so **68 today**. **Variants are props on one component, never separate components** — one
 `Button` with a `variant` prop, not five.
 
-The 64 count treats `ListingCard` as one component with a `context` prop (five contexts since
-board 6a added the ranked landing-page row) and
+The 64 count treats `ListingCard` as one component with a `context` prop (four layouts since
+board 6a added the ranked landing-page row; "unclaimed" stopped being a context in build plan
+4.6 and is read from `claimStatus` in each) and
 `Button` as one component with five variants. If you have built more files than the running
 total, check whether you split a variant into its own component.
 
@@ -103,7 +104,7 @@ map on the platform renders a blank rectangle with working controls.
 |---|---|---|
 | 51 | `VerificationBadge` | handoff 1 |
 | 52 | `VerificationLadder` | handoff 1 (read-only), writable in 4 |
-| 53 | `ListingCard` | handoff 1 — one component, `context` prop: search row, map result, grid, ranked (board 6a), unclaimed |
+| 53 | `ListingCard` | handoff 1 — one component, `context` prop for the layout: search row, map result, grid, ranked (board 6a). Unclaimed is a state every layout has, read from `claimStatus` (build plan 4.6) |
 | 54 | `ProductCard` | handoff 1 — availability-led, no price |
 | 55 | `SpecTable` | handoff 1 |
 | 56 | `CompletenessMeter` | handoff 1 |

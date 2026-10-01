@@ -305,23 +305,40 @@ export function SupplierResultRow({ row, copy }: { row: SupplierResultView; copy
     <Frame
       headingId={headingId}
       aside={
-        <>
-          {row.sellsWork && (
-            <p className="text-body-sm font-medium text-ink">{t("storefront_services.fee_on_enquiry")}</p>
-          )}
-          <Link
-            href={`/rfq/new?to=${encodeURIComponent(row.businessSlug)}`}
-            aria-label={t("search_blended.enquire_named", { name: row.businessName })}
-            className={buttonClassName({ block: true })}
-          >
-            {t("listing.enquire")}
-          </Link>
-          <Link href={href} className={buttonClassName({ variant: "secondary", block: true })}>
-            {/* Board `12g-s`: one link, the half the firm's own kind reads. */}
-            {copy[row.sellsWork ? "services" : "goods"]["search_blended.view_storefront"]}
-          </Link>
-          <Reply ms={row.replyMs} />
-        </>
+        row.claimed ? (
+          <>
+            {row.sellsWork && (
+              <p className="text-body-sm font-medium text-ink">{t("storefront_services.fee_on_enquiry")}</p>
+            )}
+            <Link
+              href={`/rfq/new?to=${encodeURIComponent(row.businessSlug)}`}
+              aria-label={t("search_blended.enquire_named", { name: row.businessName })}
+              className={buttonClassName({ block: true })}
+            >
+              {t("listing.enquire")}
+            </Link>
+            <Link href={href} className={buttonClassName({ variant: "secondary", block: true })}>
+              {/* Board `12g-s`: one link, the half the firm's own kind reads. */}
+              {copy[row.sellsWork ? "services" : "goods"]["search_blended.view_storefront"]}
+            </Link>
+            <Reply ms={row.replyMs} />
+          </>
+        ) : (
+          /*
+             Board 10g, and the rule `ListingCard` and the landing page's firm
+             row already keep: an unclaimed listing has nobody behind it to
+             answer, so it offers no quote — the enquiry service refuses one,
+             and this button used to send the buyer to a composer that could
+             not deliver it. The row says so where the button was, and goes to
+             the listing page, which is a listing and not a storefront.
+          */
+          <>
+            <p className="text-caption text-muted">{t("listing.unclaimed_title")}</p>
+            <Link href={href} className={buttonClassName({ variant: "secondary", block: true })}>
+              {t("listing.view_listing")}
+            </Link>
+          </>
+        )
       }
     >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">

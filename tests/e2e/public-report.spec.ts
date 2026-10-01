@@ -133,7 +133,8 @@ test.describe("the modal over the storefront", () => {
     // `B10` — nothing below the reasons is asked, and there is nothing to send.
     await expect(dialog.getByRole("button", { name: "Send report" })).toHaveCount(0);
     const claim = dialog.getByRole("link", { name: "Claim this listing" });
-    await expect(claim).toHaveAttribute("href", /\/onboarding\/claim\?q=./);
+    // Board 10g `B10`: one claim route, prefilled with the licence.
+    await expect(claim).toHaveAttribute("href", /\/onboarding\/claim\?licence=./);
     await expect(dialog.getByText(/trade licence/).first()).toBeVisible();
   });
 

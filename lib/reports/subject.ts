@@ -6,6 +6,7 @@ import {
   type PublicReportKind,
   type ReportSubjectField,
 } from "./taxonomy";
+import { publiclyClaimed } from "@/lib/claims/status";
 
 /**
  * Board 13c — the listing a report is about, read once, for both the form and
@@ -138,7 +139,9 @@ export async function reportSubject(slug: string): Promise<ReportSubject | null>
  * off this listing is a report about some other page.
  */
 export function showsField(subject: ReportSubject, field: ReportSubjectField): boolean {
-  const unclaimed = subject.claimStatus === "unclaimed";
+  // The storefront's own test, so a disputed listing — which renders the
+  // unclaimed composition (board 4c `B10`) — is offered the fields it shows.
+  const unclaimed = !publiclyClaimed(subject.claimStatus);
   switch (field) {
     case "phone":
       return !unclaimed && subject.phone !== null;

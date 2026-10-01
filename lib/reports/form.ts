@@ -10,6 +10,8 @@ import {
   takesCorrection,
   type PublicReportKind,
 } from "./taxonomy";
+import { publiclyClaimed } from "@/lib/claims/status";
+import { claimHref } from "@/lib/listing/claim";
 
 /**
  * Board 13c — everything the report form needs, worded, as data.
@@ -106,10 +108,10 @@ export async function reportFormData(
   reasons.push({
     value: CLAIM_DISPUTE_REASON,
     label: t("report_listing.kind.claim_dispute"),
-    description:
-      subject.claimStatus === "unclaimed"
-        ? t("report_listing.kind_hint.claim_dispute_unclaimed")
-        : t("report_listing.kind_hint.claim_dispute"),
+    // A disputed listing reads as unclaimed here as everywhere (board 4c `B10`).
+    description: publiclyClaimed(subject.claimStatus)
+      ? t("report_listing.kind_hint.claim_dispute")
+      : t("report_listing.kind_hint.claim_dispute_unclaimed"),
     fields: [],
     slaDays: 0,
   });
@@ -120,7 +122,12 @@ export async function reportFormData(
     reasons,
     categories: offersCategory ? await categoryGroups(subject.primaryCategoryId) : [],
     signedIn,
-    claimHref: `/onboarding/claim?q=${encodeURIComponent(subject.displayName)}`,
+    /*
+       Board 10g `B10`: every claim control goes to one place, prefilled with
+       the licence, which 2a answers with the single exact match — a claimed
+       row there carries the dispute action, so the same address serves both.
+    */
+    claimHref: claimHref(subject.licenceNumber),
     limits: { detail: MAX_DETAIL, correction: MAX_CORRECTION },
   };
 }

@@ -1186,7 +1186,7 @@ async function hydrate(
     } else if (doc.kind === "supplier") {
       const row = firmById.get(doc.rowId);
       if (!row) continue;
-      out.push(supplierView(row, set, returned.get(doc.rowId) ?? { products: 0, services: 0 }));
+      out.push(supplierView(row, set, returned.get(doc.rowId) ?? { products: 0, services: 0 }, doc.claimed));
     } else {
       const row = productById.get(doc.rowId);
       if (!row) continue;
@@ -1279,11 +1279,14 @@ function supplierView(
   },
   set: BlendedSet,
   matched: { products: number; services: number },
+  /** The document's own reading of the claim — the one the ranking sank it by. */
+  claimed: boolean,
 ): SupplierResultView {
   const offered = set.firmServices.get(row.id);
-  return {
+  const view: SupplierResultView = {
     kind: "supplier",
     id: row.id,
+    claimed,
     summary: row.description?.trim() || row.headline?.trim() || null,
     sellsWork: sellsWork(row.sellsKind as SellsKindValue),
     trade: row.primaryCategory?.name ?? null,
@@ -1298,6 +1301,25 @@ function supplierView(
     productCount: row._count.products,
     matched,
     ...firmFactsOf(row, set.badges.get(row.id) ?? []),
+  };
+  if (claimed) return view;
+
+  /*
+     Board 10g, on the row that links to it. An unclaimed listing shows what the
+     licence record holds — its name, its trade and where it is — and nothing a
+     person added: a disputed one's claimant may hold a seat and a headline,
+     and board 4c `B10` keeps both off the public listing. No rating, reply or
+     credential either; there is nobody behind it to have earned one.
+  */
+  return {
+    ...view,
+    summary: null,
+    teamLabel: null,
+    services: null,
+    matchedOnService: false,
+    rating: null,
+    replyMs: null,
+    checkedCredentials: [],
   };
 }
 

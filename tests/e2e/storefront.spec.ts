@@ -11,6 +11,11 @@ import { expect, test } from "@playwright/test";
 const CLAIMED = "al-marwan-industrial-supplies-llc"; // tier 3, 3 branches
 const REVIEWED = "al-manara-equipment-trading-llc"; // the one business with a review
 const UNCLAIMED = "al-wadi-technical-services-llc"; // licence import, unpinned branch
+// Board 10g's drawn record and its lapsed sibling — prisma/seed-unclaimed-listing.mts.
+const DRAWN = "deira-cooling-house-llc";
+const LAPSED = "naif-ventilation-trading-llc";
+// Two claims open on it, from the main generator.
+const DISPUTED = "redstone-trading-co-llc";
 
 async function jsonLd(page: import("@playwright/test").Page) {
   return page.$$eval('script[type="application/ld+json"]', (nodes) =>
@@ -66,45 +71,82 @@ test.describe("one route, two compositions", () => {
     // No tabs, no catalogue, no verification panel — the unclaimed composition
     // states what is unverified rather than listing checks nobody ran.
     await expect(page.getByRole("heading", { name: "What we checked" })).toHaveCount(0);
+    // One h1, the display name — the owner's answer on 10g `B2`, 1 Oct 2026.
+    await expect(page.locator("h1")).toHaveCount(1);
+    await expect(page.locator("h1")).not.toContainText(/LLC|FZE/);
+    await expect(page.getByText("Unclaimed", { exact: true })).toBeVisible();
   });
 
-  test("its two calls to action go somewhere", async ({ page }) => {
+  test("the record says what the register holds, and labels what it lacks", async ({ page }) => {
+    await page.goto(`/b/${DRAWN}`);
+    const record = page.getByRole("region", { name: "What the public record says" });
+    await expect(record).toBeVisible();
+    await expect(record.getByText(/Imported Jan 2026/i)).toBeVisible();
+
+    // `B2`: the h1 is the display name, and the legal name sits in the record.
+    await expect(page.locator("h1")).toHaveText("Deira Cooling House");
+    await expect(record).toContainText("Deira Cooling House LLC");
+    await expect(record).toContainText("DED-118904");
+    // `B4`: the expiry reaches the page, beside "not verified by us".
+    await expect(record).toContainText(/Active until \d{1,2} \w{3} \d{4} · not verified by us/);
+    await expect(record).toContainText("Trading in air-conditioning & ventilation equipment");
+
+    // `B3`: absent, muted, and still there — never hidden.
+    const phone = record.locator('[data-record-row="phone"]');
+    await expect(phone).toContainText("Not on record");
+    await expect(phone).toHaveAttribute("data-absent", "");
+    await expect(record.locator('[data-record-row="provided"]')).toContainText("Not provided");
+  });
+
+  test("prints no telephone, in any form, anywhere on the page", async ({ page }) => {
+    // `B5`, on the sibling whose import did carry a number.
+    await page.goto(`/b/${LAPSED}`);
+    await expect(page.locator('[data-record-row="phone"]')).toContainText("On record");
+    const body = (await page.textContent("main")) ?? "";
+    expect(body).not.toMatch(/\+?971|\b0\d[\s-]?\d{3}[\s-]?\d{4}\b|226\s?1180/);
+    await expect(page.getByRole("button", { name: /reveal|show number|call/i })).toHaveCount(0);
+  });
+
+  test("both claim controls go to 2a with the licence, which answers with one exact match", async ({
+    page,
+  }) => {
     /*
-       Both were `<button disabled>` under the tooltip "Enquiries open in the
-       next release" — stale, and wrong twice: this page has no enquiry action
-       by design, and the claim flow shipped long ago. This test asserted the
-       buttons existed, which is how a dead control on roughly 30,000 pages
-       stayed green.
-
-       Links, not buttons: they navigate, so a middle click opens a tab and a
-       screen reader announces them as links.
+       `B10`. Both were `<button disabled>` under a stale enquiry tooltip once,
+       and then linked with the display name, which put the claimant in a list
+       of lookalikes on the one screen whose job is telling them apart.
     */
+    await page.goto(`/b/${DRAWN}`);
+    const claims = page.getByRole("link", { name: /^Claim this listing/ });
+    // Q5: the banner's and the card's on a desktop, where they serve two scroll
+    // depths; on a phone the card's alone, first under the identity block.
+    await expect(claims).toHaveCount((page.viewportSize()?.width ?? 1280) >= 768 ? 2 : 1);
+    for (const claim of await claims.all()) {
+      await expect(claim).toHaveAttribute("href", "/onboarding/claim?licence=DED-118904");
+      // ~30,000 distinct query strings into a noindex funnel step.
+      await expect(claim).toHaveAttribute("rel", /nofollow/);
+    }
+    // `B11`: the time from the one value 2a's add-new card reads.
+    await expect(page.getByText(/takes about 6 minutes with your trade licence to hand/)).toBeVisible();
+
+    await page.getByRole("link", { name: "Claim this listing", exact: true }).click();
+    await expect(page).toHaveURL(/\/onboarding\/claim\?licence=DED-118904$/);
+    await expect(page.getByText("EXACT LICENCE MATCH")).toBeVisible();
+    await expect(page.getByRole("button", { name: "This is us" }).or(page.getByRole("link", { name: "This is us" }))).toBeVisible();
+  });
+
+  test("its report goes to 13c", async ({ page }) => {
     await page.goto(`/b/${UNCLAIMED}`);
-
-    const claim = page.getByRole("link", { name: "Claim this listing" }).first();
-    await expect(claim).toBeVisible();
-    await expect(claim).toBeEnabled();
-    // Pre-filled, so the claimant does not retype the name they just read.
-    // `2a` already reads `?q=` and names this as one of its four entry points.
-    await expect(claim).toHaveAttribute("href", /\/onboarding\/claim\?q=./);
-    // Roughly 30,000 of these pages, each a distinct `?q=` into a noindex
-    // funnel step. That is the shape lib/seo/crawl-policy.ts exists to stop.
-    await expect(claim).toHaveAttribute("rel", /nofollow/);
-
-    const report = page.getByRole("link", { name: "Report this listing" }).first();
-    await expect(report).toBeVisible();
+    const report = page.getByRole("link", { name: "Report this listing" });
+    await expect(report).toHaveCount(1);
     /*
        Board 4h. This opened `/verification-policy` — the page explaining how a
        licence is checked, not the one that takes a report — and this test held
        it there. On an unclaimed listing the details are the most likely thing
        on the page to be wrong, and the person who knows is standing in front of
-       it. `nofollow` for the same reason as the claim link above.
+       it. `nofollow` because the route takes a report, not a crawl.
     */
     await expect(report).toHaveAttribute("href", `/report/${UNCLAIMED}`);
     await expect(report).toHaveAttribute("rel", /nofollow/);
-
-    await claim.click();
-    await expect(page).toHaveURL(/\/onboarding\/claim\?q=/);
   });
 
   test("an unclaimed listing invents nothing", async ({ page }) => {
@@ -114,29 +156,64 @@ test.describe("one route, two compositions", () => {
     // No hours for a business that never told us any.
     expect(body).not.toContain("Sunday");
 
-    // No reviews section and no rating for the subject. The word "review" does
-    // appear on the page — in the footer policy link, and on the cards for the
-    // claimed suppliers we point at, both of which are correct. Scoping to the
-    // subject is what the rule actually says.
+    // No reviews section and no rating for the subject.
     await expect(page.getByRole("heading", { name: /^Reviews$/ })).toHaveCount(0);
     await expect(page.locator("[data-rating], .star, [aria-label*=star i]")).toHaveCount(0);
 
-    // Absent fields are marked absent, not dropped.
-    expect(await page.getByText("Not provided").count()).toBeGreaterThan(3);
+    // Absent fields are marked absent, not dropped: hours, photos and products
+    // always, and whatever else the import did not carry.
+    await expect(page.locator("[data-record-row][data-absent]").first()).toBeVisible();
+    await expect(page.getByText("Not provided")).toBeVisible();
   });
 
-  test("an unclaimed listing offers a way out", async ({ page }) => {
+  test("an unclaimed listing offers a way out — claimed suppliers, never paid", async ({ page }) => {
+    await page.goto(`/b/${DRAWN}`);
+    const suggestions = page.getByRole("region", { name: "Claimed suppliers in the same trade" });
+    await expect(suggestions).toBeVisible();
+    const rows = suggestions.getByRole("listitem");
+    await expect(rows.first()).toBeVisible();
+    const count = await rows.count();
+    // 13d's cap, and valid with one.
+    expect(count).toBeGreaterThanOrEqual(1);
+    expect(count).toBeLessThanOrEqual(3);
+    for (const row of await rows.all()) {
+      // `B8`: the credential component's string, on every row.
+      await expect(row).toContainText("Licence verified");
+      await expect(row.getByRole("link", { name: /^View / })).toHaveAttribute("href", /^\/b\//);
+    }
+    // D-LINE: 13d's promise, printed.
+    await expect(suggestions).toContainText("Nearest matches by trade and area, not paid placements.");
+    await expect(suggestions).not.toContainText("published specs");
+  });
+
+  test("with nobody to suggest, the section is removed rather than drawn empty", async ({ page }) => {
+    // Nobody in this listing's trade is claimed, licence-verified and measured.
     await page.goto(`/b/${UNCLAIMED}`);
-    const others = await page.$$eval(`a[href^="/b/"]`, (links, self) =>
-      [...new Set(links.map((l) => l.getAttribute("href")))].filter(
-        (h) => h && !h.includes(self),
-      ),
-      UNCLAIMED,
-    );
-    expect(others.length).toBeGreaterThanOrEqual(2);
-    // And the heading says which basis the list is on, rather than claiming
-    // "same trade" over a list from a different one.
-    await expect(page.getByRole("heading", { name: /Verified suppliers/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Claimed suppliers in the same trade" })).toHaveCount(0);
+  });
+
+  test("a lapsed licence: expired on record, no claim offered, out of the index", async ({ page }) => {
+    await page.goto(`/b/${LAPSED}`);
+    await expect(page.locator('[data-record-row="status"]')).toContainText(/Expired on record · \d{1,2} \w{3} \d{4}/);
+    // `B4`, after 13d's rule: neither claim control.
+    await expect(page.getByRole("link", { name: /^Claim this listing/ })).toHaveCount(0);
+    // Q4: the owner's answer of 1 Oct 2026.
+    await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/);
+  });
+
+  test("a disputed listing renders as unclaimed, says a claim is under review, and names nobody", async ({
+    page,
+  }) => {
+    // Board 4c `B10`. This route used to hand it the claimed storefront.
+    await page.goto(`/b/${DISPUTED}`);
+    await expect(page.getByText("This listing has not been claimed")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "What we checked" })).toHaveCount(0);
+    // Q2: it says so, and still takes a claim — 2b's rule.
+    await expect(page.getByText("A claim on this listing is being reviewed.")).toBeVisible();
+    await expect(page.getByRole("link", { name: "Claim this listing", exact: true })).toBeVisible();
+    // Its tabs went with the composition.
+    const response = await page.goto(`/b/${DISPUTED}/products`);
+    expect(response?.status()).toBe(404);
   });
 
   test("the unclaimed route has no catalogue, branches or reviews tab", async ({ page }) => {

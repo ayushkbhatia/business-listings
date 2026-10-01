@@ -10,6 +10,7 @@ import { liveLists } from "@/lib/seo/curated";
 import { emiratePagePath, liveEmiratePages } from "@/lib/seo/emirate";
 import { categoryIndex } from "@/lib/seo/taxonomy";
 import { publiclyClaimed } from "@/lib/claims/status";
+import { indexableListingWhere } from "@/lib/listing/index-rule";
 
 /**
  * Published pages only.
@@ -30,6 +31,7 @@ export const revalidate = 3600;
 const PUBLIC_BUSINESS = { suspendedAt: null, publishedAt: { not: null } } as const;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const now = new Date();
   const [
     businesses,
     products,
@@ -42,7 +44,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     guideShelves,
   ] = await Promise.all([
     prisma.business.findMany({
-      where: PUBLIC_BUSINESS,
+      /*
+         Board 10g Q4: the indexable set, not the published one. An unclaimed
+         listing whose licence has lapsed, or that somebody has reported closed
+         while 4h decides, is `noindex` on its own page, and a sitemap entry for
+         it would be the file asking for what the page refuses. The rule and
+         the page's `robots` are one function in two forms, held equal by
+         `tests/integration/unclaimed-listing.test.ts`.
+      */
+      where: { ...PUBLIC_BUSINESS, ...indexableListingWhere(now) },
       select: {
         slug: true,
         updatedAt: true,

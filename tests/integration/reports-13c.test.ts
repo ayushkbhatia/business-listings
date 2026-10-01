@@ -256,7 +256,8 @@ describe("B1, B2 — the field, the value, and what it should say", () => {
     ]);
     // The claim door files nothing, so it offers no field.
     expect(form.reasons.at(-1)!.fields).toEqual([]);
-    expect(form.claimHref).toMatch(/^\/onboarding\/claim\?q=/);
+    // Board 10g `B10`: the one claim route, prefilled with the licence.
+    expect(form.claimHref).toBe(`/onboarding/claim?licence=${encodeURIComponent(subject.licenceNumber)}`);
   });
 });
 

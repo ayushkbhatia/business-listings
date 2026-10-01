@@ -58,6 +58,15 @@ export interface ServiceResultView extends ResultFirmFacts {
 export interface SupplierResultView extends ResultFirmFacts {
   kind: "supplier";
   id: string;
+  /**
+   * Whether the firm reads as claimed — `publiclyClaimed`, so a disputed
+   * listing reads as not (board 4c `B10`). An unclaimed row offers no enquiry
+   * and carries only what the licence record holds: the loader leaves its
+   * summary, services, team, rating, reply and credentials empty, and the row
+   * says it has not been claimed where the quote button would be (board 10g,
+   * build plan 4.6).
+   */
+  claimed: boolean;
   /** The seller's own description or headline. */
   summary: string | null;
   /** Whether the firm sells work — decides *Fee on enquiry* and which storefront word. */

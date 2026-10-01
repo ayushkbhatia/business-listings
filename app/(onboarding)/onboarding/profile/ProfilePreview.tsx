@@ -1,7 +1,7 @@
 "use client";
 
 import { useDeferredValue, useId, useState } from "react";
-import { ListingCard, tierSpec } from "@/components/domain";
+import { ListingCard, tierSpec, type ListingCardBusiness } from "@/components/domain";
 import { Eyebrow, StatusBadge } from "@/components/display";
 import { SegmentedControl } from "@/components/primitives";
 import { t } from "@/lib/i18n";
@@ -131,10 +131,18 @@ export function ProfilePreview({ record }: { record: PreviewRecord }) {
  * and it is what makes the rule legible rather than arbitrary: the seller can
  * see for themselves that the suffix is for the registry and not for buyers.
  */
-function toCard(record: PreviewRecord) {
+function toCard(record: PreviewRecord): ListingCardBusiness {
   return {
     slug: record.slug,
     displayName: record.displayName,
+    /*
+       Claimed, whatever the record says today. The preview answers "what will
+       buyers see once this is mine", which is the card the seller is writing —
+       a claim still with a reviewer leaves `claimStatus` at `unclaimed`, and
+       the card would answer with the licence record and none of the words being
+       typed beside it. The pill under the card states the real claim state.
+    */
+    claimStatus: "claimed",
     categoryName: record.categoryName,
     categoryCode: record.categoryCode,
     areaName: record.areaName,
