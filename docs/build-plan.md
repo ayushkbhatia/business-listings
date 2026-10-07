@@ -270,8 +270,17 @@ per the working agreement: one production deploy, not twelve.
 
 **Owed to production, and not carried by this branch.** The two content corrections in 1.5 are
 seed edits, and a seed does not run against production. The `LegalPage` row holding the
-verification policy and the four `Guide` rows holding the fabricated byline are live and still
+verification policy and the `Guide` rows holding the fabricated byline are live and still
 wrong until somebody updates them — a data change, not a deploy.
+
+*Restated 1 Oct 2026, still owed* (`docs/design-exports.md`, `13i`). The verification policy has
+no admin writer, so it is one `UPDATE` of `legal_page` where `kind = 'verification_policy'`,
+with `effective_from` moved to the day it lands: by its pre-#150 text the live page names four
+rungs and tells a buyer a lapsed licence keeps *licence verified*. The bylines need no SQL — set
+*Ayush Bhatia, Founder* at `/admin/content/guides/:id`. And it is two guides, not four:
+`what-supplier-verification-actually-proves` and `check-a-uae-trade-licence`. Four was the count
+of `byline:` writes in the seed, a create and an update for each. The review policy has since
+drifted from the code on five points and joins the list once its seed text is corrected.
 
 **Also landed, ahead of their phases, because the work was in front of us:**
 `tests/integration/placement.test.ts` is the first test `lib/placement/` has ever had, which starts
@@ -581,7 +590,12 @@ the screen is permanently empty above copy reading "Run the matcher after an imp
   save, three switches, an address change and a merge, each audited with a reason. The header total
   is the sum of the tree and is held equal to `1a`'s hero count. Category redirects are now served
   on all four category routes — they had been written and never read.
-- [ ] **5.2 `10a`** — export-only. Two definitions of "suppliers in this trade" on one page.
+- [~] **5.2 `10a`** — *exported 1 Oct 2026*, `docs/design-exports.md`. The line was right and
+  short by one: the tabs, the meta description and the sibling chips count a supplier by primary
+  **or** additional trade; the header, the emirate chips, the FAQ and the 6f floor count primary
+  only, and products split the same way. The seed cannot show it — no seeded business carries an
+  additional category — and production can. **Owed in code:** one predicate, the list's; and the
+  zero state's *Browse {subcategory}* link, which goes to `/c/{sub}` and 404s.
 - [x] **5.3 `10c`** — built with `10c-s` as one handoff. D1 settled: the tab row filters one
   list and never partitions the index, so every query with words is the blended screen and the
   map composition survives only for a viewport or a browse with no words. The rail is in three
@@ -672,8 +686,13 @@ reader and three levels of tests. **The staff half has nothing at all.**
   rows that leave when their signal clears. Three tabs; *Users* (Q2) is not built. The banner
   states a held page's supply gate so every figure derives, and 6f's `recruit` status learned
   the verified-share gap it had been routing to content ops.
-- [ ] **7.3 `12f`** — export it; view-as is genuinely sound and is the best-guarded thing in the
-  console.
+- [~] **7.3 `12f`** — *exported 1 Oct 2026*, `docs/design-exports.md`. The guarding holds —
+  read-only through capabilities, ticket required, one audited start, expiry checked on read. The
+  end does not: nothing writes `endedAt` at thirty minutes, so a session left to expire still
+  holds `view_as_session_one_live_per_staff`, and that person's next start fails on the index
+  with the error page and no *Stop looking* to clear it. **Owed in code:** that, a page-capped
+  meta count, a reason hint that says the seller reads it, two untranslated service messages, and
+  a stop control on the dashboard strip.
 - [x] **7.4 `12g`** — shipped against its board-level handoff (14 Sep 2026). `/admin/notifications`
   is one row per event and channel with 30-day volume queried from the delivery log, `FIRED BY`
   read from `EVENT_SOURCES`, and a services twin column that tells *no trade-kind language* from
@@ -682,7 +701,9 @@ reader and three levels of tests. **The staff half has nothing at all.**
   answer recorded against it. Production held 15 of the seed's 27 templates — migration
   `20261027091000_notification_template_backfill` wrote the rest — and `ramadan_dates_moved` had
   no template **and** no routing row; it is on the platform floor with licence expiry now.
-  `/admin/strings` stays a report and belongs to `12g-s`. `7f` and `10i` are still owed.
+  `/admin/strings` stays a report and belongs to `12g-s`. `7f` and `10i` were exported on 1 Oct
+  2026 (`docs/design-exports.md`): `7f` keeps its own sample values, so 25 of 41 placeholders
+  print raw, and `10i`'s model still has no writer but the seed.
 - [x] **7.4c `12g-s`** — paired strings, shipped against its split handoff (15 Sep 2026).
   `/admin/strings/paired` lists the keys one screen renders for both kinds of business, declared in
   `lib/i18n/paired.ts` with the files that read them (a test holds each file to reading its key),
@@ -859,6 +880,7 @@ the only large piece and the only one selling something it does not deliver.
 ## 4 · The ledger
 
 `export only` means the code is finished and the work is a design export against the tree.
+Exports written against the tree live in `docs/design-exports.md`.
 `↓` marks a state the refutation pass downgraded.
 
 | Board | Name | State | Effort | The fact that decides the work | Step |
@@ -872,7 +894,7 @@ the only large piece and the only one selling something it does not deliver.
 | `4c` | Review a submission | built | 1 Oct 2026 | N claims on one listing scored on the same rows; one resolve call; conflicts open from the product; contested claims hold no seat; moderators read and assign. | 4.4 |
 | `4f` | Businesses & health | built | small | Health derived from measured reply rate, search, filters, segments, export, detail route. The suspension appeal path is not built. | 4.5 |
 | `10g` | Unclaimed listing | built | small | Composition rebuilt to the handoff; the card reads claim status in every layout. Held enquiries and `B15` wait. | 1.1 / 4.6 |
-| `10a` | Subcategory page | partial ↓ | export only | Two definitions of "suppliers in this trade" render on one page. | 5.2 |
+| `10a` | Subcategory page | partial ↓ | small | Exported 1 Oct. Three counts read primary trade only, three read primary or additional; one predicate is owed, and the zero state's Browse link 404s. | 5.2 |
 | `13c` | Report a listing | built | — | Modal over the storefront and the page it degrades to; value capture, reference, one-shot email, three-source flag, claim door. | 9.1 |
 | `4h` | Reports, flags & disputes | built | — | One queue, one taxonomy, a service level per type, and two detectors filling it. | 6.4 |
 | `4g` | Subscriptions & revenue | built | small | One Dubai month from the ledger; every ratio prints its formula, NRR excludes new business, placement stays out of MRR. | 6.2 |
@@ -891,12 +913,12 @@ the only large piece and the only one selling something it does not deliver.
 | `12g` | Notification templates | built | 14 Sep 2026 | Versions per line, a services twin the carrier picks, Meta's queue recorded, volume queried, a delivery log. Strings moved to `12g-s`. | 7.4 |
 | `6h` | Homepage curation | built | 14 Sep 2026 | Four slots chosen by a person with eligibility read live, chips typed not mined, a rails map whose counts are the page's own queries. | 7.4b |
 | `12g-s` | Paired strings | built | 15 Sep 2026 | A registry of pairs held to their consumers, halves written and suppressed from the console, a count that is a query. | 7.4c |
-| `7f` | Notification specimens | partial ↓ | export only | All four channels render; SMS has no carrier and records a skip with a reason. | 7.4 |
+| `7f` | Notification specimens | partial ↓ | small | Exported 1 Oct. A dev page, closed in production; 25 of 41 placeholders print raw because it keeps its own sample values rather than `sampleParams`. SMS still has no carrier. | 7.4 |
 | ~~`6g`~~ | ~~Admin copy audit~~ | **cut** | — | Cut 14 Sep 2026, unbuilt. The CI scan still reads exactly one file; every word held in the database is invisible to it. | ~~7.5~~ |
 | `10c` | Search — one blended set | **built** | medium | Three-part rail, three zero states, D1. | 5.3 |
 | `10d` | Product comparison | **built** | 18 Sep 2026 | Products only, one trade, template rows; tints computed on normalised values; cookie tray capped at four. Supplier comparison retired. | 5.4 |
 | `12d` | Ops CRM — supply gaps | built | medium | Tasks only a derivation writes; the lock is `assignedToId`; every rate carries its denominator. | 7.2 |
-| `12f` | Support desk & view-as | partial ↓ | small | View-as is the best-guarded thing in the console. | 7.3 |
+| `12f` | Support desk & view-as | partial ↓ | small | Exported 1 Oct. Read-only, the ticket and the audit row hold; a session left to expire never ends, and the next start for that person fails on the one-live-session index. | 7.3 |
 | ~~`5a`~~ | ~~Builder shell~~ | **cut** | — | Cut 15 Sep 2026 with the rest of the builder; code and routes removed. | ~~8.4~~ |
 | ~~`5b`~~ | ~~Theme presets~~ | **cut** | — | Cut 15 Sep 2026. One storefront palette; no seller picks a colour. | ~~8.3~~ |
 | ~~`5c`~~ | ~~Section library~~ | **cut** | — | Cut 15 Sep 2026, with `5c-s`. `/b/[slug]` draws a fixed run of five sections. | ~~8.5~~ |
@@ -906,9 +928,9 @@ the only large piece and the only one selling something it does not deliver.
 | `5e` | Domains & publishing | built | 9 Sep 2026 | #151, as subdomains: `proxy.ts` rewrites `<label>.businesslistings.me` to `/b/<label>`. The wildcard DNS and Vercel domain are outside the repo. | 8.1 |
 | ~~`5f`~~ | ~~The published result~~ | **cut** | — | Cut 15 Sep 2026; nothing left to reconcile. | ~~8.2~~ |
 | `12h` | Visits, areas, API | scaffold | large | At least two boards. None of the three routes exist. | 7.6 |
-| `10i` | Campaign landing | partial ↓ | export only | The model exists so content avoids a deploy; a second campaign costs one. | 7.4 |
+| `10i` | Campaign landing | partial ↓ | medium | Exported 1 Oct. The model exists so content avoids a deploy; nothing writes it but the seed, so a second campaign still costs one. | 7.4 |
 | `13e` | Scheduled maintenance | **built** | 14 Sep 2026 | A 503 the proxy serves per system, a window record in Global Config or the environment, and the unplanned error beside it. | 9.2 |
-| `13i` | Verification & review policy | scaffold ↓ | medium | The published policy names a fourth rung the DB CHECK forbids. | 1.5 |
+| `13i` | Verification & review policy | scaffold ↓ | medium | Exported 1 Oct. Resolves toward three: the CHECK, the screens and the seed's policy agree on 0..2. Production's row still names four, owed as a data change; the review policy disagrees with the code on five points. | 1.5 |
 | `4a` | Platform overview | built | 1 Oct 2026 | Every figure read through its owner and linked with the filter that reproduces it; a month picker over the month's figures only; one-scale chart; derived supply-gap labels; MRR's composition printed; `GET /api/admin/overview`. | 7.7 |
 
 ---
