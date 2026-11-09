@@ -3313,6 +3313,17 @@ export const en = {
   "search.bounds_empty_action": "Zoom out to {place}",
   "search.area_page_prompt": "Browsing {category} in {area}?",
   "search.area_page_link": "See the full page",
+  /*
+     T3.9. The map composition shows suppliers with pins, and a firm that
+     sells work has coverage rather than a pin — so it is not in this set at
+     all. Both routes here are deliberate and documented in `compositionFor`:
+     a viewport asks *who is here* in coordinates (rule 1), and a query with no
+     words is a browse, which is what the map is for (rule 4). What neither
+     told the buyer is that a whole half of the directory is missing from the
+     answer.
+  */
+  "search.services_not_on_map": "Firms that sell work are not on this map — they cover areas rather than sitting at an address.",
+  "search.services_not_on_map_link": "See the ones that cover this search",
 
   "map.search_area": "Search this area",
   "map.free_zones": "Free zones overlay",
