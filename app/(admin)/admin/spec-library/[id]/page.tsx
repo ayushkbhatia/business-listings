@@ -12,6 +12,7 @@ import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { AdminPage, getAdminNavBadges } from "../../../_shell";
 import { FieldTable, type FieldRow } from "./FieldTable";
+import { ActionForm } from "../ActionForm";
 import {
   discardDraftAction,
   publishDraftAction,
@@ -72,7 +73,11 @@ export default async function TemplateDetailPage({
   searchParams: Promise<{ require?: string }>;
 }) {
   const seat = await requireStaff();
-  if (!can(seat.actor, "taxonomy.write")) notFound();
+  // Read by ops lead and moderator, written by ops lead — as the index and
+  // `/admin/categories` are. Every write panel below is behind `canWrite`, and
+  // every action behind it re-checks `taxonomy.write` for itself.
+  if (!can(seat.actor, "taxonomy.read")) notFound();
+  const canWrite = can(seat.actor, "taxonomy.write");
 
   const { id } = await params;
   const [detail, badges] = await Promise.all([templateDetail(id), getAdminNavBadges(seat)]);
@@ -129,7 +134,9 @@ export default async function TemplateDetailPage({
           <FieldTable rows={rows} prefix={detail.fieldPrefix} />
 
           {/* Requiring, and dropping a requirement. One field at a time,
-              because the review names counts that belong to that field. */}
+              because the review names counts that belong to that field.
+              Write-only: for a read-only seat the whole panel is a control. */}
+          {canWrite && (
           <Panel title={review ? t("admin.spec.require.title", { label: review.label }) : t("admin.spec.require.pick")}>
             {review ? (
               <div className="flex flex-col gap-3">
@@ -145,7 +152,7 @@ export default async function TemplateDetailPage({
                   </p>
                 )}
                 <p className="text-caption text-muted">{t("admin.spec.require.floor")}</p>
-                <form action={setRequiredAction} className="flex flex-col gap-2">
+                <ActionForm action={setRequiredAction} className="flex flex-col gap-2">
                   <input type="hidden" name="templateId" value={detail.id} />
                   <input type="hidden" name="fieldId" value={review.fieldId} />
                   <input
@@ -162,7 +169,7 @@ export default async function TemplateDetailPage({
                       ? t("admin.spec.require.drop")
                       : t("admin.spec.require.confirm")}
                   </Button>
-                </form>
+                </ActionForm>
               </div>
             ) : (
               <ul className="flex flex-col">
@@ -195,8 +202,16 @@ export default async function TemplateDetailPage({
               {t("admin.spec.detail.no_facet_demand")}
             </p>
           </Panel>
+          )}
         </div>
 
+        {/*
+           The rail is every write on this screen — publish, discard, stage a
+           field, stage a removal. A read-only seat gets the fields table and
+           nothing else, rather than four panels of controls that would be
+           refused.
+        */}
+        {canWrite && (
         <div className="flex w-full shrink-0 flex-col gap-[var(--gutter)] xl:w-[352px]">
           <section id="review">
             <Panel title={t("admin.spec.publish.title", { version: String(detail.version + 1) })}>
@@ -228,27 +243,27 @@ export default async function TemplateDetailPage({
                     <p className="text-caption text-muted">{t("admin.spec.publish.removal")}</p>
                   )}
 
-                  <form action={publishDraftAction} className="flex flex-col gap-2">
+                  <ActionForm action={publishDraftAction} className="flex flex-col gap-2">
                     <input type="hidden" name="templateId" value={detail.id} />
                     <Label htmlFor="publish-reason">{t("admin.spec.reason")}</Label>
                     <Textarea id="publish-reason" name="reason" required rows={2} />
                     <Button type="submit">
                       {t("admin.spec.publish.confirm", { version: String(detail.version + 1) })}
                     </Button>
-                  </form>
-                  <form action={discardDraftAction}>
+                  </ActionForm>
+                  <ActionForm action={discardDraftAction}>
                     <input type="hidden" name="templateId" value={detail.id} />
                     <Button type="submit" variant="ghost" size="sm">
                       {t("admin.spec.publish.discard")}
                     </Button>
-                  </form>
+                  </ActionForm>
                 </div>
               )}
             </Panel>
           </section>
 
           <Panel title={t("admin.spec.add.title")}>
-            <form action={stageFieldAction} className="flex flex-col gap-3">
+            <ActionForm action={stageFieldAction} className="flex flex-col gap-3">
               <input type="hidden" name="templateId" value={detail.id} />
               <div className="flex flex-col gap-1">
                 <Label htmlFor="field-label">{t("admin.spec.add.label")}</Label>
@@ -287,7 +302,7 @@ export default async function TemplateDetailPage({
               <Button type="submit" variant="secondary">
                 {t("admin.spec.add.stage")}
               </Button>
-            </form>
+            </ActionForm>
           </Panel>
 
           <Panel title={t("admin.spec.remove.stage")}>
@@ -300,14 +315,14 @@ export default async function TemplateDetailPage({
                     className="flex items-baseline justify-between gap-3 border-t border-line py-1.5 first:border-t-0"
                   >
                     <span className="min-w-0 truncate text-body-sm text-body">{field.label}</span>
-                    <form action={stageRemovalAction} className="shrink-0">
+                    <ActionForm action={stageRemovalAction} className="shrink-0">
                       <input type="hidden" name="templateId" value={detail.id} />
                       <input type="hidden" name="fieldId" value={field.id} />
                       <input type="hidden" name="undo" value={String(removing)} />
                       <Button type="submit" variant="link" size="sm">
                         {removing ? t("admin.spec.remove.undo") : t("admin.spec.remove.stage")}
                       </Button>
-                    </form>
+                    </ActionForm>
                   </li>
                 );
               })}
@@ -317,6 +332,7 @@ export default async function TemplateDetailPage({
             </p>
           </Panel>
         </div>
+        )}
       </div>
     </AdminPage>
   );

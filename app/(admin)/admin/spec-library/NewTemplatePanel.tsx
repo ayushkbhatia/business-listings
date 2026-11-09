@@ -1,6 +1,7 @@
 import { Panel } from "@/components/structure";
 import { Button, Input, Label, Select, Textarea } from "@/components/primitives";
 import { t } from "@/lib/i18n";
+import { ActionForm } from "./ActionForm";
 import { createTemplateAction } from "./actions";
 
 /**
@@ -24,7 +25,7 @@ export function NewTemplatePanel({
       {subcategories.length === 0 ? (
         <p className="text-body-sm text-body">{t("admin.spec.coverage.none")}</p>
       ) : (
-        <form action={createTemplateAction} className="flex flex-col gap-3">
+        <ActionForm action={createTemplateAction} className="flex flex-col gap-3">
           <div className="flex flex-col gap-1">
             <Label htmlFor="new-template-name">{t("admin.spec.new.name")}</Label>
             <Input id="new-template-name" name="name" required maxLength={80} />
@@ -50,7 +51,7 @@ export function NewTemplatePanel({
           </div>
 
           <Button type="submit">{t("admin.spec.new.create")}</Button>
-        </form>
+        </ActionForm>
       )}
     </Panel>
   );

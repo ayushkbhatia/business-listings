@@ -110,39 +110,51 @@ describe("the cold start reads honest rather than broken", () => {
     expect(state!.threshold).toBe(STRONG_ENOUGH);
   });
 
-  it("offers every task, and the hero counts them", async () => {
+  it("offers every task the plan allows, and the hero counts them", async () => {
     /*
-       Three since site visits were withdrawn. The fourth was the site visit,
-       and it was the reason this hub could never be finished: it closed on our
-       scheduling rather than the seller's work, so `openCount` never reached
-       zero however much a supplier did.
+       Three cards since site visits were withdrawn — the fourth was the site
+       visit, and it was the reason this hub could never be finished: it closed
+       on our scheduling rather than the seller's work.
+
+       Two of the three are *open* here, and that is the second deadlock, fixed.
+       This fixture is on Free, Free carries one seat, and `inviteSeat` refuses
+       at the cap — so a flat target of two colleagues was a card no Free seller
+       could ever tick by any action the product offers them. The target is now
+       the smaller of two and the plan's allowance, so the owner alone is the
+       whole of it and the card is done the day it appears.
     */
     const state = await hub();
 
-    expect(state!.openCount).toBe(3);
-    expect(state!.doneCount).toBe(0);
+    expect(state!.openCount).toBe(2);
+    expect(state!.doneCount).toBe(1);
     expect(state!.openMinutes).toBe(
-      state!.tasks.reduce((total, task) => total + task.minutes, 0),
+      state!.tasks
+        .filter((task) => !task.done)
+        .reduce((total, task) => total + task.minutes, 0),
     );
-    for (const task of state!.tasks) {
+    for (const task of state!.tasks.filter((task) => task.id !== "team")) {
       expect(task.done, task.id).toBe(false);
       expect(task.progress.got, task.id).toBeLessThan(task.progress.target);
     }
 
     /*
-       The owner is a seat, so the team card opens at one of two rather than at
-       nothing. A card that read "0 of 2" over a listing with an owner on it
-       would be counting the wrong thing.
+       One of one, and done. The owner is a seat, so a card reading "0 of 2"
+       over a listing with an owner on it was counting the wrong thing; on a
+       one-seat plan "1 of 2" was asking for something it would then refuse.
     */
     const team = state!.tasks.find((task) => task.id === "team")!;
-    expect(team.progress).toEqual({ got: 1, target: 2 });
+    expect(team.progress).toEqual({ got: 1, target: 1 });
+    expect(team.done).toBe(true);
   });
 
-  it("offers each task its whole lever, because none of it is earned yet", async () => {
+  it("offers each open task its whole lever, because none of it is earned yet", async () => {
     const state = await hub();
     const points = Object.fromEntries(state!.tasks.map((task) => [task.id, task.points]));
 
-    expect(points).toEqual({ photos: 20, products: 20, team: 10 });
+    // Team is zero because it is done, not because it is worth nothing —
+    // `points` is what this seller would still gain, and the lever's whole
+    // weight is on the weights card.
+    expect(points).toEqual({ photos: 20, products: 20, team: 0 });
   });
 
   it("names the rest of the meter, so a hundred is reachable", async () => {

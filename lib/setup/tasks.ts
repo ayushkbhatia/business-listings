@@ -136,6 +136,15 @@ const TARGETS: Record<SetupTaskId, number> = {
   */
   photos: PHOTO_TARGET,
   products: 10,
+  /*
+     Two, capped by the plan's seat allowance — see `targetOf` below.
+
+     Free carries one seat and `inviteSeat` refuses at the cap, so a flat two
+     made the team card the one task a Free seller could not finish by any
+     action available to them. That is the site-visit defect again: a hub whose
+     completion rule needs something the seller cannot buy their way to without
+     being told so. The goods hub then stopped at 90 and the services hub at 72.
+  */
   team: 2,
   /*
      Two credentials, and "held" rather than "verified".
@@ -206,6 +215,15 @@ export interface SetupTaskFacts {
   products: number;
   /** Seats on the listing, the owner included. */
   seats: number;
+  /**
+   * Seats this seller's plan allows, the owner included — `PlanCaps.teamSeats`.
+   *
+   * Here because the team task's target is capped by it: `inviteSeat` refuses
+   * at the cap, so asking a one-seat plan for two colleagues is asking for
+   * something the product refuses. Optional, and `null` on a listing with no
+   * plan: both leave the ask at its full number.
+   */
+  seatCap?: number | null;
   /**
    * Invitations sent and still outstanding.
    *
@@ -281,8 +299,20 @@ export function setupBoard(facts: SetupTaskFacts): SetupBoard {
     services: facts.servicesCounting ?? 0,
   };
 
-  const targetOf = (id: SetupTaskId) =>
-    (services ? SERVICES_TARGETS[id] : undefined) ?? TARGETS[id];
+  /*
+     The seat allowance caps the team target rather than overriding it.
+
+     One seat means the owner alone is the whole of the task, and the card then
+     reads "1 of 1" and ticks — `8a-s` B1's table still decides the weight. A
+     seller on a larger plan sees two, which is the ask. `null` is a listing
+     with no plan yet, which is pre-`goLive` and before any of this is on
+     screen, so the ask stands rather than collapsing to one.
+  */
+  const targetOf = (id: SetupTaskId) => {
+    const base = (services ? SERVICES_TARGETS[id] : undefined) ?? TARGETS[id];
+    if (id !== "team" || facts.seatCap == null) return base;
+    return Math.max(1, Math.min(base, facts.seatCap));
+  };
   const minutesOf = (id: SetupTaskId) =>
     (services ? SERVICES_MINUTES[id] : undefined) ?? MINUTES[id];
 

@@ -222,7 +222,21 @@ describe("an accepted record cannot be edited", () => {
 
 describe("reviewing an engagement", () => {
   it("opens a quarter after the start, and the write refuses before then", async () => {
-    const start = utcDay(new Date(Date.now() + 20 * DAY));
+    /*
+       The start is pulled back to the 28th or earlier on purpose.
+
+       `anniversary` documents what it does with a day the target month does not
+       have: 31 Jan + 1 month is 28 Feb, not 2 Mar. So a start on the 29th,
+       30th or 31st whose quarter lands in February opens on 1 March, and
+       `(month + 3) % 12` is then the wrong assertion rather than the code being
+       wrong — which is what happened on 9 Nov 2026, where `+20 days` is the
+       29th and the quarter is February. Clamping the day keeps this test about
+       the quarter rule instead of about the calendar it runs on.
+    */
+    const soon = utcDay(new Date(Date.now() + 20 * DAY));
+    const start = new Date(
+      Date.UTC(soon.getUTCFullYear(), soon.getUTCMonth(), Math.min(soon.getUTCDate(), 28)),
+    );
     const e = await acceptedContract("review-waits", start);
 
     const gate = await enquiryForReview(e.id);

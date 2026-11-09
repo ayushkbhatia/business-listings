@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { can } from "@/lib/auth/can";
 import { getStaffSeat } from "@/lib/auth/staff";
 import { hasAnyFilter, normaliseAccountFilter, toQueryString } from "@/lib/accounts/filter";
 import { CHURN_RISK_BELOW, SLOW_REPLIES_BELOW, UPGRADE_WINDOW_DAYS } from "@/lib/accounts/health";
@@ -18,8 +19,12 @@ import { csvField } from "@/lib/import/csv";
  * The metadata rows start with `#` in the first cell, a convention pandas,
  * `csvkit` and most importers skip with one option. The header row follows.
  *
- * Every staff seat that can open the list can export it: the columns are the
- * list's columns, and nothing here is a contact detail.
+ * Held behind `account.export` — ops lead and finance. The columns are the
+ * list's columns and none of them is a contact detail, but the whole account
+ * book for 41,000 listings in one file is a different object from a page of it,
+ * and `/admin/leads` has held its list behind a capability since board 1d's
+ * amendment. The list itself stays open to every staff seat, because five
+ * console screens link a moderator into an account.
  */
 
 export const dynamic = "force-dynamic";
@@ -55,7 +60,9 @@ function line(cells: readonly (string | number | null)[]): string {
 
 export async function GET(request: Request) {
   const seat = await getStaffSeat();
-  if (!seat) return new NextResponse(null, { status: 404 });
+  // 404 rather than 403, as every other console gate answers: a seat that may
+  // not take the file is told the route is not there.
+  if (!seat || !can(seat.actor, "account.export")) return new NextResponse(null, { status: 404 });
 
   const params = Object.fromEntries(new URL(request.url).searchParams);
   const filter = normaliseAccountFilter(params);

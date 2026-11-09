@@ -87,6 +87,25 @@ export async function profileStateFor(businessId: string): Promise<ProfileState 
       establishedYear: true,
       teamSize: true,
       languages: true,
+      /*
+         Which weight table this meter is measured against — board `8a-s` B1.
+         Without it a tax practice was scored on the goods table: its own meter
+         told it to "Add your first products" and "Fill in product
+         specifications", capped at 65 because two components it can never hold
+         were counted against it, and disagreed with `/dashboard/setup`, which
+         has always passed the kind. The services facts were already being
+         gathered here at the cost of five queries and then discarded.
+      */
+      sellsKind: true,
+      /*
+         Read because the services table scores them and `profileFacts` already
+         counts them: `sectors` pays into identity (12) and `deliveryModes`
+         into coverage (4). Left out of this select they came back undefined and
+         `profileFacts` read them as zero — so passing the kind without them
+         would have swapped one wrong number for another.
+      */
+      sectorsServed: true,
+      deliveryModes: true,
       verificationTier: true,
       planId: true,
       updatedAt: true,
@@ -155,8 +174,8 @@ export async function profileStateFor(businessId: string): Promise<ProfileState 
     emirateName: business.locations[0]?.emirate ?? null,
     categoryCode: business.primaryCategory.code,
 
-    strength: profileStrength(facts),
-    items: strengthItems(facts),
+    strength: profileStrength(facts, business.sellsKind),
+    items: strengthItems(facts, business.sellsKind),
     savedAt: business.updatedAt,
   };
 }

@@ -958,9 +958,14 @@ function NoQuotesYet({
 
 /**
  * Cheapest per line, computed from the green marks (`B1`–`B3`). It names only
- * the suppliers it needs and counts their deliveries. Accepting is one supplier
- * per enquiry (decided 24 Sep 2026), so the card is a figure to negotiate with:
- * it says so, and points at the threads where a supplier can revise.
+ * the suppliers it needs and counts their deliveries.
+ *
+ * The card is a figure to negotiate with rather than one to accept, and the
+ * reason is the screen rather than the rule. Board `1o` (8815989) made a split
+ * acceptance committable — `lib/quote/split.ts` plans it, `commitAcceptance`
+ * writes it — and no buyer screen calls either yet. So this card says what is
+ * true here: one quote at a time, and the threads are where a supplier revises.
+ * When `1o`'s selection step lands, this copy is the first thing it replaces.
  */
 function CheapestCard({
   model,

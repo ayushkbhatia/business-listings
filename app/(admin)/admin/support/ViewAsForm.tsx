@@ -71,7 +71,7 @@ export function ViewAsForm({ live, start, stop }: ViewAsFormProps) {
           </Button>
         </div>
         {result && !result.ok && (
-          <Alert tone="bad" live="assertive" fix={t("admin.review.reason_hint")}>
+          <Alert tone="bad" live="assertive" fix={result.fix}>
             {result.error}
           </Alert>
         )}
@@ -105,9 +105,9 @@ export function ViewAsForm({ live, start, stop }: ViewAsFormProps) {
           htmlFor={reasonId}
           requirement="required"
           requirementLabel={t("field.required")}
-          hint={t("admin.review.reason_hint")}
+          hint={t("admin.support.reason_hint")}
         >
-          {t("admin.review.reason_label")}
+          {t("admin.support.reason_label")}
         </Label>
         <Input id={reasonId} value={reason} onChange={(e) => setReason(e.target.value)} />
       </div>
@@ -122,7 +122,7 @@ export function ViewAsForm({ live, start, stop }: ViewAsFormProps) {
         <Alert
           tone={result.ok ? "ok" : "bad"}
           live={result.ok ? "polite" : "assertive"}
-          {...(result.ok ? {} : { fix: t("admin.review.reason_hint") })}
+          {...(result.ok ? {} : { fix: result.fix })}
         >
           {result.ok ? result.message : result.error}
         </Alert>

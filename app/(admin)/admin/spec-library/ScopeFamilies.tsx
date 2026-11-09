@@ -68,6 +68,16 @@ export interface ScopeFamiliesProps {
   addBasis: (formData: FormData) => Promise<ScopeResult>;
   removeBasis: (formData: FormData) => Promise<ScopeResult>;
   saveOrder: (formData: FormData) => Promise<ScopeResult>;
+  /**
+   * False for a seat with `taxonomy.read` and not `taxonomy.write`.
+   *
+   * The screen is read by an ops lead and a moderator and written by an ops
+   * lead — the split `/admin/categories` already has. Every control here is
+   * hidden rather than disabled: a disabled button is a thing to argue with,
+   * and the five actions behind them all `assertCan` anyway, so this is the
+   * console not offering what the service would refuse.
+   */
+  canWrite: boolean;
 }
 
 interface Failure {
@@ -76,6 +86,7 @@ interface Failure {
 }
 
 export function ScopeFamilies({
+  canWrite,
   families,
   unassigned,
   requiredFields,
@@ -147,6 +158,7 @@ export function ScopeFamilies({
               expanded={open === family.id}
               onToggle={() => setOpen(open === family.id ? null : family.id)}
               busy={pending}
+              canWrite={canWrite}
               run={run}
               retire={retire}
               addBasis={addBasis}
@@ -172,12 +184,18 @@ export function ScopeFamilies({
             <ul className="mt-3 flex list-none flex-col gap-2.5">
               {unassigned.map((row) => (
                 <li key={row.id}>
-                  <AssignRow
-                    row={row}
-                    families={families}
-                    busy={pending}
-                    onSubmit={(form) => run(assign, form)}
-                  />
+                  {canWrite ? (
+                    <AssignRow
+                      row={row}
+                      families={families}
+                      busy={pending}
+                      onSubmit={(form) => run(assign, form)}
+                    />
+                  ) : (
+                    <span className="text-body-sm text-body">
+                      {row.parent ? `${row.parent} · ${row.name}` : row.name}
+                    </span>
+                  )}
                 </li>
               ))}
             </ul>
@@ -195,6 +213,7 @@ function FamilyCard({
   expanded,
   onToggle,
   busy,
+  canWrite,
   run,
   retire,
   addBasis,
@@ -205,6 +224,7 @@ function FamilyCard({
   expanded: boolean;
   onToggle: () => void;
   busy: boolean;
+  canWrite: boolean;
   run: (call: (form: FormData) => Promise<ScopeResult>, form: FormData) => void;
   retire: (formData: FormData) => Promise<ScopeResult>;
   addBasis: (formData: FormData) => Promise<ScopeResult>;
@@ -288,35 +308,39 @@ function FamilyCard({
                           formatted: formatCount(basis.usedBy),
                         })}
                   </span>
-                  <ReasonedAction
-                    label={t("admin.scope.fee_remove", { label: basis.label })}
-                    warning={
-                      basis.usedBy === 0
-                        ? null
-                        : t("admin.scope.fee_remove_warn", {
-                            count: basis.usedBy,
-                            formatted: formatCount(basis.usedBy),
-                          })
-                    }
-                    busy={busy}
-                    fields={{ familyId: family.id, key: basis.key }}
-                    onSubmit={(form) => run(removeBasis, form)}
-                  />
+                  {canWrite && (
+                    <ReasonedAction
+                      label={t("admin.scope.fee_remove", { label: basis.label })}
+                      warning={
+                        basis.usedBy === 0
+                          ? null
+                          : t("admin.scope.fee_remove_warn", {
+                              count: basis.usedBy,
+                              formatted: formatCount(basis.usedBy),
+                            })
+                      }
+                      busy={busy}
+                      fields={{ familyId: family.id, key: basis.key }}
+                      onSubmit={(form) => run(removeBasis, form)}
+                    />
+                  )}
                 </li>
               ))}
             </ul>
 
-            <ReasonedForm
-              submit={t("admin.scope.fee_add")}
-              busy={busy}
-              fields={{ familyId: family.id }}
-              onSubmit={(form) => run(addBasis, form)}
-            >
-              <span className="flex flex-wrap gap-2.5">
-                <Input name="key" size="sm" aria-label={t("admin.scope.fee_key")} placeholder={t("admin.scope.fee_key")} />
-                <Input name="label" size="sm" aria-label={t("admin.scope.fee_label")} placeholder={t("admin.scope.fee_label")} />
-              </span>
-            </ReasonedForm>
+            {canWrite && (
+              <ReasonedForm
+                submit={t("admin.scope.fee_add")}
+                busy={busy}
+                fields={{ familyId: family.id }}
+                onSubmit={(form) => run(addBasis, form)}
+              >
+                <span className="flex flex-wrap gap-2.5">
+                  <Input name="key" size="sm" aria-label={t("admin.scope.fee_key")} placeholder={t("admin.scope.fee_key")} />
+                  <Input name="label" size="sm" aria-label={t("admin.scope.fee_label")} placeholder={t("admin.scope.fee_label")} />
+                </span>
+              </ReasonedForm>
+            )}
           </section>
 
           {/* ── Row order ───────────────────────────────────────────── */}
@@ -344,22 +368,26 @@ function FamilyCard({
                   {family.rows.find((row) => row.key === key)?.filterable && (
                     <Tag size="sm">{t("admin.scope.filterable")}</Tag>
                   )}
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={busy || index === 0}
-                    onClick={() => move(index, -1)}
-                  >
-                    {t("admin.scope.row_up", { label: label(key) })}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={busy || index === order.length - 1}
-                    onClick={() => move(index, 1)}
-                  >
-                    {t("admin.scope.row_down", { label: label(key) })}
-                  </Button>
+                  {canWrite && (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={busy || index === 0}
+                        onClick={() => move(index, -1)}
+                      >
+                        {t("admin.scope.row_up", { label: label(key) })}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={busy || index === order.length - 1}
+                        onClick={() => move(index, 1)}
+                      >
+                        {t("admin.scope.row_down", { label: label(key) })}
+                      </Button>
+                    </>
+                  )}
                 </li>
               ))}
             </ol>
@@ -406,13 +434,15 @@ function FamilyCard({
               <p className="max-w-prose text-caption text-muted">
                 {t("admin.scope.retire_note")}
               </p>
-              <ReasonedAction
-                label={family.retired ? t("admin.scope.restore") : t("admin.scope.retire")}
-                warning={null}
-                busy={busy}
-                fields={{ familyId: family.id, retired: family.retired ? "false" : "true" }}
-                onSubmit={(form) => run(retire, form)}
-              />
+              {canWrite && (
+                <ReasonedAction
+                  label={family.retired ? t("admin.scope.restore") : t("admin.scope.retire")}
+                  warning={null}
+                  busy={busy}
+                  fields={{ familyId: family.id, retired: family.retired ? "false" : "true" }}
+                  onSubmit={(form) => run(retire, form)}
+                />
+              )}
             </section>
           ) : (
             <p className="text-caption text-muted">{t("admin.scope.retire_fallback")}</p>

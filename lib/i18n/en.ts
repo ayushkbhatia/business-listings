@@ -1668,6 +1668,7 @@ export const en = {
   "admin.ingest.col.status": "Status",
 
   "dashboard.viewing_as": "You are looking at {business} for ticket {ticket}. Read-only, and it ends in {minutes} minutes.",
+  "dashboard.viewing_as_stop": "Stop looking",
 
   "admin.businesses.title": "Businesses",
   "admin.businesses.eyebrow": "Accounts",
@@ -2374,7 +2375,7 @@ export const en = {
 
   "admin.support.title": "Support desk",
   "admin.support.eyebrow": "Platform",
-  "admin.support.meta": "{count} sessions in the last while",
+  "admin.support.meta": { one: "{n} session in the last {days} days", other: "{n} sessions in the last {days} days" },
   "admin.support.start": "Start looking",
   "admin.support.ticket_label": "Ticket",
   "admin.support.ticket_hint": "It goes on the audit row. Looking through a seller's eyes without a reason is a privacy event.",
@@ -2387,6 +2388,20 @@ export const en = {
   "admin.support.recent": "Recent sessions",
   "admin.support.recent_empty": "Nobody has looked at an account yet.",
   "admin.support.not_found": "No listing has that address. Check the slug from the storefront URL.",
+  "admin.support.not_found_fix": "The slug is the last part of the storefront URL, after /b/.",
+  "admin.support.reason_label": "Reason",
+  /*
+     Its own hint. It reused `admin.review.reason_hint` — "The seller reads
+     this." — which is true of a review removal and false here: a view-as
+     reason goes to the audit log and the seller never sees it. A field whose
+     hint names the wrong reader gets the wrong sentence written into it.
+  */
+  "admin.support.reason_hint": "It goes to the audit log, where somebody may read it a year from now. The seller never sees it.",
+  "admin.support.error.needs_ticket": "Name the ticket this is for.",
+  "admin.support.error.needs_ticket_fix": "It goes on the audit row, and it is the reason. Three characters or more.",
+  "admin.support.error.business_missing": "That business is not in the directory.",
+  "admin.support.error.already_viewing": "You are already viewing another account.",
+  "admin.support.error.already_viewing_fix": "End that session first — two at once means nobody can say whose account is on screen.",
 
   "admin.reports.title": "Reports & flags",
   "admin.reports.eyebrow": "Moderation",
@@ -3216,6 +3231,7 @@ export const en = {
   "staff.capability.subscription.credit": "Issue subscription credits",
   "staff.capability.plan.entitlements.write": "Edit plans & entitlements",
   "staff.capability.revenue.read": "Read and export finance data",
+  "staff.capability.account.export": "Export the accounts list",
   "staff.capability.staff.manage": "Invite staff & change roles",
   "staff.capability.staff.read": "See staff & roles",
   "staff.capability.audit.read": "Read the audit log",
@@ -3612,8 +3628,20 @@ export const en = {
   // ── SEO copy ──
   "seo.product_description": "{product} from {supplier} in {area}. Availability, full specification and a direct enquiry — no account needed.",
   "seo.spec_caption": "Specification for {product}",
+  /*
+     Three kinds, six strings. The goods pair promised "branches and
+     catalogue" on every storefront, so a tax practice's meta description —
+     the sentence Google prints under its name — offered a buyer two things
+     the page does not have and "supplier" for a word it would not use of
+     itself. `Business.sellsKind` already decides what the page renders;
+     this makes it decide what the page says about itself.
+  */
   "seo.business_description": "{name} — {category} supplier in {area}, {emirate}. {verification} Contact details, branches and catalogue.",
   "seo.business_description_no_place": "{name} — {category} supplier. {verification} Contact details, branches and catalogue.",
+  "seo.business_description_services": "{name} — {category} in {area}, {emirate}. {verification} Contact details, coverage and the work they take on.",
+  "seo.business_description_services_no_place": "{name} — {category}. {verification} Contact details, coverage and the work they take on.",
+  "seo.business_description_both": "{name} — {category} in {area}, {emirate}. {verification} Contact details, branches, catalogue and services.",
+  "seo.business_description_both_no_place": "{name} — {category}. {verification} Contact details, branches, catalogue and services.",
   "seo.catalogue_description": "{count} products from {name}, a {category} supplier. Availability and full specifications, with no account needed.",
   "seo.branches_description": "All {count} branches of {name}, with addresses, trading hours and Ramadan hours.",
   "seo.reviews_description": "Reviews of {name}, written only by buyers who sent an enquiry through us and had it answered.",
@@ -4066,8 +4094,8 @@ export const en = {
   // The panel that replaces it when no open request can be shown safely.
   "home.trust_title": "Why suppliers here are different",
   "home.trust_1": "Every listing starts from a trade licence we read ourselves.",
-  "home.trust_2": "Tier 2 means we called the number on the licence and someone answered.",
-  "home.trust_3": "Tier 3 means one of our team stood in the warehouse.",
+  "home.trust_2": "Claimed means the supplier holds the account and we confirmed the contact ourselves.",
+  "home.trust_3": "Tier 2 · Licence verified is the top rung: we checked the licence against the issuing authority, and it lapses when the licence does.",
   "home.trust_4": "Response time is measured from real replies, never claimed by the seller.",
   "home.trust_cta": "How verification works →",
 
@@ -4655,7 +4683,12 @@ export const en = {
   "rfq.how_3": "Free for buyers. Sellers on the free plan get 3 RFQs a month; Basic and Pro are unlimited.",
   "rfq.send": { one: "Send to {count} seller", other: "Send to {count} sellers" },
   "rfq.send_idle": "Send",
-  "rfq.send_note": "You'll get an email and SMS as each quote lands.",
+  // SMS is retired for launch — it has no carrier (`lib/notify/senders/console.ts`)
+  // — and a buyer's `quote_received` routes to WhatsApp and in-app, never to
+  // email (`BUYER_DEFAULT` in `lib/notify/routing.ts`). This said "an email and
+  // SMS", which was two channels wrong in the sentence a buyer reads last
+  // before sending.
+  "rfq.send_note": "We message you on WhatsApp as each quote lands, and every quote is on this enquiry either way.",
   /* Query-seeded arrival, from 1c's zero results. */
   "rfq.seeded_notice": "We couldn't find this listed — describe it and 5 suppliers will come back to you.",
   "rfq.resend_notice": "Re-sending {ref}, which expired. It goes out as a new enquiry, matched again — the suppliers it first went to are not picked by default.",
@@ -5012,7 +5045,7 @@ export const en = {
   "track.h1_accepted": "You accepted a quote.",
   "track.h1_all_declined": "No supplier took this one on.",
   /* Removes the fear that sending an RFQ is a commitment. */
-  "track.sub": "We'll text and email you as each one replies. Nothing is committed — you compare what comes back and take it forward with whoever suits.",
+  "track.sub": "We message you on WhatsApp as each one replies. Nothing is committed — you compare what comes back and take it forward with whoever suits.",
 
   "track.asked_for": "What you asked for",
   "track.happens_next": "What happens next",
@@ -5054,7 +5087,7 @@ export const en = {
   "track.more_actions": "More",
 
   "track.reference": "REFERENCE",
-  "track.sent_at": "Sent {when}. Quotes appear here and in your email — no login needed to read them.",
+  "track.sent_at": "Sent {when}. Quotes appear here, and this page needs no login to read them.",
   "track.privacy_title": "Your number stays private",
   /* A specification, not reassurance: enforced at the query layer. */
   "track.privacy_body": "Suppliers see the requirement and your first name. Nobody gets your mobile until you accept a quote, so one enquiry doesn't become five cold calls.",
@@ -5204,7 +5237,7 @@ export const en = {
   "compare_quotes.cheapest.deliveries": { one: "{count} delivery", other: "{count} deliveries" },
   "compare_quotes.cheapest.body": "Splitting across {suppliers} would land at {total} — {saving} under the best single quote, across {deliveries}.",
   "compare_quotes.cheapest.body_no_single": "Taking each line from its lowest quote, across {suppliers}, would land at {total} across {deliveries}. No single supplier quoted every line.",
-  "compare_quotes.cheapest.one_supplier": "You accept one supplier per enquiry, so this is a figure to negotiate with rather than one to accept. A supplier can send a revised quote in your thread with them.",
+  "compare_quotes.cheapest.one_supplier": "This screen accepts one quote at a time, so the split is a figure to negotiate with rather than one to accept. A supplier can send a revised quote in your thread with them.",
   "compare_quotes.cheapest.thread": "Your thread with {supplier}",
   "compare_quotes.on_accept.eyebrow": "What happens on accept",
   "compare_quotes.on_accept.accepted": "The quote is accepted at its prices.",
@@ -7424,7 +7457,7 @@ export const en = {
   "template.platform_body": "{field} is engineering data per SKU — nothing on the platform can work it out from what you have already given us. Export your rows, fill the column, and keep the file for the importer. Or leave it: nothing breaks, and no product comes down.",
   "template.platform_no_usage": "We cannot yet tell you how many buyers filtered on it — the search log records what was typed, not which filters were used.",
   "template.platform_export": { one: "Export {count} row", other: "Export {count} rows" },
-  "template.platform_no_return": "The import that reads this file back is not built yet, so the export is one-way for now.",
+  "template.platform_return": "Edit it and import it back from the catalogue, if your plan carries CSV import.",
 
   "template.pending_heading": "Pending changes",
   "template.pending_eyebrow": { one: "Not yet applied to {count} product", other: "Not yet applied to {count} products" },
@@ -9126,7 +9159,7 @@ export const en = {
   "promote.eyebrow": "Growth",
   "promote.intro": "One slot per subcategory and emirate. Not auctioned — if it is taken, you join a queue in the order people joined it.",
   "promote.rule.labelled": "Always labelled as sponsored, on every surface.",
-  "promote.rule.never_outranks": "Never above a verified supplier on a filter the buyer set. A buyer who asked for tier 3 gets tier 3 first, whoever is paying.",
+  "promote.rule.never_outranks": "Never above a verified supplier on a filter the buyer set. A buyer who asked for Tier 2 · Licence verified gets it first, whoever is paying.",
   "promote.rule.one_slot": "One slot per subcategory and emirate. Nobody can buy the whole category.",
   "promote.fix_first_heading": "Fix the free things first",
   "promote.fix_first": "{count} of your products have no filterable specs. Buyers narrow by those fields, so those products are listed and not found — and a sponsored slot puts a product nobody can filter to at the top of a page.",
@@ -9429,8 +9462,24 @@ export const en = {
   "kind.decides_enquiries": "Enquiries",
   "kind.decides_enquiries_body": "Whether a buyer is asked for a quantity or a scope",
   "kind.cost_eyebrow": "Changeable, but not free",
-  "kind.cost_body": "You can switch in Settings at any time. Once you have published, switching rewrites your catalogue — a product with a stock level has no scope, and a service has no SKU, so nothing carries across. Better to get it right here.",
-  "kind.agree_body": "Your answer and the trades you pick next have to agree. If you say products and then choose Audit & assurance, we will ask again rather than quietly override you.",
+  /*
+     It said switching "rewrites your catalogue" and that "nothing carries
+     across", two doors down from `kind.settings_keeps`, which says nothing is
+     converted or deleted. The second is what `changeSellsKind` does — it
+     writes one column and touches no row — and refusing to convert is the
+     reason the promise is safe to make. So the cost is stated as what it
+     actually is: setup work, not lost data.
+  */
+  "kind.cost_body": "You can switch in Settings at any time, and nothing you have entered is converted or deleted. What it costs is setup: a product has no scope and a service has no SKU, so the other kind’s fields start empty, and your setup tasks and profile strength are measured against the new list. Better to get it right here.",
+  /*
+     It promised "we will ask again rather than quietly override you" and no
+     reader exists: nothing watches for a seller who answers products and then
+     picks Audit & assurance, so the promise was kept by nobody. Rather than
+     invent a re-ask in a string, this says what the two things actually do —
+     and the honest half of the old sentence survives, because nothing *is*
+     overridden. The re-ask itself is a screen, and it is prompt P-53.
+  */
+  "kind.agree_body": "Your answer and the trades you pick next are two different things. This one decides your screens; each trade carries its own kind and decides how that listing reads to a buyer. Neither overrides the other, and you can change this answer in Settings whenever you like.",
   "kind.error_generic": "That did not save. Try again.",
 
   // The Settings path the onboarding copy promises — board 2b-s B5.
@@ -9796,7 +9845,14 @@ export const en = {
 
   // ── `3f-s` the list ──────────────────────────────────────────────────────
   "services.title": "Services",
-  "services.eyebrow": "Catalogue",
+  /*
+     Not "Catalogue", which was `catalogue.eyebrow` copied across. A
+     catalogue is the goods list — `catalogue.title` is *Products* under it
+     — and a practice's own screen calling its work a catalogue is the goods
+     vocabulary leaking into the services half. "Service list" is the phrase
+     this product already uses for it, on `kind.both_1`.
+  */
+  "services.eyebrow": "Service list",
   "services.meta": { one: "{count} service", other: "{count} services" },
   "services.counts": "{live} live · {draft} draft",
   "services.counts_live": { one: "{count} live", other: "{count} live" },
@@ -10012,9 +10068,19 @@ export const en = {
   "service_public.coverage_none": "This firm has not said which areas it covers.",
   "service_public.no_price_title": "Why there is no price",
   "service_public.no_price_body": "A fee moves with the size of the job, and a number without the job attached is a number that changes. The fee basis above says what shape it takes; the number comes back with the quote.",
-  "service_public.compare_title": "Other firms offering this",
-  "service_public.compare_hint": "In {emirate}, in the same trade",
-  "service_public.enquire": "Enquire about this",
+  /*
+     `compare_title` and `compare_hint` are gone, not kept for later. They
+     described `1g-s` B9's strip of competing firms, which the page itself says
+     cannot be built yet — no family assignment and no facets — and a string
+     for a surface that does not exist is a surface somebody thinks is built.
+     Prompt P-60 draws it if it is wanted; the strings come back with it.
+
+     `service_public.enquire` is gone too. It read "Enquire about this", and
+     "Ask for a quote" replaced "Enquire" on 16 Sep 2026 on *one* string,
+     `listing.enquire`, on every surface — the compact form on a card or a row,
+     which is exactly what this link is. A second spelling of one concept is
+     the defect that rule exists to stop.
+  */
   "service_public.other_services": "Other services from {name}",
   "service_public.meta_description": "{name} from {business} — what the engagement covers, what it does not, how it is charged and how fast.",
 
@@ -12162,8 +12228,8 @@ export const en = {
   "matrix.opportunity_lead": "Largest opportunity: {path}, {searches} searches a month against {recruits} suppliers still to recruit.",
   "matrix.opportunity_none": "Every area in this filter meets its need. There is no recruitment shortfall to rank.",
   "matrix.opportunity_metric": "Opportunity is monthly searches divided by suppliers still to recruit — listings to add plus listings to verify — which is demand unlocked per supplier recruited. It is not raw demand, which favours pages that are almost there, and not raw shortfall, which favours near-empty areas nobody searches.",
-  "matrix.send_crm": "Send {count} to ops CRM",
-  "matrix.send_crm_note": "The supply-gap campaign this creates belongs to board 12d, which is not built. The shortfall list is on this screen in the meantime.",
+  "matrix.crm_derived": { one: "{count} row is at Recruit.", other: "{count} rows are at Recruit." },
+  "matrix.crm_derived_note": "The unclaimed and unverified suppliers in them open tasks in the ops CRM on the nightly run, so there is nothing to send from here.",
   "matrix.vintage": "Search volume from {sources}, oldest figure {date}.",
   "matrix.vintage_none": "No search volume has been recorded yet. Every row is measured against the listing minimum alone.",
   "matrix.demand_saved": "Search volume recorded.",
@@ -13659,6 +13725,33 @@ export const en = {
   "admin.scope.error.duplicate_fix": "Pick a different key, or edit the one that exists.",
   "admin.scope.error.blank": "A fee basis needs a key and a label.",
   "admin.scope.error.blank_fix": "Type both, for example “per_survey” and “Per survey”.",
+
+  /*
+     Board 4e's refusals. They were thirteen English literals inside
+     `lib/spec/versions.ts`, thrown by the server action as `new Error(message)`
+     — so an ops lead who left a reason blank lost the whole screen to an error
+     page and a seller-facing locale would never have seen them. The service
+     names the key, the screen renders it beside the control.
+  */
+  "admin.spec.error.reason": "Say why this is changing.",
+  "admin.spec.error.reason_fix": "It is recorded on the audit row, so write the sentence you would want to read a year from now.",
+  "admin.spec.error.template_missing": "That template is not in the library.",
+  "admin.spec.error.field_missing": "That field is not in the library.",
+  "admin.spec.error.category_missing": "That subcategory is not in the taxonomy.",
+  "admin.spec.error.duplicate_key": "This template already has a field keyed {key}.",
+  "admin.spec.error.duplicate_key_fix": "Edit the field that is there, or key this one differently.",
+  "admin.spec.error.not_live": "Only the live version can be added to.",
+  "admin.spec.error.not_live_fix": "Publish the live version first.",
+  "admin.spec.error.empty_draft": "Nothing is staged on this template, so there is nothing to publish.",
+  "admin.spec.error.field_not_live": "Only a field in the live version can be required.",
+  "admin.spec.error.already_required": "{label} is already required.",
+  "admin.spec.error.already_optional": "{label} is not required.",
+  "admin.spec.error.not_serving": "That template does not serve this subcategory, so it cannot be the one offered first.",
+  "admin.spec.error.already_default": "That template is already the one offered first here.",
+  "admin.spec.error.stale_fix": "Reload the screen — this may have changed while it was open.",
+  "admin.spec.error.empty_draft_fix": "Stage a field, a flag change or a removal first.",
+  "admin.spec.error.already_fix": "Nothing to change. Reload the screen if somebody else has moved it since.",
+  "admin.spec.error.not_serving_fix": "Put the template on this subcategory first, on the coverage tab.",
 
   // ── Board `3h-s` — scope templates ───────────────────────────────────────
   //

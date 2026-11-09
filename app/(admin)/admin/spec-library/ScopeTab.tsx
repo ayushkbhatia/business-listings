@@ -43,7 +43,16 @@ const FIELD_LABEL: Record<string, string> = {
   deliverable: t("admin.scope.field.deliverable"),
 };
 
-export function ScopeTab({ library, specs }: { library: ScopeLibrary; specs: number }) {
+export function ScopeTab({
+  library,
+  specs,
+  canWrite,
+}: {
+  library: ScopeLibrary;
+  specs: number;
+  /** False for a moderator: `taxonomy.read` without `taxonomy.write`. */
+  canWrite: boolean;
+}) {
   const families: FamilyView[] = library.families.map((family) => ({
     id: family.id,
     name: family.name,
@@ -91,6 +100,7 @@ export function ScopeTab({ library, specs }: { library: ScopeLibrary; specs: num
       </div>
 
       <ScopeFamilies
+        canWrite={canWrite}
         families={families}
         unassigned={library.unassigned}
         requiredFields={library.requiredFields.map((key) => ({

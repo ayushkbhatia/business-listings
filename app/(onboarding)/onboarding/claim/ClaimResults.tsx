@@ -137,14 +137,19 @@ function toRows(candidates: readonly ClaimCandidate[], signedIn: boolean): Claim
       /*
          Board 2a and the details panel on `1d` are the only two surfaces a
          legal trade name belongs on, and this is the one that could not work
-         without it. An unclaimed record has no display name anybody chose, and
-         three near-identical results are told apart by the suffix, the
-         authority prefix and the area — stripping `LLC` from
+         without it — for an *unclaimed* record. Nobody has chosen a display
+         name for one of those, and three near-identical results are told apart
+         by the suffix, the authority prefix and the area: stripping `LLC` from
          `Gulf Cool Technical Services LLC` removes the disambiguator the person
-         reading the list is scanning for. The display name takes over the
-         moment the listing is claimed, on every public surface.
+         reading the list is scanning for.
+
+         A claimed row is the other case, and it used to read the same column.
+         The display name takes over the moment a listing is claimed, on every
+         public surface — so a claimed row showing the trade name made this
+         screen the one place a seller's name differed from the storefront the
+         Report a dispute action leads to. One name, one landing.
       */
-      name: candidate.tradeName, // licence-locked
+      name: claimed ? candidate.displayName : candidate.tradeName, // unclaimed: licence-locked
       categoryCode: candidate.categoryCode,
       meta: metaLine(candidate),
       claimed,

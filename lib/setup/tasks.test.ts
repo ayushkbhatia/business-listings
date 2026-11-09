@@ -41,17 +41,49 @@ const EMPTY: ProfileFacts = {
   coverageAreas: 0,
 };
 
-function board(profile: Partial<ProfileFacts> = {}, invitesSent = 0) {
+function board(profile: Partial<ProfileFacts> = {}, invitesSent = 0, seatCap?: number | null) {
   const facts: ProfileFacts = { ...EMPTY, ...profile };
   const input: SetupTaskFacts = {
     photos: facts.photos,
     products: facts.products,
     seats: facts.teamSeats,
+    seatCap,
     invitesSent,
     items: strengthItems(facts),
   };
   return setupBoard(input);
 }
+
+function teamTask(seatCap?: number | null, seats = 1, invitesSent = 0) {
+  return board({ teamSeats: seats }, invitesSent, seatCap).tasks.find((task) => task.id === "team")!;
+}
+
+describe("the team card asks for what the plan allows", () => {
+  /*
+     The Free deadlock. `TARGETS.team` is two and `inviteSeat` refuses at the
+     plan's cap, so a one-seat plan was asked for a colleague it would then be
+     refused — the one card on the hub nothing the seller could do would tick,
+     which stopped the goods hub at 90 and the services hub at 72.
+  */
+  it("ticks on the owner alone where the plan carries one seat", () => {
+    const task = teamTask(1);
+    expect(task.progress).toEqual({ got: 1, target: 1 });
+    expect(task.done).toBe(true);
+  });
+
+  it("still asks for two where the plan carries more", () => {
+    expect(teamTask(3).progress.target).toBe(2);
+    expect(teamTask(3).done).toBe(false);
+    expect(teamTask(10, 1, 1).done).toBe(true);
+  });
+
+  it("leaves the ask at two for a listing with no plan yet", () => {
+    // Pre-`goLive`, before any of this is on screen. Collapsing to one there
+    // would be a guess about a plan nobody has chosen.
+    expect(teamTask(null).progress.target).toBe(2);
+    expect(teamTask().progress.target).toBe(2);
+  });
+});
 
 function chip(profile: Partial<ProfileFacts>, id: SetupTaskId): number {
   return board(profile).tasks.find((task) => task.id === id)!.points;
