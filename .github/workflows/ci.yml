@@ -118,6 +118,13 @@ jobs:
       - name: Ordering is total
         run: pnpm check:ordering
 
+      # T6.7. An emitted event with no live body on a channel the recipient gets
+      # without choosing anything. `notify` records `no_live_template` and
+      # carries on, which is right at runtime and invisible in practice — so the
+      # build is where it fails.
+      - name: Every default route has a template
+        run: pnpm check:templates
+
       # A PR that adds a migration has to name it. `prisma migrate deploy`
       # applies every pending migration rather than the caller's, so whoever
       # deploys next inherits this one — and can only review it if the merge

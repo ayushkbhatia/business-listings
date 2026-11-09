@@ -133,15 +133,58 @@ describe("the backfill migration mirrors the catalogue", () => {
     // Selected by what the file does, not by what it is called.
     .filter((text) => text.includes('INSERT INTO "notification_template"'))
     .join("\n");
+
+  /*
+     And the files that **retire** a row rather than insert one — T6.8.
+
+     A template's status can change after it was written: N10 retired the two
+     SMS bodies with an `UPDATE`, because they were inserted `live` by an
+     earlier migration and `notification_delivery.template_id` points at them.
+     So "the catalogue is mirrored" is two rules rather than one, and the second
+     is what this reads.
+  */
+  const statusSql = readdirSync("prisma/migrations", { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort()
+    .map((name) => {
+      try {
+        return readFileSync(`prisma/migrations/${name}/migration.sql`, "utf8");
+      } catch {
+        return "";
+      }
+    })
+    .filter((text) => text.includes('UPDATE "notification_template"'))
+    .join("\n");
   const quote = (value: string | undefined) => (value === undefined ? "NULL" : `'${value.replace(/'/g, "''")}'`);
 
   for (const template of TEMPLATES) {
     it(`carries ${template.event} on ${template.channel}`, () => {
+      /*
+         A retired row was inserted `live` and retired later, so the tuple to
+         look for is the one that was written. Asserting the insert *and* the
+         retirement is what keeps both halves honest: a catalogue row marked
+         retired with no migration retiring it would mean production still sends
+         it.
+      */
+      const retired = template.status === "retired";
+      const insertedAs = retired ? "live" : (template.status ?? "live");
       const row =
-        `(${quote(template.event)}, ${quote(template.channel)}, ${quote(template.kind)}, ${quote(template.status ?? "live")}, ${quote(template.subject)},\n` +
+        `(${quote(template.event)}, ${quote(template.channel)}, ${quote(template.kind)}, ${quote(insertedAs)}, ${quote(template.subject)},\n` +
         `   ${quote(template.body)},\n` +
         `   ${quote(template.actionLabel)}, ${quote(template.actionPath)}, ${quote(template.metaTemplateName)})`;
       expect(sql.includes(row), `the backfill has no row matching:\n${row}`).toBe(true);
+
+      if (retired) {
+        expect(
+          statusSql.includes(`SET "status" = 'retired'::"template_approval"`),
+          "a retired template needs a migration that retires it in production",
+        ).toBe(true);
+        expect(
+          statusSql.includes(`"channel" = '${template.channel}'::"notification_channel"`),
+          `no migration retires ${template.channel}`,
+        ).toBe(true);
+      }
     });
   }
 

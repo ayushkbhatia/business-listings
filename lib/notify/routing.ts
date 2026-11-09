@@ -36,6 +36,7 @@ export type NotificationChannel = "whatsapp" | "sms" | "email" | "in_app";
  */
 export type { NotificationEvent } from "@/lib/db/generated/enums";
 import type { NotificationEvent } from "@/lib/db/generated/enums";
+import { EVENT_AUDIENCE, type Audience } from "./params";
 
 /**
  * What a seller cannot switch off. Board 12g `B7`.
@@ -94,6 +95,73 @@ export const PLATFORM_FLOOR: Readonly<Partial<Record<NotificationEvent, readonly
      choose for this one (`ROUTES_LIKE`).
   */
   quote_partly_accepted: ["in_app"],
+  /*
+     Board 11h, task T6.2. A card that did not go through, and the last notice
+     before the plan drops to Free.
+
+     On the floor for the reason the floor exists — 12g `B7`: *"opt-outs are
+     honoured per channel, with two exceptions… Those are consequences, not
+     marketing."* A seller who loses Pro because they never saw the email was
+     not told, and a box they ticked about newsletters is not consent to that.
+     It is the same argument `document_expiring` is here on, with money instead
+     of a licence.
+
+     Email and in-app. Neither interrupts, so quiet hours still hold for
+     whatever a seller has chosen on top — and a payment is not an emergency at
+     two in the morning.
+  */
+  payment_failed: ["email", "in_app"],
+  payment_final_notice: ["email", "in_app"],
+};
+
+/**
+ * What a seller with no stored preference receives — task T6.1.
+ *
+ * ## What happened without it
+ *
+ * `notify()` read `NotificationPreference` and, finding none,
+ * `return []` — **before** `route()` ran, so `PLATFORM_FLOOR` was never
+ * reached. A business with no row received nothing, on any channel, for any
+ * event, including the two the platform promises are not switchable. And no
+ * delivery row was written, so the silence was invisible in the log and in
+ * board 12g's deliveries screen: the one place somebody would look.
+ *
+ * That is the state **every imported listing is in**. T5.5 of the build plan
+ * says to seed a preference row per imported business *or* land this first,
+ * and this is the half that does not need forty thousand rows written to be
+ * true.
+ *
+ * ## Email and in-app, and nothing that interrupts
+ *
+ * The honest default for a business that has never opened the alerts screen.
+ * Both are unintrusive — email is read when it is read, in-app is a list — and
+ * email only leaves the building if the seat's address is a **verified**
+ * `SeatChannel`, so this cannot mail somebody who never confirmed an address.
+ * WhatsApp and SMS stay off until a seller asks for them: a template, an
+ * opt-in and a carrier stand behind each, and defaulting a phone to on is the
+ * one mistake in this area that cannot be taken back.
+ *
+ * ## Derived, not listed
+ *
+ * From `EVENT_AUDIENCE`, which already names each event's side. A fourth
+ * hand-written list of the seller's events is a fourth thing to keep in step
+ * with the enum — `routing.ts` learned that when its own hand-written union
+ * drifted from the schema, which is written up above `NotificationEvent`.
+ *
+ * `quiet` matches `BUYER_DEFAULT`'s: the 21:00–07:00 window and Sunday, which
+ * is the platform's promise rather than a preference. It is inert here anyway —
+ * neither default channel interrupts — and it is set so that a seller who later
+ * turns WhatsApp on inherits the promise rather than a blank.
+ */
+export const DEFAULT_ROUTING: RoutingPreference = {
+  matrix: Object.fromEntries(
+    (Object.entries(EVENT_AUDIENCE) as [NotificationEvent, Audience][])
+      .filter(([, audience]) => audience === "seller")
+      .map(([event]) => [event, ["email", "in_app"] as const]),
+  ),
+  quiet: { enabled: true, fromHour: 21, toHour: 7, onSunday: true },
+  /** Null means never. A business that has set no threshold has not asked. */
+  highValueOverrideAed: null,
 };
 
 /**
@@ -131,6 +199,25 @@ export function withInheritedChoices<M extends Partial<Record<string, readonly s
 
 /** The channels quiet hours actually silence. */
 export const INTERRUPTING_CHANNELS: readonly NotificationChannel[] = ["whatsapp", "sms"];
+
+/**
+ * Channels the product no longer sends on — decision N10, task T6.8.
+ *
+ * SMS. It had no carrier: `senders/index.ts` bound it to the console sender, so
+ * a seller who chose it was promised a text message and sent a line in a server
+ * log. WhatsApp reaches the same handset for a fraction of the cost.
+ *
+ * Filtered in `route()` rather than removed from the enum, because
+ * `NotificationDelivery.channel` has history in it and a retired channel is
+ * still a thing that happened. A matrix that still names it — and some do,
+ * since T6.5 stopped the alerts screen deleting what it does not render — is
+ * answered with a `skip` the log can count rather than silence: the count is
+ * how ops know when the last stored choice has gone.
+ *
+ * `20261121094000_retire_sms_routing_n10` strips it from the stored matrices in
+ * one pass, so that count should reach zero and stay there.
+ */
+export const RETIRED_CHANNELS: readonly NotificationChannel[] = ["sms"];
 
 export interface QuietHours {
   enabled: boolean;
@@ -267,6 +354,15 @@ export function route(
   const override = quiet && overridesQuietHours(preference, context.valueAed);
 
   return channels.map((channel): ChannelDecision => {
+    /*
+       T6.8. A channel the product has retired is skipped with a reason, not
+       dropped: a stored matrix that still names SMS is a fact worth counting,
+       and a silent drop would make the log agree with a preference the product
+       no longer honours.
+    */
+    if (RETIRED_CHANNELS.includes(channel)) {
+      return { channel, action: "skip", reason: "channel_retired" };
+    }
     if (!quiet) return { channel, action: "send" };
 
     // In-app is never suppressed: nothing buzzes, and a list is a list.

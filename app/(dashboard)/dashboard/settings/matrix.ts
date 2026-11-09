@@ -46,7 +46,21 @@ export const EVENTS = [
   "enquiry_nudged",
 ] as const;
 
-export const CHANNELS = ["whatsapp", "sms", "email", "in_app"] as const;
+/**
+ * The channels a seller may choose between — decision N10, task T6.8.
+ *
+ * SMS has left. It had no carrier — `senders/index.ts` bound it to the console
+ * sender — so a seller who ticked it was promised a text message and sent a
+ * line in a server log, and its two bodies are `retired`. WhatsApp reaches the
+ * same handset for a fraction of the cost and is the channel the product's copy
+ * already promises.
+ *
+ * The **enum** keeps `sms`, because `NotificationDelivery.channel` has history
+ * in it: 96 `enquiry_received` and 21 `quote_accepted` SMS deliveries are in the
+ * seeded log and a retired channel is still a thing that happened. What goes is
+ * every surface that offers it as a choice.
+ */
+export const CHANNELS = ["whatsapp", "email", "in_app"] as const;
 
 export const ESCALATION_CHOICES = [30, 60, 120, 240, 480] as const;
 export const NUDGE_CHOICES = [12, 24, 48, 72] as const;
@@ -121,4 +135,41 @@ export function inAppLocked(event: AlertEvent): boolean {
  */
 export function floorLocked(event: AlertEvent, channel: AlertChannel): boolean {
   return (PLATFORM_FLOOR[event] ?? []).includes(channel);
+}
+
+/**
+ * The matrix to store, from what was posted and what was already there — T6.5.
+ *
+ * ## The defect this is a function because of
+ *
+ * `saveAlerts` built the column from `{}` and `EVENTS`, so every stored choice
+ * for an event the screen does not render was **deleted on save**. This screen
+ * shows 11 of the 18 events a seller can receive; of the seven it omits, four
+ * survive because `PLATFORM_FLOOR` puts them back whatever the matrix says, and
+ * three did not — `subscription_renewed`, `enquiry_unanswered` and
+ * `review_dispute_decided`. A seller who had chosen WhatsApp for a renewal
+ * receipt lost it the first time they changed their quiet hours, and nothing on
+ * the screen said so.
+ *
+ * ## The two halves, which pull against each other
+ *
+ * An event the screen **does** render is written from the form, whatever the
+ * stored value was — including as an empty array, because a seller who unticked
+ * every box has chosen and merging over the old value would make an untick a
+ * no-op. An event the screen does **not** render is carried through untouched:
+ * this form has no opinion about it, and a form with no opinion must not have
+ * an effect.
+ *
+ * Pure, and in this module rather than in `actions.ts`, because a `"use server"`
+ * module may only export async functions — and because the rule above is the
+ * one thing on this screen worth a test of its own.
+ */
+export function nextRouting(
+  previous: Readonly<Record<string, readonly string[]>>,
+  posted: Readonly<Partial<Record<AlertEvent, readonly string[]>>>,
+): Record<string, string[]> {
+  const next: Record<string, string[]> = {};
+  for (const [event, channels] of Object.entries(previous)) next[event] = [...channels];
+  for (const event of EVENTS) next[event] = [...(posted[event] ?? [])];
+  return next;
 }

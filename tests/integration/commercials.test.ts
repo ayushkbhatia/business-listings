@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/db/client";
 import { runDunning } from "@/lib/billing/dunning-job";
 import { GRACE_AFTER_FINAL_DAYS, SCHEDULE } from "@/lib/billing/dunning";
@@ -142,7 +143,14 @@ beforeAll(async () => {
     data: {
       ...basic,
       id: planId,
-      name: `Test ${planId}`,
+      /*
+         A name, not an id. `Test test-dunning-1794268943000` is a long run of
+         digits, and `render`'s leak guard reads one as a phone number and
+         refuses to send — which is the guard working: a plan name reaches a
+         seller in T6.2's dunning messages, and the id does not belong in one.
+         The id keeps the stamp, so two runs still cannot collide.
+      */
+      name: "Test dunning plan",
       sortOrder: 90,
     },
   });
@@ -320,6 +328,80 @@ describe("dunning never takes anything away but the plan", () => {
 
     // The plan moved. Nothing else did.
     expect(after).toEqual(before);
+  }, 120_000);
+
+  it("sends at every notifying stage, which it used to only count — T6.2", async () => {
+    /*
+       The defect, as a test.
+
+       `runDunning`'s `send` branch advanced `dunningStage` and sent nothing,
+       under a comment arguing that advancing the stage was the part that
+       mattered. `notified` counted the silence, so the job reported three
+       messages a day and a seller's plan dropped to Free on day fifteen having
+       been told by nobody.
+
+       Day 3, day 7 and day 14 are the three notifying stages. Each writes at
+       least one `NotificationDelivery` row — the row is the proof, because a
+       console sender "delivers" everything and a count of sends would pass on
+       an unconfigured provider either way.
+    */
+    const { businessId } = await payingListing("Told");
+    /*
+       An owner to tell. `payingListing` creates none — every other test here is
+       about what dunning does to the *account* — and `onPaymentFailed` is right
+       to send nothing when there is nobody on the seat. That is also why this
+       test creates one rather than the fixture doing it: the census the two
+       tests above take would change under them.
+    */
+    const owner = await prisma.user.create({
+      data: {
+        id: randomUUID(),
+        businessId,
+        fullName: "Dunning Owner",
+        email: `dunning-${Date.now()}@example.test`,
+        roles: ["seller_owner"],
+      },
+      select: { id: true },
+    });
+
+    const failed = new Date();
+    const day = (n: number) => new Date(failed.getTime() + n * 86_400_000);
+
+    await runDunning(day(0));
+    const before = await prisma.notificationDelivery.count({
+      where: { businessId, event: { in: ["payment_failed", "payment_final_notice"] } },
+    });
+    expect(before, "the retry stage is silent on purpose").toBe(0);
+
+    await runDunning(day(SCHEDULE.emailed));
+    await runDunning(day(SCHEDULE.messaged));
+    await runDunning(day(SCHEDULE.final));
+
+    const rows = await prisma.notificationDelivery.findMany({
+      where: { businessId, event: { in: ["payment_failed", "payment_final_notice"] } },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      select: { event: true, channel: true, status: true, reason: true },
+    });
+
+    // Two nudges and a final notice, each on the floor's two channels.
+    const failedRows = rows.filter((row) => row.event === "payment_failed");
+    const finalRows = rows.filter((row) => row.event === "payment_final_notice");
+    expect(failedRows.length, JSON.stringify(rows)).toBeGreaterThanOrEqual(2);
+    expect(finalRows.length, JSON.stringify(rows)).toBeGreaterThanOrEqual(1);
+
+    /*
+       And they reached a channel rather than being recorded as unroutable. A
+       `no_live_template` here would mean the migration and the catalogue had
+       drifted; `no_channel_for_event` would mean the floor entry was missing.
+    */
+    for (const row of rows) {
+      expect(row.reason, JSON.stringify(row)).not.toBe("no_channel_for_event");
+      expect(row.reason, JSON.stringify(row)).not.toBe("no_live_template");
+    }
+    expect(rows.some((row) => row.channel === "in_app" && row.status === "sent")).toBe(true);
+
+    await prisma.notificationDelivery.deleteMany({ where: { businessId } });
+    await prisma.user.delete({ where: { id: owner.id } });
   }, 120_000);
 
   it("keeps the verification badge, because a card is not a licence", async () => {

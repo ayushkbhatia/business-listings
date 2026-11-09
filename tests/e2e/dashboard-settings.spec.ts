@@ -1,4 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
+import { CHANNELS } from "@/app/(dashboard)/dashboard/settings/matrix";
 import { expect, test } from "@playwright/test";
 
 /**
@@ -27,8 +28,13 @@ test.describe("board 7e — the event matrix", () => {
   test("draws it as a real table with both header directions", async ({ page }) => {
     const table = page.getByRole("table", { name: /Notification channels by event/ });
     await expect(table).toBeVisible();
-    // Event, who it goes to, and the four channels.
-    await expect(table.getByRole("columnheader")).toHaveCount(6);
+    /*
+       Event, who it goes to, and the channels — three since T6.8 retired SMS
+       (N10), four before it. Counted from `CHANNELS` rather than written as a
+       number, because the number is what changed and a literal would have to be
+       found and corrected by whoever changes it next.
+    */
+    await expect(table.getByRole("columnheader")).toHaveCount(2 + CHANNELS.length);
     await expect(table.getByRole("rowheader").first()).toBeVisible();
   });
 
@@ -102,7 +108,8 @@ test.describe("board 7e — quiet hours and the acknowledgement", () => {
     // §5: one source for quiet hours, the acknowledgement and board 7d's
     // routing skip. A second copy is the contradiction that surfaces during
     // Ramadan.
-    await expect(page.getByLabel("Hold WhatsApp and SMS outside your working hours")).toBeVisible();
+    // T6.8: the label named SMS, which a seller can no longer choose.
+    await expect(page.getByLabel("Hold WhatsApp outside your working hours")).toBeVisible();
     await expect(page.getByText(/no second copy of the week on this screen/)).toBeVisible();
   });
 

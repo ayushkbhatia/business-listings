@@ -1088,6 +1088,90 @@ export async function onSubscriptionRenewed(input: {
 }
 
 /**
+ * A card that did not go through — board 11h's dunning sequence, task T6.2.
+ *
+ * ## What the job did instead
+ *
+ * `runDunning`'s `send` branch advanced `dunningStage` and sent **nothing**,
+ * under a comment arguing that advancing the stage is what matters because "a
+ * stage that moves only when a message actually sent would stall the whole
+ * sequence behind an unconfigured provider". The first half of that is right
+ * and is kept — the stage still moves whatever happens here. The second half
+ * made the sequence a timer with no voice: a seller's plan dropped to Free on
+ * day fifteen having been told three times by nobody.
+ *
+ * ## Which message, and to whom
+ *
+ * Two events, because the two messages are not one message with a parameter.
+ * `payment_failed` is day 3 and day 7 — a card that failed, with runway left,
+ * and `daysLeft` is the runway rather than a date. `payment_final_notice` is
+ * day 14, and it says what happens rather than how long is left.
+ *
+ * To the owner, and that is deliberate. The alerts matrix sends
+ * `document_expiring` to *owner and finance*, and money is the same shape of
+ * fact — but `GOES_TO` is 7e's screen and this event is not on it (`notify`
+ * reads the floor, not the screen), so widening the recipient set is a decision
+ * for the screen to make rather than one to smuggle in here. The owner is who
+ * the billing page belongs to.
+ *
+ * `safely`, like every other emitter: a message that fails must not take a
+ * dunning run down with it, because the run is what keeps the account's state
+ * honest.
+ */
+export async function onPaymentFailed(input: {
+  businessId: string;
+  planName: string;
+  /** What the card was asked for, VAT included, already formatted. */
+  amountAed: string;
+  /** Days from today to the plan dropping to Free. */
+  daysLeft: number;
+  final: boolean;
+}): Promise<void> {
+  const event = input.final ? "payment_final_notice" : "payment_failed";
+  await safely(event, async () => {
+    const owner = await prisma.user.findFirst({
+      where: { businessId: input.businessId, roles: { has: "seller_owner" } },
+      orderBy: { id: "asc" },
+      select: { id: true },
+    });
+    if (!owner) return;
+
+    const shortLink = absoluteUrl("/dashboard/billing");
+    if (input.final) {
+      await notify({
+        event: "payment_final_notice",
+        businessId: input.businessId,
+        recipientUserId: owner.id,
+        params: withParams("payment_final_notice", {
+          planName: input.planName,
+          amount: formatAED(input.amountAed),
+          /*
+             What dunning is forbidden from doing, as a sentence the seller
+             reads — from `lib/i18n/en.ts` rather than written into a template
+             body, so the promise and the code that keeps it move together.
+          */
+          keptLabel: t("billing.dunning.kept"),
+          shortLink,
+        }),
+      });
+      return;
+    }
+
+    await notify({
+      event: "payment_failed",
+      businessId: input.businessId,
+      recipientUserId: owner.id,
+      params: withParams("payment_failed", {
+        planName: input.planName,
+        amount: formatAED(input.amountAed),
+        daysLeft: formatCount(input.daysLeft),
+        shortLink,
+      }),
+    });
+  });
+}
+
+/**
  * An enquiry nobody answered, escalated to the owner. Board 8d §8.
  *
  * The one promise on the invite screen that needed a job rather than a

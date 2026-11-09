@@ -1,0 +1,26 @@
+-- Task T6.2 — the two events board 11h's dunning sequence sends.
+--
+-- Purely **additive**: two values on an enum type, no column, no constraint, no
+-- data. By `docs/deployments.md` § Ordering that means it applies *before* the
+-- merge that reads it, and nothing on `main` emits either until then.
+--
+-- ## Adding the value is safe. Writing a row with it is not.
+--
+-- A deployed Prisma client throws on reading a **whole table** when one row
+-- carries an enum value it does not know, so the order is:
+--
+--   1. this migration — the type gains two values, no row uses them;
+--   2. the merge deploys a client that knows them;
+--   3. the templates for the two events go in, through the console's own
+--      editor or the seed.
+--
+-- Doing (3) before (2) would take `/admin/notifications` down for every event,
+-- not just these. Until the templates exist `notify` records
+-- `no_live_template` against each send — which is the honest state and is
+-- exactly what board 12g's screen is for.
+--
+-- `ALTER TYPE … ADD VALUE` is allowed inside a transaction on Postgres 12 and
+-- later as long as the new value is not *used* in the same transaction, which
+-- is why there is no `INSERT` in this file.
+ALTER TYPE "notification_event" ADD VALUE IF NOT EXISTS 'payment_failed';
+ALTER TYPE "notification_event" ADD VALUE IF NOT EXISTS 'payment_final_notice';

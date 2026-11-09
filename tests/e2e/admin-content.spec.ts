@@ -83,7 +83,15 @@ test.describe("board 6f — the page matrix", () => {
     await expect(field).toBeVisible();
 
     await field.fill("Three words only");
-    await expect(page.getByText("3 words")).toBeVisible();
+    /*
+       `exact`, because `getByText` matches substrings: the same screen prints
+       "65 listings, 313 words" for a published page, and "313 words" contains
+       "3 words". Whether this test passed therefore depended on the word counts
+       in the database — it passes on the seeded one and fails the moment a page
+       is long enough to end in three. The assertion is about the live counter
+       on the field, so it should match that and nothing else.
+    */
+    await expect(page.getByText("3 words", { exact: true })).toBeVisible();
   });
 
   test("will not write anything without a reason", async ({ page }) => {
@@ -197,7 +205,12 @@ test.describe("board 12g — notification templates", () => {
     await expect(page.getByText("WhatsApp goes through Meta")).toBeVisible();
     await expect(page.getByRole("button", { name: /^Send v\d+ to Meta$/ })).toBeVisible();
     await expect(page.getByRole("button", { name: /^Save as v\d+$/ })).toHaveCount(0);
-    await expect(page.getByText(/Email, SMS and in-app take effect on save/).first()).toBeVisible();
+    /*
+       T6.8: the panel said "Email, SMS and in-app take effect on save" and now
+       says "Email and in-app" — SMS is retired (N10) and a sentence naming it
+       would describe a channel the save cannot reach.
+    */
+    await expect(page.getByText(/Email and in-app take effect on save/).first()).toBeVisible();
   });
 
   test("offers the services version where a goods body has none", async ({ page }) => {
@@ -213,9 +226,26 @@ test.describe("board 12g — notification templates", () => {
      * is gone once a twin exists, so a second local run would find no link to
      * click. A unique body means that run writes v2 rather than being refused
      * as unchanged.
+     *
+     * ## The suffix is letters, and it has to be
+     *
+     * It was `Date.now()` — thirteen digits on the end of a **live** template
+     * body. `render()`'s leak guard reads a long run of digits as a phone
+     * number and refuses to send, so this test was writing a body the product
+     * itself would never deliver; and `tests/integration/notifications.test.ts`
+     * reads every live template in the database and failed on it, which is a
+     * cross-suite collision only a shared database shows. CI gives each job its
+     * own, so nothing caught it there.
+     *
+     * Base 36 of the same clock: still unique per run, still a different body
+     * from the last one, and not a number anybody can mistake for a telephone.
      */
     await page.goto("/admin/notifications?t=quote_expiring.in_app&line=services");
-    await page.getByRole("textbox", { name: /^Body/ }).fill(`Proposal {quoteRef} runs out {expiresAt}. Extend the terms or let it lapse. ${Date.now()}`);
+    await page
+      .getByRole("textbox", { name: /^Body/ })
+      .fill(
+        `Proposal {quoteRef} runs out {expiresAt}. Extend the terms or let it lapse. Run ${Date.now().toString(36)}`,
+      );
     await page.getByRole("textbox", { name: /^Why/ }).fill("Service firms send proposals, not quotes.");
     await page.getByRole("button", { name: /^Save as v\d+$/ }).click();
     await expect(page.getByText(/Version \d+ is live/)).toBeVisible();

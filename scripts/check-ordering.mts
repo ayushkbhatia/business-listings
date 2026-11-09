@@ -119,7 +119,6 @@ const EXEMPT = new Map<string, string>([
   ["lib/enquiry/escalation-job.ts :: EnquiryRecipient :: take: 500", "A job's batch. Wants oldest-first so a backlog drains rather than circling."],
   ["lib/enquiry/zero-quote.ts :: Enquiry :: take: 200", "Same: a job's batch, and the same answer."],
   ["lib/messaging/follow-up.ts :: EnquiryRecipient :: take: 200", "Same."],
-  ["lib/notify/service.ts :: NotificationDelivery :: take: 200", "The delivery queue's batch. Oldest-first is the whole point of a queue."],
   ["lib/search/reindex.ts :: Product :: take: 300", "The reindex batch. Wants a cursor, as `loadDirectory` now has."],
 ]);
 

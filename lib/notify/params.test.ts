@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { NotificationEvent } from "@/lib/db/generated/enums";
 import {
   EVENT_AUDIENCE,
   EVENT_PARAMS,
@@ -114,6 +115,14 @@ describe("what an event supplies", () => {
       // Board `7b` `B4`: the scanner's finding, told to the company's admins.
       "off_platform_flagged",
       /*
+         Board 11h's dunning sequence, T6.2. The sixth and seventh events sent
+         from a schedule, and the first two whose *absence* had a cost in money:
+         `runDunning` advanced the stage and sent nothing, so a plan dropped to
+         Free on day fifteen having been told three times by nobody.
+      */
+      "payment_failed",
+      "payment_final_notice",
+      /*
          Board `11e` `B10`. The waiting list's release rule — everybody on it is
          told the day the slot frees, and the first to answer takes it — only
          works if everybody is actually told. Until this, `notifiedAt` was a
@@ -182,9 +191,16 @@ describe("what an event supplies", () => {
   });
 
   it("covers every event in the enum, so none is missing a row", () => {
-    // `satisfies Record<NotificationEvent, …>` enforces this at compile time;
-    // this fails loudly if somebody widens the enum and the type is loosened.
-    expect(Object.keys(EVENT_PARAMS)).toHaveLength(31);
+    /*
+       `satisfies Record<NotificationEvent, …>` enforces this at compile time;
+       this fails loudly if somebody widens the enum and the type is loosened.
+
+       Counted from the enum rather than written as a literal — 31 became 33
+       when T6.2 added `payment_failed` and `payment_final_notice`, and a hand
+       maintained number is a number somebody updates without looking at what
+       it is counting.
+    */
+    expect(Object.keys(EVENT_PARAMS).sort()).toEqual(Object.values(NotificationEvent).sort());
   });
 
   it("does not claim to emit the alert it only records", () => {

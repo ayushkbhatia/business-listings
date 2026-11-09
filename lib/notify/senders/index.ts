@@ -66,12 +66,14 @@ export function resolveNotificationSenders(
     senders.email = new ConsoleNotificationSender("email", env["NODE_ENV"]);
   }
 
-  // SMS still has no carrier. Absent in production is the honest state: the
-  // service writes a skip with a reason, which is auditable, rather than a
-  // sent it cannot back up.
-  if (!production) {
-    senders.sms = new ConsoleNotificationSender("sms", env["NODE_ENV"]);
-  }
+  /*
+     No SMS sender — decision N10, task T6.8.
+
+     There was a console one outside production, which is what made "sent" mean
+     "printed to a server log" for a seller who had chosen a text message.
+     `route()` returns a `skip` with reason `channel_retired` for SMS now, so
+     this branch would be a carrier for a decision that cannot be made.
+  */
 
   return senders;
 }
