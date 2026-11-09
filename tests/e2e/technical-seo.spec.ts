@@ -121,7 +121,15 @@ test.describe("criterion 12 — the sitemap is only published pages", () => {
       "/compare",
       "/admin",
       "/dev",
-      "/lp/",
+      /*
+         `/lp/` left this list in T3.3, and it is a decision rather than a
+         relaxation. A campaign page sets no `robots` meta and is canonical to
+         itself, and the route says why in its own words: "a campaign page is a
+         real page with real copy — it is not a doorway, and hiding it would be
+         admitting it was." So it was never *asked* not to be indexed; it was
+         simply in no sitemap, reachable from an advert and from nothing else.
+         The `campaign` chunk submits it now.
+      */
       // The seeded area page that does not clear the floors.
       "/dubai/ras-al-khor-industrial-2/safety-and-ppe",
     ]) {
