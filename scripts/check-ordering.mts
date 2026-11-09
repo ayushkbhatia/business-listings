@@ -32,6 +32,34 @@
  * Otherwise it fails, unless `EXEMPT` names it with a reason. An exemption that
  * matches nothing fails too, so the list cannot quietly outlive its sites.
  *
+ * ## The second shape — a cut with no order at all (T2.3)
+ *
+ * The rule above only ever looked at reads that *had* an `orderBy`, so the
+ * worse shape was invisible to it: a `take`, a `skip` or a `cursor` with **no
+ * ordering**, where Postgres is free to return any rows at all rather than
+ * merely to break a tie its own way. `searchBusinesses` read `take: 200` like
+ * that against 38,687 public listings and ranked whatever came back, and
+ * `loadDirectory` read `take: 20_000` like that — so a seller's nightly rank
+ * history was a history of which rows the planner happened to pick. Both were
+ * found by reading, which is exactly what a scan is for.
+ *
+ * Narrower than the first rule on purpose, because the second shape has one
+ * very common innocent form. A read is flagged when it **pages**:
+ *
+ *   · `skip` or `cursor` — paging, which is meaningless without an order;
+ *   · `take` above one, or a `take` whose size is a variable, which is a page
+ *     size by another name.
+ *
+ * A bare `take: 1` is not flagged. It is usually an existence probe or a
+ * "whichever one" read where the caller genuinely does not care, and a static
+ * check cannot tell those from a probe that then uses the row it found — so
+ * flagging them produced a hundred findings, nearly all innocent, which is how
+ * a scan teaches people to add exclusions instead of reading it. The two real
+ * defects this rule exists for were `take: 200` and `take: 20_000`.
+ *
+ * One further allowance: a read whose `where` pins at most one row has nothing
+ * to order.
+ *
  * ## What this does not catch
  *
  * - **In-memory paging.** `rows.sort(cmp).slice(…)` decides rows exactly the way
@@ -67,7 +95,33 @@ const CUTS = ["take", "skip", "cursor"];
  * an entry survives a line moving but not the ordering changing. Adding to this
  * list is the point at which somebody has to argue.
  */
-const EXEMPT = new Map<string, string>([]);
+const EXEMPT = new Map<string, string>([
+  /*
+     T2.3's shape, as it stood when the rule went in. A fence, not a sweep.
+
+     Ten paging reads had no ordering when the check learned to see them. Five
+     were in `lib/db/queries/search.ts` and are fixed in the same change,
+     because that file is the one this sprint owns. These ten are not: each
+     needs a decision about what the right order *is* — a job wants the oldest
+     first so a backlog drains, a card wants whatever the screen shows, a map
+     wants the nearest — and guessing one per module from outside the module
+     would be ten guesses wearing a scan's authority.
+
+     Unlike the first rule's list these are debt rather than decisions, so the
+     count is printed and should only ever go down. Nothing new joins: a new
+     unordered paging read fails.
+  */
+  ["app/(public)/rfq/new/page.tsx :: Product :: take: 20", "Which twenty products pre-fill a composer. Needs 3f's own order."],
+  ["lib/db/queries/blended-search.ts :: BusinessCategory :: take: 5", "The trade line on a blended row, as `BUSINESS_INCLUDE` had it."],
+  ["lib/db/queries/blended-search.ts :: FreeZoneRegistration :: take: 25", "Which free-zone registrations a row names."],
+  ["lib/db/queries/map.ts :: Business :: take: MAX_PINS", "Which pins a viewport shows past the cap. Wants nearest-first, which is 3c's distance work."],
+  ["lib/db/queries/product-detail.ts :: Product :: take: 60", "The related-products strip on a product page."],
+  ["lib/enquiry/escalation-job.ts :: EnquiryRecipient :: take: 500", "A job's batch. Wants oldest-first so a backlog drains rather than circling."],
+  ["lib/enquiry/zero-quote.ts :: Enquiry :: take: 200", "Same: a job's batch, and the same answer."],
+  ["lib/messaging/follow-up.ts :: EnquiryRecipient :: take: 200", "Same."],
+  ["lib/notify/service.ts :: NotificationDelivery :: take: 200", "The delivery queue's batch. Oldest-first is the whole point of a queue."],
+  ["lib/search/reindex.ts :: Product :: take: 300", "The reindex batch. Wants a cursor, as `loadDirectory` now has."],
+]);
 
 // ─── The schema: which fields are unique, and where each relation leads ──────
 
@@ -258,13 +312,50 @@ interface Finding {
   file: string;
   line: number;
   model: string;
+  /** The ordering, or `(no orderBy)` for the second shape. */
   orderBy: string;
   key: string;
 }
 
+/** What an unordered cut is keyed and reported as. */
+const UNORDERED = "(no orderBy)";
+
 const findings: Finding[] = [];
 const seen = new Set<ts.Node>();
 let qualifying = 0;
+
+/**
+ * Whether an unordered read is *paging* — see the second shape in the docblock.
+ *
+ * `skip` or `cursor` always. A `take` only above one, or when its size is not a
+ * literal, because a page size held in a constant is the shape that matters
+ * (`take: PAGE_SIZE`) and a bare `take: 1` is usually a probe.
+ */
+function pages(query: ts.ObjectLiteralExpression, file: ts.SourceFile): boolean {
+  if (prop(query, "skip") || prop(query, "cursor")) return true;
+  const take = prop(query, "take");
+  if (!take) return false;
+  const text = take.getText(file).trim();
+  const literal = Number(text.replace(/_/g, ""));
+  return Number.isNaN(literal) ? true : literal > 1;
+}
+
+/**
+ * Whether a `where` can match at most one row.
+ *
+ * Shared by both shapes: an ordering that ends on a non-unique column is
+ * harmless over one row, and a cut over one row has nothing to order.
+ */
+function pinsOneRow(model: Model, where: ts.ObjectLiteralExpression): boolean {
+  const names = where.properties.map(propName).filter((n): n is string => Boolean(n));
+  const compoundMembers = new Set([...model.compoundKeys].flatMap((k) => k.split("_")));
+  if (names.some((n) => model.unique.has(n) && !compoundMembers.has(n))) return true;
+  if (names.some((n) => model.compoundKeys.has(n))) return true;
+  // Every member of a compound key named as its own field pins one row too.
+  return [...model.compoundKeys].some((k) =>
+    k.split("_").every((member) => names.includes(member)),
+  );
+}
 
 function evaluate(
   query: ts.ObjectLiteralExpression,
@@ -275,9 +366,59 @@ function evaluate(
   groupBy?: Set<string>,
 ) {
   const orderBy = prop(query, "orderBy");
-  if (!orderBy || seen.has(query)) return;
+  if (seen.has(query)) return;
+  const cut = isFirst || CUTS.some((name) => prop(query, name));
+
+  /*
+     T2.3's shape: a cut with no ordering. Reported before the `orderBy` rule
+     because it is the worse of the two — there is no tie to break, only
+     whichever rows the scan produced.
+  */
+  if (!orderBy) {
+    if (!pages(query, file)) return;
+    /*
+       Only where the model resolved, which means a real `prisma.x.findMany`.
+
+       The `loose` pass walks every object literal in the file so that a query
+       fragment declared apart from its call is still seen. Without an
+       `orderBy` to anchor on, that pass cannot tell a Prisma read from any
+       object that happens to carry a `take`, a `skip` or a `cursor` — it
+       flagged a spread fragment (`...(cursor === null ? {} : { cursor, skip:
+       1 })`, whose own query *is* ordered) and a React prop called `skip`
+       holding a translated string. A read whose model is unknown is not a read
+       this rule can speak about.
+    */
+    if (!modelName) return;
+    seen.add(query);
+    const model = MODELS.get(modelName);
+    const where = asObject(prop(query, "where"), file);
+    // Nothing to order when the `where` pins at most one row.
+    if (model && where && pinsOneRow(model, where)) return;
+    qualifying += 1;
+    /*
+       Keyed on the cut rather than on the line, as the first rule is keyed on
+       the ordering: an entry has to survive a line moving and must not survive
+       the read changing size. `take: 200` and `take: PAGE_SIZE` in one file are
+       two different reads and get two keys.
+    */
+    const cutText = CUTS.map((name) => {
+      const node = prop(query, name);
+      return node ? `${name}: ${node.getText(file).replace(/\s+/g, " ")}` : null;
+    })
+      .filter((part): part is string => part !== null)
+      .join(", ");
+    findings.push({
+      file: relative(ROOT, path),
+      line: file.getLineAndCharacterOfPosition(query.getStart(file)).line + 1,
+      model: modelName ?? "?",
+      orderBy: UNORDERED,
+      key: `${relative(ROOT, path)} :: ${modelName ?? "?"} :: ${cutText || UNORDERED}`,
+    });
+    return;
+  }
+
   seen.add(query);
-  if (!isFirst && !CUTS.some((cut) => prop(query, cut))) return;
+  if (!cut) return;
   qualifying += 1;
 
   const variants = orderVariants(orderBy, file);
@@ -306,14 +447,7 @@ function evaluate(
     if (model ? model.unique.has(last) : [...MODELS.values()].some((m) => m.unique.has(last))) return true;
 
     // 2. The where pins one row.
-    if (model && where) {
-      const names = where.properties.map(propName).filter((n): n is string => Boolean(n));
-      const compoundMembers = new Set([...model.compoundKeys].flatMap((k) => k.split("_")));
-      if (names.some((n) => model.unique.has(n) && !compoundMembers.has(n))) return true;
-      if (names.some((n) => model.compoundKeys.has(n))) return true;
-      // Every member of a compound key named as its own field pins one row too.
-      if ([...model.compoundKeys].some((k) => k.split("_").every((member) => names.includes(member)))) return true;
-    }
+    if (model && where && pinsOneRow(model, where)) return true;
 
     // 3. The select reads only what is ordered on.
     if (select) {
@@ -396,7 +530,7 @@ for (const path of SCAN.flatMap((dir) => sourceFiles(join(ROOT, dir)))) {
 const failing = findings.filter((f) => !EXEMPT.has(f.key));
 const stale = [...EXEMPT.keys()].filter((key) => !findings.some((f) => f.key === key));
 
-console.log(`→ ordered reads that choose rows end on a unique key`);
+console.log(`→ a read that cuts rows says which rows: an orderBy, ending on a unique key`);
 console.log(`   ${qualifying} qualifying read(s), ${findings.length - failing.length} exempt, ${failing.length} failing`);
 for (const f of failing) {
   console.log(`   FAIL — ${f.file}:${f.line}  ${f.model}  orderBy: ${f.orderBy}`);

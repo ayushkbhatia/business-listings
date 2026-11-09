@@ -416,7 +416,19 @@ const BUSINESS_INCLUDE = {
      Deira buyer, and ranking them by whichever branch the database happened to
      return first would be a coin toss dressed as a distance.
   */
-  locations: { where: { published: true }, include: { area: true }, take: 5 },
+  /*
+     `type` then `id`, as the storefront orders them — T2.3. Five of a
+     supplier's branches reach the card and the distance signal, and taking five
+     unordered meant *which* five moved between requests: a Jebel Ali
+     supplier's Deira counter could be in the five on one request and out of it
+     on the next, which moves their distance and so their rank.
+  */
+  locations: {
+    where: { published: true },
+    include: { area: true },
+    orderBy: [{ type: "asc" }, { id: "asc" }] as Prisma.LocationOrderByWithRelationInput[],
+    take: 5,
+  },
   /*
      Board 1b's row carries a photo, the trades they carry and a branch count.
 
@@ -440,7 +452,15 @@ const BUSINESS_INCLUDE = {
     orderBy: [{ sortOrder: "asc" }, { id: "asc" }] as Prisma.MediaOrderByWithRelationInput[],
     take: 1,
   },
-  categories: { include: { category: { select: { name: true } } }, take: 5 },
+  /*
+     The "Valves & actuators · Pumps & motors" line, and *which* five it named
+     was arbitrary — T2.3. On the category id, which is stable.
+  */
+  categories: {
+    include: { category: { select: { name: true } } },
+    orderBy: [{ categoryId: "asc" }] as Prisma.BusinessCategoryOrderByWithRelationInput[],
+    take: 5,
+  },
   _count: {
     select: {
       products: { where: { status: { not: "draft" } } },
@@ -737,7 +757,18 @@ export async function searchBusinesses(
   const candidates = await prisma.business.findMany({
     where,
     include: BUSINESS_INCLUDE,
-    // The fallback path, for the three shapes above. Bounded as it always was.
+    /*
+       The fallback path, for the four shapes above. Bounded as it always was,
+       and ordered now — T2.3.
+
+       Two hundred rows chosen with no ordering are whichever two hundred the
+       planner produced, and a different two hundred on the next request: the
+       ranking then ordered a different sample each time, so a listing could be
+       on page one and then absent with nothing having changed. On the id it is
+       at least the *same* arbitrary two hundred, which is what makes a fallback
+       a fallback rather than a lottery.
+    */
+    orderBy: [{ id: "asc" }],
     take: 200,
   });
 
@@ -1048,7 +1079,19 @@ const PRODUCT_INCLUDE = {
       plan: { select: { rankingMultiplier: true } },
       // Five, for the same reason as the business include: distance is to the
       // nearest branch, not to whichever one came back first.
-      locations: { where: { published: true }, include: { area: true }, take: 5 },
+      /*
+     `type` then `id`, as the storefront orders them — T2.3. Five of a
+     supplier's branches reach the card and the distance signal, and taking five
+     unordered meant *which* five moved between requests: a Jebel Ali
+     supplier's Deira counter could be in the five on one request and out of it
+     on the next, which moves their distance and so their rank.
+  */
+  locations: {
+    where: { published: true },
+    include: { area: true },
+    orderBy: [{ type: "asc" }, { id: "asc" }] as Prisma.LocationOrderByWithRelationInput[],
+    take: 5,
+  },
     },
   },
 } as const;
@@ -1075,7 +1118,17 @@ export async function searchProducts(
   const where = productWhere(query, categoryIds);
 
   const [candidates, total] = await Promise.all([
-    prisma.product.findMany({ where, include: PRODUCT_INCLUDE, take: 200 }),
+    /*
+       Ordered on the id — T2.3, same reasoning as the suppliers fallback above.
+       The products tab still ranks in the process; it is the next caller
+       `rankedPage` should take.
+    */
+    prisma.product.findMany({
+      where,
+      include: PRODUCT_INCLUDE,
+      orderBy: [{ id: "asc" }],
+      take: 200,
+    }),
     prisma.product.count({ where }),
   ]);
 
