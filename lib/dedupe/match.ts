@@ -21,19 +21,71 @@ import {
  * record is compared only with listings that share something that could make
  * it a duplicate at all — its licence digits or root, a phone, or an
  * identifying word of its name — which is a handful per record. A word shared
- * by more than `MAX_BLOCK` listings ("gulf", "star") identifies nobody and is
- * skipped as a block, never as a signal: a pair it would have found still
- * shares its licence or phone, or it was never going to score.
+ * by a large share of the corpus ("gulf", "star") identifies nobody and is
+ * dropped as a block, never as a signal: a pair it would have found still
+ * shares its licence or phone, or a rarer word in the same name.
  */
 
-const MAX_BLOCK = 200;
+/**
+ * The smallest a block cap is ever set — task T4.5.
+ *
+ * Below a few hundred listings no word identifies nobody, because there is
+ * nothing for it to fail to distinguish. The floor is what keeps the cap from
+ * firing on a directory of four hundred, where two hundred rows is half of it.
+ */
+export const MIN_BLOCK = 200;
+
+/**
+ * The share of the corpus a word may match before it stops identifying anyone.
+ *
+ * One per cent. A word that appears in one listing in a hundred narrows a
+ * 41,000-row directory to 410, which is a set worth comparing; a word in one in
+ * ten narrows it to nothing.
+ */
+export const BLOCK_SHARE = 0.01;
+
+/**
+ * How many listings one word may block, for a corpus of this size — T4.5.
+ *
+ * `MAX_BLOCK` was a flat 200 and that was the defect: **the number did not
+ * move with the directory**. At 400 listings it never fired, at 41,000 it cut
+ * at half a per cent, and at 400,000 it would cut words that appear in one
+ * listing in two thousand — which is a word that identifies a company
+ * perfectly well. The cut was also silent and at the wrong end: a block over
+ * the line was skipped by `bestMatch`, so the index still held it and nothing
+ * anywhere said a word had been given up on.
+ *
+ * Relative, with a floor, decided once per index and carried on it.
+ */
+export function blockCapFor(corpus: number): number {
+  return Math.max(MIN_BLOCK, Math.ceil(corpus * BLOCK_SHARE));
+}
 
 export interface MatchIndex {
   listings: ReadonlyMap<string, Listing>;
   blocks: ReadonlyMap<string, readonly string[]>;
+  /** The cap this index was built with — `blockCapFor(listings.length)`. */
+  blockCap: number;
+  /**
+   * The words that matched more listings than the cap and were left out.
+   *
+   * Carried rather than counted, because "which words identify nobody in this
+   * directory" is a thing an ops lead tuning the bands should be able to read,
+   * and because a silent cut is the defect this replaced.
+   */
+  droppedKeys: readonly string[];
 }
 
-function keysFor(listing: Listing): string[] {
+/**
+ * The blocking keys of one listing or record.
+ *
+ * Exported since T4.4, because the candidate query is built from exactly these:
+ * the database is asked for the listings that share a key with this chunk of
+ * records, and then the in-process index is built from what comes back. One
+ * definition of "could these two be the same company at all", read by the
+ * matcher and by the query that feeds it.
+ */
+export function keysFor(listing: Listing): string[] {
   const keys: string[] = [];
   const digits = licenceDigits(listing.licenceNumber);
   if (digits.length >= 4) keys.push(`licence:${digits}`);
@@ -49,7 +101,21 @@ function keysFor(listing: Listing): string[] {
   return [...new Set(keys)];
 }
 
-export function buildMatchIndex(listings: readonly Listing[]): MatchIndex {
+/**
+ * The blocking index, with the useless blocks left out rather than skipped.
+ *
+ * T4.5 moved the cap from the lookup to the build. It is the same decision in a
+ * better place: an index that holds a nine-thousand-row block is an index
+ * carrying nine thousand ids it will never use, and a `bestMatch` that skips
+ * the block has no way to say so. Every block that survives here is one the
+ * matcher will actually read.
+ *
+ * `cap` is for a caller that knows the corpus is wider than the array it is
+ * handing over — T4.4's candidate loader, which has already applied the same
+ * rule in SQL against the whole directory and must not apply a second, tighter
+ * one to the handful of rows it brought back.
+ */
+export function buildMatchIndex(listings: readonly Listing[], cap?: number): MatchIndex {
   const byId = new Map<string, Listing>();
   const blocks = new Map<string, string[]>();
   for (const listing of listings) {
@@ -60,7 +126,22 @@ export function buildMatchIndex(listings: readonly Listing[]): MatchIndex {
       else blocks.set(key, [listing.id]);
     }
   }
-  return { listings: byId, blocks };
+
+  const blockCap = cap ?? blockCapFor(listings.length);
+  const droppedKeys: string[] = [];
+  for (const [key, block] of blocks) {
+    if (block.length <= blockCap) continue;
+    /*
+       Only a name can be too common. A licence or a phone shared by four
+       hundred listings is not noise, it is four hundred listings that need
+       looking at — so those keys are never dropped however large they get.
+    */
+    if (!key.startsWith("name:")) continue;
+    blocks.delete(key);
+    droppedKeys.push(key.slice("name:".length));
+  }
+
+  return { listings: byId, blocks, blockCap, droppedKeys: droppedKeys.sort() };
 }
 
 export interface Match {
@@ -92,8 +173,10 @@ export function bestMatch(
   let best: Match | null = null;
 
   for (const key of keysFor(record)) {
+    // Every block the index holds is one worth reading — the cap was applied
+    // when it was built, which is where it can be reported.
     const block = index.blocks.get(key);
-    if (!block || block.length > MAX_BLOCK) continue;
+    if (!block) continue;
     for (const id of block) {
       if (seen.has(id) || exclude.has(id)) continue;
       seen.add(id);

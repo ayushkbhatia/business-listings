@@ -33,6 +33,9 @@ import { signalRows } from "./signals";
  */
 
 export const dynamic = "force-dynamic";
+// T4.6. The ceiling for every Server Action called from this screen. See the
+// note on `/admin/ingest`'s own page for why 300 and why it is set here.
+export const maxDuration = 300;
 
 const DAY_MS = 86_400_000;
 

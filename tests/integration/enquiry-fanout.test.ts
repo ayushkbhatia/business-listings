@@ -53,8 +53,28 @@ beforeAll(async () => {
   });
   categoryId = category.id;
 
+  /*
+     A buyer with something to hide, chosen deterministically.
+
+     This asked for the first non-provisional buyer with no `orderBy` and no
+     condition on the contact details — so which buyer it got depended on
+     physical row order, and the assertion three hundred lines down ("the seeded
+     buyer needs contact details to prove anything") was a hope rather than a
+     fact. It fails the moment another run leaves a buyer row earlier in the
+     heap, which on a shared local database is a Tuesday.
+
+     The point of the test is that the four sellers who did not win cannot see
+     the buyer's phone, email or company, so the buyer has to **have** one.
+     Asked for here, ordered on the key.
+  */
   const buyer = await prisma.user.findFirstOrThrow({
-    where: { roles: { has: "buyer" }, isProvisional: false },
+    where: {
+      roles: { has: "buyer" },
+      isProvisional: false,
+      phone: { not: null },
+      email: { not: null },
+    },
+    orderBy: { id: "asc" },
     select: { id: true },
   });
   buyerId = buyer.id;

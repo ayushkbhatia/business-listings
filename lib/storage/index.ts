@@ -2,11 +2,14 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   DOCUMENT_BUCKET,
+  INGEST_BUCKET,
+  INGEST_TYPES,
   INVOICE_BUCKET,
   MEDIA_BUCKET,
   PUBLIC_BUCKETS,
   MAX_DOCUMENT_BYTES,
   MAX_IMAGE_BYTES,
+  MAX_INGEST_BYTES,
   MAX_INVOICE_BYTES,
   DOCUMENT_TYPES,
   IMAGE_TYPES,
@@ -171,6 +174,26 @@ export async function replaceObject(
   return { ok: true, path };
 }
 
+/**
+ * One staged licence export, as text — T4.1.
+ *
+ * `download` rather than a signed read URL and a fetch: the server already
+ * holds the service-role key, and a round trip through a signed URL would add a
+ * network hop for no isolation. A missing object is null rather than a throw,
+ * because the caller's answer to it is a sentence on a screen — "that upload is
+ * no longer in storage, upload the file again" — and not a stack trace.
+ *
+ * Decoded as UTF-8. A register export in Windows-1252 with an Arabic trade name
+ * in it would arrive mangled, which is a real possibility and a different task:
+ * the parser's header check catches a file that is not CSV, and a name that
+ * round-trips wrong is T5.1's problem with the mapping in front of it.
+ */
+export async function readIngestText(path: string): Promise<string | null> {
+  const bytes = await readObject(INGEST_BUCKET, path);
+  if (!bytes) return null;
+  return new TextDecoder("utf-8").decode(bytes);
+}
+
 export async function removeObject(bucket: string, path: string): Promise<void> {
   const admin = createAdminClient();
   await admin.storage.from(bucket).remove([path]);
@@ -240,6 +263,23 @@ export async function ensureBuckets(): Promise<{
         public: false,
         fileSizeLimit: MAX_INVOICE_BYTES,
         allowedMimeTypes: ["application/pdf"],
+      },
+    },
+    /*
+       T4.1 — licence exports on their way into the importer.
+
+       Thirty-two megabytes, which is the only bucket here measured in tens: a
+       40,000-row register export is 6–10 MB and the declared row ceiling allows
+       50,000. The limit is on the bucket as well as on the form, because the
+       browser writes these bytes directly to a signed URL and the form's number
+       is a claim.
+    */
+    {
+      name: INGEST_BUCKET,
+      options: {
+        public: false,
+        fileSizeLimit: MAX_INGEST_BYTES,
+        allowedMimeTypes: [...INGEST_TYPES],
       },
     },
   ];

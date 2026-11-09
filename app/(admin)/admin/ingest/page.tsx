@@ -14,7 +14,7 @@ import { queuedRecordCount } from "@/lib/ingest/queue";
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { AdminPage, getAdminNavBadges } from "../../_shell";
-import { discard, publish, rollback, stage } from "./actions";
+import { discard, publish, resumeStaging, rollback, signIngestUpload, stage } from "./actions";
 import { IngestTabs } from "./IngestTabs";
 import { RunHistory, SourcesPanel } from "./IngestRail";
 import { NewImport } from "./NewImport";
@@ -31,6 +31,28 @@ import { RunTable } from "./RunTable";
  */
 
 export const dynamic = "force-dynamic";
+/*
+   Task T4.6 — how long an ingest action is allowed to live.
+
+   Every action on this screen can touch forty thousand records: staging a
+   register export, publishing a run, continuing one the chunk loop did not
+   finish, categorising a queue group, rescanning the directory for pairs.
+   Not one of them declared a duration, so each inherited the platform's
+   default — and a function killed mid-run is what T4.2's chunked transactions
+   and resumable cursor exist to survive. Surviving it is not a reason to keep
+   provoking it.
+
+   `maxDuration` on a **page** sets the ceiling for every Server Action called
+   from it (Next's own note in `route-segment-config/maxDuration`), which is
+   what makes one line here cover six actions.
+
+   Three hundred seconds: the ceiling on this project's Vercel plan — settled by
+   measurement in `docs/deployments.md` § Which plan the crons run on — and well
+   above what a 41,000-row run measures at, with every chunk transaction bounded
+   at thirty seconds inside it so a stall fails one chunk rather than the
+   request. The resume is what covers the case where even this is not enough.
+*/
+export const maxDuration = 300;
 
 /**
  * The licensing authorities a run can come from, straight off the schema enum
@@ -67,7 +89,7 @@ export default async function IngestPage() {
             : t("admin.ingest.meta_none")}
         </span>
       }
-      actions={<NewImport authorities={AUTHORITIES} stage={stage} />}
+      actions={<NewImport authorities={AUTHORITIES} stage={stage} sign={signIngestUpload} />}
     >
       <IngestTabs active="runs" queued={queued} showDedupe={can(seat.actor, "business.merge")} />
 
@@ -81,6 +103,7 @@ export default async function IngestPage() {
                 publish={publish}
                 discard={discard}
                 rollback={rollback}
+                resume={resumeStaging}
                 reversibleDays={REVERSIBLE_DAYS}
                 linkToRun
               />

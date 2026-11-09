@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/primitives";
 import { Modal } from "@/components/structure";
 import { t } from "@/lib/i18n";
-import type { ActionResult } from "./actions";
+import type { ActionResult, SignResult } from "./actions";
 import { StageForm } from "./StageForm";
 
 /**
@@ -17,9 +17,12 @@ import { StageForm } from "./StageForm";
 export function NewImport({
   authorities,
   stage,
+  sign,
 }: {
   authorities: readonly { value: string; label: string }[];
   stage: (formData: FormData) => Promise<ActionResult>;
+  /** T4.1 — the export goes to object storage before anything is staged. */
+  sign: (formData: FormData) => Promise<SignResult>;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -32,7 +35,14 @@ export function NewImport({
         closeLabel={t("action.cancel")}
         size="lg"
       >
-        {open && <StageForm authorities={authorities} stage={stage} onCancel={() => setOpen(false)} />}
+        {open && (
+          <StageForm
+            authorities={authorities}
+            stage={stage}
+            sign={sign}
+            onCancel={() => setOpen(false)}
+          />
+        )}
       </Modal>
     </>
   );

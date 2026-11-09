@@ -4,11 +4,19 @@ const nextConfig: NextConfig = {
   experimental: {
     serverActions: {
       /*
-         Board 12a: a licence export is read in the browser and staged by a
-         server action, and the default 1 MB refused an 8,000-row file — the
-         number criterion 1 names — before any code of ours ran. 4 MB is under
-         Vercel's 4.5 MB request ceiling, which is the real limit; the staging
-         form states it and refuses a larger file before sending it.
+         The seller's catalogue import — board 11d — is read in the browser and
+         posted as text by a server action, and the default 1 MB refuses a
+         5,000-row sheet. 4 MB is under Vercel's 4.5 MB request ceiling, which
+         is the real limit.
+
+         **It is no longer the licence importer's limit.** Board 12a used to
+         ride in this body too, and this number is where its ceiling came from:
+         4 MB cut a register export at about 30,000 rows against a declared
+         50,000, so the importer refused the file the feature exists for. T4.1
+         moved it to object storage — the browser PUTs to a signed URL and the
+         server stages from the bucket — so the only thing bounded by this is a
+         catalogue, where 5,000 rows is the product's own limit rather than the
+         transport's.
       */
       bodySizeLimit: "4mb",
     },

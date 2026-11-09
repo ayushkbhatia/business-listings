@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { signalRows } from "@/app/(admin)/admin/ingest/dedupe/signals";
-import { bestMatch, buildMatchIndex, chooseParent, pairHint, type SideFacts } from "./match";
+import {
+  MIN_BLOCK,
+  bestMatch,
+  blockCapFor,
+  buildMatchIndex,
+  chooseParent,
+  pairHint,
+  type SideFacts,
+} from "./match";
 import { DEFAULT_BANDS, type Listing } from "./similarity";
 
 /**
@@ -113,6 +121,68 @@ describe("bestMatch", () => {
     const result = bestMatch(record, index, { floor: 0.8, certain: 0.9 });
     expect(result.match).toBeNull();
     expect(result.nearMiss).toBe(true);
+  });
+});
+
+describe("T4.5 — the block cap moves with the directory", () => {
+  /*
+     The defect, as a test.
+
+     `MAX_BLOCK` was a flat 200 and the cut was made at **lookup**: a word
+     shared by more than two hundred listings was skipped by `bestMatch`, so the
+     index still carried it and nothing anywhere said a word had been given up
+     on. The number did not move with the corpus, which is the part that
+     mattered — at four hundred listings it never fired, and at four hundred
+     thousand it would cut words that appear in one listing in two thousand.
+  */
+  it("is a share of the corpus, with a floor", () => {
+    // Small directory: the floor, because no word identifies nobody yet.
+    expect(blockCapFor(0)).toBe(MIN_BLOCK);
+    expect(blockCapFor(400)).toBe(MIN_BLOCK);
+    // 41,000 listings: a word in one in a hundred still narrows to 410.
+    expect(blockCapFor(41_000)).toBe(410);
+    // And it keeps moving, which the flat 200 did not.
+    expect(blockCapFor(400_000)).toBe(4_000);
+  });
+
+  it("drops an over-common word when the index is built, and says which", () => {
+    /*
+       Two hundred and one listings sharing one word, against a cap of 200. The
+       word leaves the index — so `bestMatch` reads no useless block — and it is
+       named on the index, because a silent cut is what this replaced.
+    */
+    const many = Array.from({ length: MIN_BLOCK + 1 }, (_, i) =>
+      listing({ id: `gulf-${String(i)}`, tradeName: `Gulf Trading ${String(i)} LLC` }),
+    );
+    const index = buildMatchIndex(many, MIN_BLOCK);
+
+    expect(index.blockCap).toBe(MIN_BLOCK);
+    expect(index.droppedKeys).toContain("gulf");
+    expect(index.blocks.has("name:gulf")).toBe(false);
+    /*
+       The rarer word in the same name is untouched: this is a cap on words that
+       identify nobody, not a cap on the name. `keysFor` only blocks on tokens
+       longer than two characters, so `137` is a key and `17` is not — which is
+       worth asserting, because a reader of this test would otherwise read the
+       absent `17` as the cap having fired.
+    */
+    expect(index.blocks.get("name:137")?.length).toBe(1);
+    expect(index.blocks.has("name:17")).toBe(false);
+  });
+
+  it("never drops a licence or a phone, however many listings share it", () => {
+    /*
+       A licence shared by four hundred listings is not noise — it is four
+       hundred listings that need looking at, and dropping the block would hide
+       the clearest duplicate signal the matcher has.
+    */
+    const many = Array.from({ length: MIN_BLOCK + 1 }, (_, i) =>
+      listing({ id: `same-${String(i)}`, tradeName: `Distinct ${String(i)}`, licenceNumber: "DED-441908", phones: ["043406688"] }),
+    );
+    const index = buildMatchIndex(many, MIN_BLOCK);
+    expect(index.blocks.get("licence:441908")?.length).toBe(MIN_BLOCK + 1);
+    expect(index.blocks.get("phone:43406688")?.length).toBe(MIN_BLOCK + 1);
+    expect(index.droppedKeys).not.toContain("441908");
   });
 });
 

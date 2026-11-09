@@ -6,7 +6,7 @@ import { REVERSIBLE_DAYS, isRecordFilter, runOverview, runRecords } from "@/lib/
 import { queuedRecordCount } from "@/lib/ingest/queue";
 import { t } from "@/lib/i18n";
 import { AdminPage, getAdminNavBadges } from "../../../_shell";
-import { discard, publish, rollback } from "../actions";
+import { discard, publish, resumeStaging, rollback } from "../actions";
 import { IngestTabs } from "../IngestTabs";
 import { RunReview } from "../RunReview";
 import { RecordsTable } from "./RecordsTable";
@@ -21,6 +21,9 @@ import { RecordsTable } from "./RecordsTable";
  */
 
 export const dynamic = "force-dynamic";
+// T4.6. The ceiling for every Server Action called from this screen. See the
+// note on `/admin/ingest`'s own page for why 300 and why it is set here.
+export const maxDuration = 300;
 
 const PAGE_SIZE = 50;
 
@@ -71,6 +74,7 @@ export default async function RunPage({
           publish={publish}
           discard={discard}
           rollback={rollback}
+          resume={resumeStaging}
           reversibleDays={REVERSIBLE_DAYS}
         />
       </div>

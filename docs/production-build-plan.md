@@ -227,12 +227,12 @@ funnel stage 1 sums to its own breakdown.
 
 | # | Task | Gap | Anchor | Size |
 |---|---|---|---|---|
-| T4.1 | Replace the form-post stage with an object-storage upload: the browser puts the file in Storage, the server stages from there. The current ceiling is a 4 MB body against a declared 50,000-row limit, and a 40,000-row licence export is 6–10 MB | G29 | `next.config.ts:13`, `admin/ingest/StageForm.tsx:30`, `lib/ingest/service.ts:155` | L |
-| T4.2 | Chunk staging and publish into per-chunk transactions with a resumable cursor. Both currently run the whole file in one 120 s interactive transaction, on a pooler the app opens with `connection_limit=1`, with no `maxDuration` declared anywhere on the path | G29 | `lib/ingest/service.ts:483`, `:831` | L |
-| T4.3 | Resolve slug collisions on the database's unique constraint with a retry, instead of pre-reading every slug in the directory | G29 | `lib/ingest/service.ts:650` | M |
-| T4.4 | Build the dedupe match index from an indexed query per chunk instead of loading every business with all of its locations into memory, twice per run | G29 | `lib/dedupe/source.ts:44` | L |
-| T4.5 | Raise or remove `MAX_BLOCK = 200`, which silently stops name-token matching as the directory grows — exactly when dedupe matters most | G— | `lib/dedupe/match.ts:29`, `:96` | M |
-| T4.6 | Declare `maxDuration` on every ingest route and action | G29 | — | S |
+| T4.1 | **Done.** `ingest-uploads` bucket, signed PUT from the browser, `uploadPath` on the run. 32 MB on the bucket as well as the form. Tested with a 4.5 MB file, which the request body could never have carried | G29 | `lib/storage/`, `StageForm.tsx`, `lib/ingest/service.ts` | L |
+| T4.2 | **Done.** Three phases each, a chunk per transaction. **No migration and no cursor column** — `(run_id, row_number)` is unique, so the rows say how far a run got, and a published staged row has left the publish set. `parsing` is a real state now, drawn and resumable | G29 | `lib/ingest/service.ts` | L |
+| T4.3 | **Done.** `claimSlugs` asks for the bases the run wants (one indexed `IN`, plus a family read only where one is taken); the constraint decides and a refused row is renamed rather than losing the chunk | G29 | `lib/ingest/service.ts` | M |
+| T4.4 | **Done, and the old path did not merely cost too much — it threw `P2029`** at 38,687 listings, so the read the importer did twice per run could not read the directory it exists to build. Per-chunk candidates: 266 listings and 48 ms against 38,687 and 707 ms, 200/200 pairs still found | G29 | `lib/dedupe/source.ts`, `scripts/measure-ingest.mts` | L |
+| T4.5 | **Done.** `blockCapFor` is `max(200, 1% of the corpus)` — 396 on the harness — applied when the index is **built** rather than skipped at lookup, with the dropped words named on the index. A licence or a phone is never dropped | G— | `lib/dedupe/match.ts` | M |
+| T4.6 | **Done.** 300 s on all six importer screens and the rejects export; a test fails the seventh screen that forgets | G29 | `app/(admin)/admin/ingest/` | S |
 
 ### S5 · The real import, and what comes out of it
 

@@ -1302,7 +1302,7 @@ export const en = {
   "admin.ingest.col.when": "Uploaded",
   "admin.ingest.open": "Open",
   "admin.ingest.run_label": "Run {number}",
-  "admin.ingest.status.parsing": "Parsing",
+  "admin.ingest.status.parsing": "Staging",
   "admin.ingest.status.staged": "Awaiting review",
   "admin.ingest.status.approved": "Published",
   "admin.ingest.status.discarded": "Discarded",
@@ -1324,8 +1324,11 @@ export const en = {
   "admin.ingest.stage_source_hint": "Records with no authority column are read as this authority's.",
   "admin.ingest.stage_filename": "File name",
   "admin.ingest.stage_drop": "Drop a CSV export",
-  "admin.ingest.stage_drop_hint": "Needs a trade name column. Up to 3.9 MB, which is about 30,000 rows.",
+  "admin.ingest.stage_drop_hint": "Needs a trade name column. Up to 32 MB, which is more than one authority's whole register.",
   "admin.ingest.stage_too_large": "That file is {size}, and one run takes up to {limit}. Split it by emirate or by month and stage each part as its own run.",
+  "admin.ingest.stage_uploading": "Uploading the file",
+  "admin.ingest.stage_upload_failed": "The file did not finish uploading. Nothing was staged — try it again.",
+  "admin.ingest.storage_off": "Uploads are not set up in this environment. Run pnpm storage:setup against a Supabase project with a service key.",
   "admin.ingest.stage_action": "Stage the run",
   "admin.ingest.staged": {
     one: "{n} new listing staged. Nothing is live until the run is approved.",
@@ -1471,6 +1474,48 @@ export const en = {
   "admin.run.review_title": "Approve run {number} with nothing new",
   "admin.run.review_description": "No listing is created. The run is recorded as reviewed, with your reason.",
   "admin.run.review_confirm": "Approve run",
+  /*
+     Board 12a's refusals, which the importer's screens print verbatim.
+
+     They lived as literals in `lib/ingest/service.ts` — fourteen of them —
+     until T4.2 added a run state with refusals of its own and
+     `check:tokens` pass 4c caught the module. They are here rather than on the
+     scan's OWED list because the list is debt and nothing new joins it.
+  */
+  "ingest.refuse.empty": "That file has no rows under its header.",
+  "ingest.refuse.no_trade_name_column":
+    "No column looks like a trade name. The importer needs one — everything else it can do without.",
+  "ingest.refuse.upload_gone": "That upload is no longer in storage. Upload the file again and stage it.",
+  "ingest.refuse.no_file": "No file arrived with that request.",
+  "ingest.refuse.run_not_found": "That run is not in the importer.",
+  "ingest.refuse.not_parsing": "That run is {status}. Only a run still staging can be continued.",
+  "ingest.refuse.staged_from_text":
+    "That run was staged from text rather than from an upload, so there is no file to read again.",
+  "ingest.refuse.upload_gone_resume":
+    "That upload is no longer in storage. Discard the run and stage the file again.",
+  "ingest.refuse.rolled_back_publish": "That run was rolled back. Nothing more publishes from it.",
+  "ingest.refuse.not_open": "That run is {status}. Nothing publishes from it.",
+  "ingest.refuse.all_waiting":
+    "Nothing in this run can publish yet. The records left are waiting on the categorisation queue or on a fix.",
+  "ingest.refuse.nothing_left": "Everything in this run that can publish already has.",
+  "ingest.refuse.discard_published": "That run has published. Roll it back instead of discarding it.",
+  "ingest.refuse.already": "That run is already {status}.",
+  "ingest.refuse.already_rolled_back": "That run was already rolled back.",
+  "ingest.refuse.never_published": "Only a run that has published listings can be rolled back.",
+  "ingest.refuse.window_closed": "A run is reversible for {days} days. This one closed on {date}.",
+  "ingest.refuse.merges_confirmed":
+    "Records from this run became branches that their owners confirmed: {names}. Those are the owners' now, so the run cannot be rolled back.",
+  "ingest.refuse.merges_need_merge_role":
+    "Records from this run were merged into {count} listings. Rolling it back puts those merges back, which only an ops lead can do.",
+  "admin.run.decision.staging": "Staging this file. {stored} of {rows} records are in; the rest are not.",
+  "admin.run.decision.staging_lead": "Not finished.",
+  "admin.run.decision.staging_no_file": "The upload this run was staged from is not in storage, so it cannot be continued. Discard it and stage the file again.",
+  "admin.run.resume": "Continue staging",
+  "admin.run.resume_title": "Continue staging run {number}",
+  "admin.run.resume_description": "Reads the same file again and writes the records that are not in yet. The records already staged keep the verdict they were staged with.",
+  "admin.run.resume_confirm": "Continue staging",
+  "admin.run.resumed": "{n} more records staged. The run is ready for review.",
+  "admin.run.resume_nothing": "Every record in that file was already staged. The run is ready for review.",
   "admin.run.discard_title": "Discard run {number}",
   "admin.run.discard_description": "Nothing from this run publishes. Its records and raw rows stay, for comparing with the next file from this source.",
   "admin.run.rollback_title": "Roll back run {number}",

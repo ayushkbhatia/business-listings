@@ -14,6 +14,15 @@ import { t } from "@/lib/i18n";
  * can paste is a URL somebody will paste. 404 rather than 403, as the console's
  * pages do.
  */
+/*
+   T4.6. The rejects of a 41,000-row run are tens of thousands of rows, each
+   carrying its whole raw record (B5) — so this is the longest read in the
+   console that is not an action, and it declared no duration at all. The two
+   other exports in `/admin` ask for sixty seconds; this one can be a register.
+*/
+export const dynamic = "force-dynamic";
+export const maxDuration = 300;
+
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const seat = await getStaffSeat();
   if (!seat || !can(seat.actor, "queue.decide")) return new NextResponse(null, { status: 404 });
