@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
+import { sitemapXml } from "./_sitemap";
 
 /**
  * Board 6a — the area landing page, as a buyer and a crawler get it.
@@ -149,7 +150,7 @@ test.describe("a scope that clears all four conditions", () => {
     expect(await page.locator('meta[name="robots"]').count()).toBe(0);
     expect(await page.locator('link[rel="canonical"]').getAttribute("href")).toContain(LIVE);
 
-    const xml = await (await request.get("/sitemap.xml")).text();
+    const xml = await sitemapXml(request);
     expect(xml).toContain(LIVE);
   });
 
@@ -238,7 +239,7 @@ test.describe("a scope that fails a condition has no URL", () => {
   });
 
   test("is absent from the sitemap", async ({ request }) => {
-    const xml = await (await request.get("/sitemap.xml")).text();
+    const xml = await sitemapXml(request);
     expect(xml).not.toContain(HELD);
   });
 });

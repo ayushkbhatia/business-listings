@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import { Button, buttonClassName } from "@/components/primitives";
 import { Check } from "@/components/primitives/icons";
+import { crawlRel } from "@/lib/seo/crawl-policy";
 import type { ShortlistActionResult } from "./actions";
 
 /**
@@ -70,6 +71,14 @@ export function ShortlistButton({
     return (
       <Link
         href={labels.signInHref}
+        /*
+           T3.3. `?next=` makes this one distinct URL per listing — roughly
+           thirty thousand sign-in forms, each with nothing on it to index —
+           which is the shape `lib/seo/crawl-policy.ts` names for the claim
+           link and the report form. Derived from the href, so the bare
+           `/signin` a page without a return path renders stays followable.
+        */
+        rel={crawlRel(labels.signInHref)}
         className={buttonClassName({ variant: "secondary", size, block })}
       >
         {labels.signIn}

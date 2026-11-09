@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ChipLink, Eyebrow, FilterChip } from "@/components/display";
+import { crawlRel } from "@/lib/seo/crawl-policy";
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import {
@@ -57,6 +58,18 @@ export function SearchFilterBar({ query, basePath, total, appliedLabels }: Searc
   const hrefFor = (over: Partial<SearchQuery>) =>
     `${basePath}?${toSearchParams(query, { ...over, page: 1 })}`;
 
+  /*
+     The href and the `rel` it earns. `FilterChip` already does this for the
+     remove control it draws; these three were the only facet anchors on the
+     blended screen without it. Availability is multi-select, so they address
+     eight states of every query that reaches here, and `/search` is
+     `noindex, follow` — a crawler that ignores robots.txt follows them.
+  */
+  const link = (over: Partial<SearchQuery>) => {
+    const to = hrefFor(over);
+    return { href: to, rel: crawlRel(to) };
+  };
+
   return (
     <div className="border-b border-line bg-card">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3.5">
@@ -96,7 +109,7 @@ export function SearchFilterBar({ query, basePath, total, appliedLabels }: Searc
               <ChipLink
                 key={value}
                 size="sm"
-                href={hrefFor({ availability: next })}
+                {...link({ availability: next })}
                 selected={on}
               >
                 {t(`availability.${value}` as never)}

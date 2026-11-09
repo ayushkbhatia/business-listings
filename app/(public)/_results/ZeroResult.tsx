@@ -93,7 +93,13 @@ export function ZeroResult({
               most: nobody in the directory lists it, so asking the trade is the
               only thing left to offer.
             */}
-            <a href={rfqHref} className={buttonClassName()}>
+            {/*
+              T3.3: `?category=` makes this one composer URL per trade — 427 of
+              them, each `force-dynamic`, with nothing on any of them to index.
+              `crawlRel`, so the bare `/rfq/new` the blended screen passes stays
+              followable.
+            */}
+            <a href={rfqHref} rel={crawlRel(rfqHref)} className={buttonClassName()}>
               {t("zero.rfq_cta")}
             </a>
             {categoryName && categoryHref && (

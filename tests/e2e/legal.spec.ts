@@ -1,4 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
+import { sitemapXml } from "./_sitemap";
 import { expect, test, type Page } from "@playwright/test";
 
 /**
@@ -286,7 +287,12 @@ test.describe("the legal template", () => {
       await expect(page.locator('meta[name="robots"][content*="noindex"]')).toHaveCount(0);
     }
 
-    const sitemap = await (await request.get("/sitemap.xml")).text();
+    /*
+       T3.1: the sitemap is an index of chunks now, so a test that read one
+       document would be reading one slice of the directory. `sitemapXml`
+       follows the index and concatenates, which is what a crawler does.
+    */
+    const sitemap = await sitemapXml(request);
     for (const { path } of PAGES) expect(sitemap, path).toContain(`${path}<`);
   });
 

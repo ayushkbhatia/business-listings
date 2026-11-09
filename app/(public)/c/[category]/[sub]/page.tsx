@@ -191,6 +191,8 @@ export default async function SubcategoryPage({ params, searchParams }: Props) {
             id: category.id,
             slug: category.slug,
             name: category.name,
+            // T3.4: a subcategory's address carries its trade.
+            parentSlug: parent.slug,
             ids: [category.id],
             templateIds: [category.id, parent.id],
           }}

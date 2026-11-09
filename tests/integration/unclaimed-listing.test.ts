@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
-import sitemap from "@/app/sitemap";
+import { sitemapChunk, sitemapChunkIds } from "@/lib/seo/sitemap";
 import { publiclyClaimed } from "@/lib/claims/status";
 import { indexableListingWhere, unclaimedIndexable } from "@/lib/listing/index-rule";
 import { nearestVerifiedInTrade, suggestionPlace, type SuggestionSubject } from "@/lib/listing/suggestions";
@@ -278,7 +278,15 @@ describe("Q4 — the sitemap is the indexable set", () => {
        than only this file's: the sitemap's `/b/:slug` entries against the
        rule each page applies to itself.
     */
-    const entries = await sitemap();
+    /*
+       Every `/b/:slug` entry, across every chunk — T3.1 split the file by
+       class and id range, so "the sitemap" is now the union of its chunks and
+       a test that read one of them would be testing one slice of the
+       directory.
+    */
+    const entries = (
+      await Promise.all((await sitemapChunkIds()).map((id) => sitemapChunk(id)))
+    ).flat();
     const submitted = new Set(
       entries
         .map((entry) => /\/b\/([^/?#]+)$/.exec(entry.url)?.[1])

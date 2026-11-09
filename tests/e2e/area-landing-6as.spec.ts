@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { sitemapXml } from "./_sitemap";
 
 /**
  * Board `6a-s` — the services landing page, as a buyer and a crawler get it.
@@ -313,7 +314,7 @@ test.describe("B7 and B8 — two link axes, and only live pages on either", () =
   });
 
   test("the sitemap carries the four published pages and not the fifth", async ({ request }) => {
-    const xml = await (await request.get("/sitemap.xml")).text();
+    const xml = await sitemapXml(request);
     for (const route of [BB, DOWNTOWN, BB_AUDIT, DUBAI]) expect(xml, route).toContain(route);
     expect(xml).not.toContain(DEIRA);
   });

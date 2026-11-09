@@ -19,6 +19,7 @@ import {
   type FacetGroup,
 } from "@/lib/db/queries";
 import { appliedKeys, toSearchParams, type SearchQuery } from "@/lib/search/query";
+import { categoryPath } from "@/lib/seo/category-path";
 import { isCrawler } from "@/lib/seo/crawl-policy";
 import { BrowseToolbar } from "./BrowseToolbar";
 import { FilterPanel } from "./FilterPanel";
@@ -44,6 +45,15 @@ export interface ResultsProps {
     id: string;
     slug: string;
     name: string;
+    /**
+     * The parent trade's slug, for a subcategory — T3.4.
+     *
+     * Null on a top-level trade. Needed because a subcategory's address is
+     * `/c/:trade/:niche`, and the zero-result state's *Browse the whole
+     * category* link built `/c/:niche` — a 404 offered to a buyer who has just
+     * found nothing, which is a dead end inside a dead end.
+     */
+    parentSlug?: string | null;
     ids: string[];
     /**
      * Where to find the spec template, when that is wider than `ids`.
@@ -311,7 +321,7 @@ export async function Results({ query, basePath, category }: ResultsProps) {
                   return facets.find((group) => group.key === key)?.label ?? key;
                 }}
                 categoryName={category?.name}
-                categoryHref={category ? `/c/${category.slug}` : undefined}
+                categoryHref={category ? categoryPath(category) : undefined}
                 alert={
                   /*
                      Criterion 8. Only where there are words to watch for — an

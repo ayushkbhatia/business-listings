@@ -45,6 +45,14 @@ const nextConfig: NextConfig = {
       { source: "/account/rfq/:id", destination: "/enquiry/:id/compare", permanent: false },
       { source: "/account/enquiries/:id/compare", destination: "/enquiry/:id/compare", permanent: false },
       { source: "/account/enquiries/:id/accepted", destination: "/enquiry/:id/accepted", permanent: false },
+      /*
+         T3.1. `generateSitemaps()` splits the file into `/sitemap/<id>.xml` and
+         leaves `/sitemap.xml` answering 404, while that is the address every
+         crawler and every operator tries first. Permanent, unlike the four
+         above: a sitemap index is a fixed address, the move is not coming back,
+         and a crawler that caches this one is caching the right answer.
+      */
+      { source: "/sitemap.xml", destination: "/sitemap-index.xml", permanent: true },
     ];
   },
 };
