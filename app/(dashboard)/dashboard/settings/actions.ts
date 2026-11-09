@@ -14,7 +14,15 @@ import { recordEvent } from "@/lib/telemetry/record";
 import { t } from "@/lib/i18n";
 import { changeSellsKind, isSellsChoice } from "@/lib/onboarding/kind";
 import { getSellerSeat } from "../_shell";
-import { ALWAYS_IN_APP, CHANNELS, ESCALATION_CHOICES, EVENTS, NUDGE_CHOICES, floorLocked } from "./matrix";
+import {
+  ALWAYS_IN_APP,
+  CHANNELS,
+  ESCALATION_CHOICES,
+  EVENTS,
+  NUDGE_CHOICES,
+  floorLocked,
+  nextRouting,
+} from "./matrix";
 
 /**
  * Saving the alert matrix, the acknowledgement, and a seat's own channels.
@@ -47,7 +55,24 @@ export async function saveAlerts(formData: FormData): Promise<SaveAlertsResult> 
   });
   const previous = (before?.routing ?? {}) as Record<string, string[]>;
 
-  const routing: Record<string, string[]> = {};
+  /*
+     T6.5 — the save keeps what the screen does not show.
+
+     This started from `{}` and rebuilt the whole column from `EVENTS`, so every
+     stored choice for an event the screen omits was **deleted on save**. Board
+     7e renders 11 of the 18 events a seller can receive; of the seven it omits,
+     four survive because `PLATFORM_FLOOR` puts them back whatever the matrix
+     says, and three did not: `subscription_renewed`, `enquiry_unanswered` and
+     `review_dispute_decided`. A seller who had chosen WhatsApp for a renewal
+     receipt lost it the first time they changed their quiet hours, and nothing
+     on the screen said so.
+
+     Starting from the stored matrix and overwriting only the rendered rows is
+     the whole fix. Every event in `EVENTS` is written **explicitly**, including
+     as an empty array when a seller unticks everything — merging over the old
+     value would make an untick a no-op, which is the opposite defect.
+  */
+  const posted: Partial<Record<(typeof EVENTS)[number], string[]>> = {};
   for (const event of EVENTS) {
     const on = CHANNELS.filter((channel) => formData.get(`matrix.${event}.${channel}`) === "on");
     /*
@@ -59,8 +84,16 @@ export async function saveAlerts(formData: FormData): Promise<SaveAlertsResult> 
     if (ALWAYS_IN_APP.includes(event) && !on.includes("in_app")) on.push("in_app");
     // Board 12g `B7`. The same disabled-posts-nothing trap, for the platform floor.
     for (const channel of CHANNELS) if (floorLocked(event, channel) && !on.includes(channel)) on.push(channel);
-    if (on.length > 0) routing[event] = on;
+    posted[event] = on;
   }
+
+  /*
+     T6.5. What this screen renders is written from the form; what it does not
+     render is carried through. `nextRouting` is the rule and has the argument
+     for both halves — a form with no opinion about an event must not have an
+     effect on it.
+  */
+  const routing = nextRouting(previous, posted);
 
   const hour = (name: string, fallback: number): number => {
     const value = Number(formData.get(name));
