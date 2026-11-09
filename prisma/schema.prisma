@@ -9333,6 +9333,16 @@ enum NotificationEvent {
   claim_not_awarded
   claim_documents_requested
   claim_new_listing_created
+  /// Board 11h's dunning sequence, task T6.2.
+  ///
+  /// Two events rather than one, because the two messages are not the same
+  /// message: `payment_failed` is the first two nudges — a card that did not go
+  /// through, with days of runway left — and `payment_final_notice` is the last
+  /// one before the plan drops to Free. A single event with a `stage` parameter
+  /// would make the console's template editor show one body for both, and would
+  /// let a seller switch off the final notice by switching off the first.
+  payment_failed
+  payment_final_notice
 
   @@map("notification_event")
 }

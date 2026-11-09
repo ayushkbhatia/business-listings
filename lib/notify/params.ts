@@ -49,6 +49,25 @@ export const EVENT_PARAMS = {
   */
   subscription_renewed: ["planName", "amount", "renewsAt", "shortLink"],
   /*
+     Board 11h's dunning sequence — task T6.2.
+ 
+     `daysLeft` rather than a date, because the runway is what the message is
+     about: the sequence is fourteen days long and the seller's question is how
+     long they have, not which Thursday it ends on. `amount` is what the card
+     was actually asked for, VAT included, which is the invoice's total to the
+     fil — the figure a seller will recognise on their statement.
+  */
+  payment_failed: ["planName", "amount", "daysLeft", "shortLink"],
+  /*
+     The last message before the plan drops to Free, so it says what happens
+     rather than how long is left: nothing is deleted, the listing stays live,
+     the reviews and the catalogue stay, and the badge stays — it records what
+     we checked and a card expiring does not unverify a trade licence.
+     `keptLabel` carries that sentence from `lib/billing/dunning.ts`'s own
+     refusal list rather than letting a template author invent it.
+  */
+  payment_final_notice: ["planName", "amount", "keptLabel", "shortLink"],
+  /*
      Board 8a's one nudge, sent 72 hours after a listing goes live.
 
      Two declared params and no more, because this is the one event whose
@@ -296,6 +315,9 @@ export const EVENT_SOURCES = {
   // `lib/quotes/expiry-job.ts`, which boards 7d and 7e added.
   quote_expiring: ["7e"],
   subscription_renewed: ["11f"],
+  // `runDunning`, in the daily job. Board 11h's sequence.
+  payment_failed: ["11h"],
+  payment_final_notice: ["11h"],
   setup_nudge: ["8a"],
   enquiry_unanswered: [],
   enquiry_escalated: ["8d"],
@@ -347,6 +369,8 @@ export const EVENT_AUDIENCE = {
   quote_accepted: "seller",
   quote_expiring: "seller",
   subscription_renewed: "seller",
+  payment_failed: "seller",
+  payment_final_notice: "seller",
   setup_nudge: "seller",
   enquiry_unanswered: "seller",
   enquiry_escalated: "seller",
@@ -462,6 +486,10 @@ export function sampleParams<E extends NotificationEvent>(
     lines: "2 of your 3 lines: rigid grooved coupling ×120 and EPDM gasket ×120",
     planName: "Basic",
     renewsAt: "14 Oct 2026",
+    // T6.2 — board 11h's dunning sequence.
+    daysLeft: 8,
+    keptLabel:
+      "Your listing stays live and nothing is deleted \u2014 your products, your reviews and your verified badge all stay. Only the paid features pause.",
     taskList: "photos, opening hours and a second contact",
     minutes: 12,
     hours: 2,

@@ -78,6 +78,64 @@ export const TEMPLATES: TemplateSeed[] = [
     status: "live",
   },
   /*
+     Board 11h's dunning sequence — task T6.2.
+
+     Day 3 and day 7 carry `payment_failed`; day 14 carries
+     `payment_final_notice`. Two bodies rather than one with a stage parameter,
+     because the two messages say different things: the first is "this did not
+     go through and here is how long you have", the last is "here is what
+     happens tomorrow, and here is what does not".
+
+     **No blame and no alarm.** A card fails for a dozen reasons a seller did
+     not choose — an expiry, a bank's limit, a 3-D Secure prompt nobody saw —
+     and `docs/design-system.md` §08's rule is that an error says what is wrong
+     and what correct looks like without blaming the reader. So: what happened,
+     what it costs, what to do, and the deadline as days rather than a date,
+     which is the number a seller is actually counting.
+  */
+  {
+    event: "payment_failed",
+    channel: "email",
+    kind: "neutral",
+    subject: "Your {planName} payment did not go through",
+    body:
+      "We could not charge {amount} for your {planName} plan. It usually takes one try on an " +
+      "updated card. You have {daysLeft} days before the plan moves to Free.",
+    actionLabel: "Update the card",
+    actionPath: "/dashboard/billing",
+    status: "live",
+  },
+  {
+    event: "payment_failed",
+    channel: "in_app",
+    kind: "neutral",
+    body: "{planName} payment of {amount} did not go through. {daysLeft} days to update the card.",
+    actionLabel: "Update the card",
+    actionPath: "/dashboard/billing",
+    status: "live",
+  },
+  {
+    event: "payment_final_notice",
+    channel: "email",
+    kind: "neutral",
+    subject: "Last notice: your {planName} plan moves to Free tomorrow",
+    body:
+      "We still could not charge {amount} for your {planName} plan, so it moves to Free " +
+      "tomorrow. {keptLabel}",
+    actionLabel: "Update the card",
+    actionPath: "/dashboard/billing",
+    status: "live",
+  },
+  {
+    event: "payment_final_notice",
+    channel: "in_app",
+    kind: "neutral",
+    body: "{planName} moves to Free tomorrow — {amount} is still unpaid. {keptLabel}",
+    actionLabel: "Update the card",
+    actionPath: "/dashboard/billing",
+    status: "live",
+  },
+  /*
      Board 11b's follow-up, and the only message-shaped notification in the
      product. Everything else here is about a quote, because a message was
      assumed to be read where it was written — the follow-up breaks that, since

@@ -7,7 +7,9 @@ import {
 } from "@/lib/placement/term";
 import { prisma } from "@/lib/db/client";
 import { paymentProvider } from "./provider";
-import { nextAction, SCHEDULE, type DunningStage } from "./dunning";
+import { DROP_TO_FREE_DAY, daysPastDue, nextAction, SCHEDULE, type DunningStage } from "./dunning";
+import { onPaymentFailed } from "@/lib/notify/events";
+import { filsToAed } from "@/lib/quote/money";
 import { recordMovement } from "./mrr";
 import { monthlyValueFils } from "./period";
 import { priceRenewal, RENEWAL_SELECT, settleRenewal } from "./renewal-job";
@@ -176,14 +178,44 @@ export async function runDunning(now: Date = new Date()): Promise<DunningResult>
 
     if (action.kind === "send") {
       /*
-       * The notification itself goes through `lib/notify`, which is a port with
-       * a console sender until a real one exists. Advancing the stage is what
-       * matters here: a stage that moves only when a message actually sent
-       * would stall the whole sequence behind an unconfigured provider.
-       */
+         T6.2 — the stage moves **and** the message goes.
+
+         This branch advanced `dunningStage` and sent nothing, under a comment
+         arguing that advancing the stage is what matters because "a stage that
+         moves only when a message actually sent would stall the whole sequence
+         behind an unconfigured provider". The first half is right and is kept:
+         the update is before the send and does not depend on it, so an
+         unconfigured carrier cannot stall day 7 behind day 3. The second half
+         made the sequence a timer with no voice — a plan dropped to Free on day
+         fifteen having been told three times by nobody, and `notified` counted
+         the silence.
+
+         `onPaymentFailed` is `safely`-wrapped, so a carrier that is down costs
+         this seller's message and not the run.
+      */
       await prisma.subscription.update({
         where: { id: subscription.id },
         data: { dunningStage: action.stage, pastDueSince, dunningAdvancedAt: now },
+      });
+      /*
+         What the card was asked for, priced here rather than reused from the
+         retry branch: `price` is scoped to that branch, and a send step on day
+         7 never ran it. Repricing is one read and it is the honest figure — a
+         sponsored slot added since day 3 is on the amount the seller owes.
+      */
+      const owed = await priceRenewal(subscription, now);
+      await onPaymentFailed({
+        businessId: subscription.businessId,
+        planName: subscription.plan.name,
+        amountAed: filsToAed(BigInt(owed.chargeFils)),
+        /*
+            The runway, from the same constant the queue's column reads —
+            `DROP_TO_FREE_DAY` less the days already past due. Clamped at zero:
+            a run that is late does several steps at once, and "in -2 days" is
+            a sentence nobody should receive.
+        */
+        daysLeft: Math.max(0, DROP_TO_FREE_DAY - daysPastDue(pastDueSince, now)),
+        final: action.stage === "final",
       });
       notified += 1;
       continue;

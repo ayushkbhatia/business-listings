@@ -95,6 +95,23 @@ export const PLATFORM_FLOOR: Readonly<Partial<Record<NotificationEvent, readonly
      choose for this one (`ROUTES_LIKE`).
   */
   quote_partly_accepted: ["in_app"],
+  /*
+     Board 11h, task T6.2. A card that did not go through, and the last notice
+     before the plan drops to Free.
+
+     On the floor for the reason the floor exists — 12g `B7`: *"opt-outs are
+     honoured per channel, with two exceptions… Those are consequences, not
+     marketing."* A seller who loses Pro because they never saw the email was
+     not told, and a box they ticked about newsletters is not consent to that.
+     It is the same argument `document_expiring` is here on, with money instead
+     of a licence.
+
+     Email and in-app. Neither interrupts, so quiet hours still hold for
+     whatever a seller has chosen on top — and a payment is not an emergency at
+     two in the morning.
+  */
+  payment_failed: ["email", "in_app"],
+  payment_final_notice: ["email", "in_app"],
 };
 
 /**

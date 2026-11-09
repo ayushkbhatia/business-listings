@@ -8436,6 +8436,15 @@ export const en = {
     "Nothing is taken from what a buyer pays you. There is no commission, no per-lead charge and no take rate, because there is no mechanism for one — buyers pay suppliers directly and the platform is never party to it.",
 
   // ── Billing, boards 3m and 11f ────────────────────────────────────────────
+  /*
+     What dunning never does, as the sentence the final notice carries — T6.2.
+
+     `FORBIDDEN_EFFECTS` in `lib/billing/dunning.ts` is the same list as code.
+     This is here rather than written into a template body so that a seller
+     reading the notice and the rule the job obeys cannot drift apart.
+  */
+  "billing.dunning.kept":
+    "Your listing stays live and nothing is deleted \u2014 your products, your reviews and your verified badge all stay. Only the paid features pause.",
   "billing.title": "Subscription",
   "billing.eyebrow": "Account",
   "billing.on_plan": "You are on {plan}",
@@ -12018,6 +12027,10 @@ export const en = {
   "notifications.floor_event.quote_declined": "a quote the buyer did not accept",
   "notifications.floor_event.quote_partly_accepted": "a quote the buyer accepted in part",
   "notifications.floor_event.enquiry_nudged": "a buyer's nudge",
+  // T6.2. Board 11h's two, on the floor because losing a paid plan without
+  // being told is a consequence rather than marketing (12g B7).
+  "notifications.floor_event.payment_failed": "a payment that did not go through",
+  "notifications.floor_event.payment_final_notice": "the last notice before a plan moves to Free",
   "notifications.floor_title.document_expiring": "Licence expiry",
   "notifications.floor_title.ramadan_dates_moved": "Ramadan date changes",
   // Missing since board `11e` put the slot on the floor: the quiet-hours page
