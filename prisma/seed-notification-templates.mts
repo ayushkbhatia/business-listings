@@ -78,6 +78,133 @@ export const TEMPLATES: TemplateSeed[] = [
     status: "live",
   },
   /*
+     Task T6.7's six — the bodies `check:templates` found missing on a channel
+     the recipient gets without choosing anything.
+
+     Every one of these was a message the product promised and could not send.
+     `notify` recorded `no_live_template` and carried on, which is right at
+     runtime and invisible in practice: the same shape that let production hold
+     15 templates against a catalogue of 27 and skip `enquiry_escalated`'s
+     in-app delivery twenty-two times with nothing failing.
+
+     Five of the six only became *default* routes with T6.1, which gave a
+     business with no stored preference email and in-app. That is the check
+     earning its place on the first run: widening the default surfaced five
+     bodies nobody had written, rather than five silences nobody would have
+     counted.
+  */
+  {
+    /*
+       The licence notice on the channel that always works. The email has
+       existed since board 3e; in-app had not, so a seller with no verified
+       email address was told nothing at all about the badge they are about to
+       lose — and `PLATFORM_FLOOR` lists this event precisely because that
+       must not depend on a preference.
+    */
+    event: "document_expiring",
+    channel: "in_app",
+    kind: "neutral",
+    body:
+      "Your trade licence expires {expiresAt}, in {days} days. The licence-verified badge " +
+      "goes on the day it lapses, with no grace period, and returns when we have checked a renewal.",
+    actionLabel: "Upload the renewal",
+    actionPath: "/dashboard/verification",
+    status: "live",
+  },
+  {
+    /*
+       The most important message in the product, by email, which it did not
+       have. In-app, SMS and a Meta-pending WhatsApp existed; a business with no
+       stored preference routes to email and in-app (T6.1), so this is the body
+       that decides whether forty thousand imported listings hear about their
+       first enquiry.
+    */
+    event: "enquiry_received",
+    channel: "email",
+    kind: "goods",
+    subject: "New enquiry {ref} — {summary}",
+    body:
+      "A buyer needs {summary} in {area} by {neededBy}. Enquiry {ref} has {lineCount} lines and " +
+      "is open for quotes until {closesAt}. Reply times are measured from this message.",
+    actionLabel: "Open and quote",
+    actionPath: "/dashboard/leads/{enquiryId}",
+    status: "live",
+  },
+  {
+    /*
+       An acceptance in the list the work appears in. Email and a Meta-pending
+       WhatsApp existed; in-app did not, which is the odd one out because an
+       accepted quote is exactly the kind of thing 7e §2.2 keeps in-app
+       whatever else is switched off.
+    */
+    event: "quote_accepted",
+    channel: "in_app",
+    kind: "goods",
+    body: "Quote {quoteRef} accepted at {amount}. The buyer's contact details are on enquiry {ref}.",
+    actionLabel: "Open the accepted quote",
+    actionPath: "/dashboard/leads/{enquiryId}",
+    status: "live",
+  },
+  {
+    /*
+       A quote about to lapse, by email. The in-app body has existed since
+       handoff 2 and the email never did, so a seller who is not logged in that
+       week simply lost the quote — which is the one case the message is for.
+    */
+    event: "quote_expiring",
+    channel: "email",
+    kind: "goods",
+    subject: "Quote {quoteRef} expires {expiresAt}",
+    body:
+      "Quote {quoteRef} expires {expiresAt}. Extend its validity if it still stands, or let it " +
+      "lapse — a lapsed quote cannot be accepted, and the buyer is told when it goes.",
+    actionLabel: "Open the quote",
+    actionPath: "/dashboard/quotes",
+    status: "live",
+  },
+  {
+    /*
+       Board 8a's one nudge, by email. The screen's promise is that it is sent
+       once ever; with in-app alone it was sent once to a list a seller who had
+       not come back was not looking at.
+    */
+    event: "setup_nudge",
+    channel: "email",
+    kind: "neutral",
+    subject: "A few minutes of setup left on your listing",
+    body:
+      "Your listing is live, and this is still open: {taskList}. About {minutes} minutes of work. " +
+      "This is the only reminder we send.",
+    actionLabel: "Finish setting up",
+    actionPath: "/dashboard/setup",
+    status: "live",
+  },
+  {
+    /*
+       A buyer's quote, on WhatsApp, where `BUYER_DEFAULT` has promised it since
+       the routing defaults were written and **no body existed at all** — not
+       live, not pending, nothing. So every buyer who received a quote was
+       routed to a channel with nothing to send on it.
+
+       `pending_meta`, because a WhatsApp body cannot be live until Meta
+       approves it. That is a real state and somebody else's queue — the check
+       reports it as a note rather than a failure, and the in-app body carries
+       the message in the meantime.
+    */
+    event: "quote_received",
+    channel: "whatsapp",
+    kind: "goods",
+    body:
+      "{businessName} sent a quote for enquiry {ref}. Compare it with the others before you accept.",
+    actionLabel: "See the quote",
+    actionPath: "/enquiry/{enquiryId}",
+    // The name Meta approves, in the same `bl_<event>_v<n>` form as the other
+    // four. A WhatsApp body with no registered name cannot be submitted, which
+    // is what `whatsapp_needs_meta_name` says and the editor refuses.
+    metaTemplateName: "bl_quote_received_v1",
+    status: "pending_meta",
+  },
+  /*
      Board 11h's dunning sequence — task T6.2.
 
      Day 3 and day 7 carry `payment_failed`; day 14 carries
