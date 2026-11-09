@@ -64,6 +64,8 @@ export interface CuratedListView {
   intro: string | null;
   categoryName: string;
   categorySlug: string;
+  /** The parent trade's slug, or null at the top level — T3.4. */
+  categoryParentSlug: string | null;
   areaName: string | null;
   areaSlug: string | null;
   emirate: string | null;
@@ -96,7 +98,8 @@ export async function curatedList(
       entryRemovedAt: true,
       consideredCount: true,
       criteria: true,
-      category: { select: { name: true, slug: true } },
+      // The parent, because a subcategory's address carries it — T3.4.
+      category: { select: { name: true, slug: true, parent: { select: { slug: true } } } },
       area: { select: { name: true, slug: true, emirate: true } },
       members: {
         orderBy: { position: "asc" },
@@ -180,6 +183,7 @@ export async function curatedList(
     intro: list.intro,
     categoryName: list.category.name,
     categorySlug: list.category.slug,
+    categoryParentSlug: list.category.parent?.slug ?? null,
     areaName: list.area?.name ?? null,
     areaSlug: list.area?.slug ?? null,
     emirate: (list.area?.emirate as string | undefined) ?? null,
