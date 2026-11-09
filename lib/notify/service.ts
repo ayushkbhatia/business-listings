@@ -740,6 +740,22 @@ export async function deliverQueued(limit = 200): Promise<DeliverQueuedResult> {
 export async function flushDeferred(now: Date = new Date()): Promise<number> {
   const due = await prisma.notificationDelivery.findMany({
     where: { status: "deferred", scheduledFor: { lte: now } },
+    /*
+       T6.6 — oldest-due first, which is the whole point of a queue.
+
+       This took an arbitrary 200 of the deferred rows: no `orderBy`, so on a
+       backlog the rows the planner happened to return were released and the
+       rest waited for a draw they might keep losing. A message held from
+       Thursday evening could sit behind Friday's for as long as the backlog
+       outran 200 a pass. `scripts/check-ordering.mts` carried the read on its
+       EXEMPT list with exactly this note — "oldest-first is the whole point of
+       a queue" — and the entry is gone with this change.
+
+       `scheduledFor` is when the window lifted and `id` ends the order on a
+       unique key, so two runs over the same backlog claim the same rows in the
+       same sequence.
+    */
+    orderBy: [{ scheduledFor: "asc" }, { id: "asc" }],
     select: { id: true },
     take: 200,
   });

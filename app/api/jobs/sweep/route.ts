@@ -45,6 +45,15 @@ import { retryRegisterReads } from "@/lib/credentials/review";
  */
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+/*
+   T6.6. The delivery loop's budget is measured against this, and a budget
+   measured against an undeclared ceiling is guesswork: without it the function
+   inherits the platform's default and the loop's sixty seconds could be longer
+   than the run it is inside. Three hundred is this project's plan ceiling —
+   `docs/deployments.md` § Which plan the crons run on — and the same number
+   T4.6 declared on the importer for the same reason.
+*/
+export const maxDuration = 300;
 
 /**
  * `flushDeferred` takes 200 rows a call. After a long quiet-hours window the
@@ -57,6 +66,26 @@ export const dynamic = "force-dynamic";
  * times out.
  */
 const MAX_PASSES = 25;
+
+/**
+ * How long the delivery loop may spend handing messages to carriers — T6.6.
+ *
+ * `deliverQueued` was called **once** a run, 200 rows a call, while the step
+ * above it released up to 5,000: so the hourly ceiling on *releasing* a held
+ * message was twenty-five times the ceiling on *sending* one, and the morning
+ * after a long weekend the queue grew every hour instead of draining. Nothing
+ * reported it, because `deliverQueued`'s own numbers were about the batch
+ * rather than the backlog.
+ *
+ * A time budget rather than another pass count, because the two loops are
+ * bounded by different things. `flushDeferred` is one `updateMany` a pass and
+ * its cost is predictable; a delivery pass calls a carrier per row, and how
+ * long 200 of those take is somebody else's network. Sixty seconds leaves the
+ * rest of a 300-second run to the four steps that come after it, and the
+ * remainder is still `queued` — which is a state the next run picks up rather
+ * than a message lost.
+ */
+const DELIVERY_BUDGET_MS = 60_000;
 
 export async function GET(request: NextRequest) {
   const refusal = await authorizeJob(request, "sweep");
@@ -108,7 +137,44 @@ export async function GET(request: NextRequest) {
        `unsendable` counts rows queued before the payload column existed, which
        have nothing to send and are marked failed rather than retried for ever.
     */
-    releasedNotifications: () => deliverQueued(),
+    async releasedNotifications() {
+      const startedAt = Date.now();
+      let sent = 0;
+      let failed = 0;
+      let unsendable = 0;
+      let passes = 0;
+      let overBudget = false;
+
+      for (; passes < MAX_PASSES; passes += 1) {
+        const batch = await deliverQueued();
+        sent += batch.sent;
+        failed += batch.failed;
+        unsendable += batch.unsendable;
+        // Nothing left to hand over: the queue is drained, which is the only
+        // reason this loop should usually stop.
+        if (batch.sent + batch.failed + batch.unsendable === 0) break;
+        if (Date.now() - startedAt >= DELIVERY_BUDGET_MS) {
+          overBudget = true;
+          passes += 1;
+          break;
+        }
+      }
+
+      /*
+         `capped` says the backlog outran the bound, which is the number worth
+         seeing — the same thing `deferredNotifications` reports, and for the
+         same reason: the next run picks the rest up and somebody should know
+         that it had to.
+      */
+      return {
+        sent,
+        failed,
+        unsendable,
+        passes,
+        capped: overBudget || passes === MAX_PASSES,
+        ...(overBudget ? { stoppedBy: "time_budget" as const } : {}),
+      };
+    },
     /*
        Criterion 8, and the end of the flywheel: a search that found nothing
        becomes an enquiry when somebody finally lists the thing.

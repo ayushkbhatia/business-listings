@@ -634,3 +634,59 @@ describe("T6.3 and T6.4 — a delivery row carries what it said, and whether it 
     expect(row?.readAt ?? null).toBeNull();
   });
 });
+
+describe("T6.6 — the queue drains oldest first, and the loop can see past 200", () => {
+  it("releases the oldest held delivery first", async () => {
+    /*
+       The defect, as a test.
+
+       `flushDeferred` took 200 deferred rows with **no `orderBy`**, so on a
+       backlog the rows the planner happened to return were released and the
+       rest waited for a draw they might keep losing — a message held from
+       Thursday evening could sit behind Friday's indefinitely.
+       `scripts/check-ordering.mts` carried the read on its EXEMPT list with
+       the note "oldest-first is the whole point of a queue"; the entry is gone
+       and this is what replaced it.
+
+       Three rows, scheduled three hours apart, claimed one at a time by
+       passing a `now` that only the oldest is due at — which is the property
+       that matters: the claim is ordered by when the window lifted.
+    */
+    const base = new Date("2026-08-24T03:00:00Z");
+    const ids: string[] = [];
+    for (const minutes of [0, 180, 360]) {
+      const row = await prisma.notificationDelivery.create({
+        data: {
+          event: "enquiry_received",
+          channel: "email",
+          status: "deferred",
+          recipientUserId,
+          businessId,
+          reason: "quiet_hours",
+          scheduledFor: new Date(base.getTime() + minutes * 60_000),
+          payload: { subject: null, body: `held ${String(minutes)}`, actionLabel: null, actionUrl: null, metaTemplateName: null } as never,
+        },
+        select: { id: true },
+      });
+      ids.push(row.id);
+      createdDeliveryIds.push(row.id);
+    }
+
+    /*
+       A moment when only the first two are due. Both are released and the
+       third is not — so the order is by `scheduledFor` rather than by whatever
+       the heap offered.
+    */
+    const released = await flushDeferred(new Date(base.getTime() + 200 * 60_000));
+    expect(released).toBeGreaterThanOrEqual(2);
+
+    const rows = await prisma.notificationDelivery.findMany({
+      where: { id: { in: ids } },
+      orderBy: { scheduledFor: "asc" },
+      select: { status: true },
+    });
+    expect(rows[0]?.status).toBe("queued");
+    expect(rows[1]?.status).toBe("queued");
+    expect(rows[2]?.status, "not due yet, so not claimed").toBe("deferred");
+  });
+});
