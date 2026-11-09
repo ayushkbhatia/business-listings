@@ -78,6 +78,14 @@ jobs:
           pnpm exec prisma migrate deploy
           pnpm db:seed
 
+      # T4.1 and T4.2. The integration suite stages a licence export through
+      # `ingest-uploads` and resumes it from the object, which is the only way
+      # to prove the resume reads the same file. `storage.*` belongs to Supabase
+      # and is deliberately not a migration, so the buckets are created against
+      # the stack this job started.
+      - name: Create the storage buckets
+        run: pnpm storage:setup
+
       - name: Typecheck
         run: pnpm typecheck
 
@@ -225,6 +233,16 @@ jobs:
         run: |
           pnpm exec prisma migrate deploy
           pnpm db:seed
+
+      # T4.1. The licence importer's e2e stages a real file now: the browser
+      # PUTs it to a signed URL in `ingest-uploads` and the server stages from
+      # the bucket. `storage.*` belongs to Supabase and is deliberately not a
+      # migration — `ensureBuckets` is the reconciler — so the buckets have to
+      # be created against the stack this job just started, or the staging
+      # dialog answers "uploads are not set up in this environment" and three
+      # specs fail for a reason that is about the runner rather than the code.
+      - name: Create the storage buckets
+        run: pnpm storage:setup
 
       - name: Install Playwright chromium
         run: pnpm exec playwright install --with-deps chromium

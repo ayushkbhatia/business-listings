@@ -28,10 +28,30 @@ export const DOCUMENT_BUCKET = "business-documents";
  */
 export const INVOICE_BUCKET = "invoice-documents";
 
+/**
+ * Licence exports, on their way into the importer — task T4.1.
+ *
+ * A fourth bucket, because it is the only one whose contents are **transient
+ * and staff-written**. The ceiling and the type list are both wrong for the
+ * other three: this holds a 12 MB CSV rather than a photograph or a PDF, and
+ * nothing a supplier can reach writes to it.
+ *
+ * It exists at all because the file used to travel in a server action's request
+ * body. `serverActions.bodySizeLimit` was 4 MB against a declared 50,000-row
+ * limit, and a 40,000-row licence export is 6–10 MB — so the importer refused
+ * the file the whole feature was built for, in the browser, before any code of
+ * ours ran. The browser now puts the bytes in Storage and the server stages from
+ * there.
+ *
+ * Private. A licence export is a register's file, not ours to publish, and the
+ * only reader is the service-role key.
+ */
+export const INGEST_BUCKET = "ingest-uploads";
+
 /** Public read, because these render on a storefront a buyer has not signed into. */
 export const PUBLIC_BUCKETS = [MEDIA_BUCKET] as const;
 /** No public read at any URL. Reached only through a signed link, briefly. */
-export const PRIVATE_BUCKETS = [DOCUMENT_BUCKET, INVOICE_BUCKET] as const;
+export const PRIVATE_BUCKETS = [DOCUMENT_BUCKET, INVOICE_BUCKET, INGEST_BUCKET] as const;
 
 /**
  * Where one invoice's PDF lives, keyed by its id.
@@ -84,6 +104,32 @@ export const MAX_LICENCE_BYTES = 10 * 1024 * 1024;
  */
 export const MAX_INVOICE_BYTES = 1024 * 1024;
 
+/**
+ * Thirty-two megabytes, for a licence export — T4.1.
+ *
+ * `MAX_LICENCE_ROWS` is 50,000 and a row of this register is 150–250 bytes, so
+ * the declared ceiling is about 12 MB of CSV. Thirty-two is that with room for
+ * an export carrying columns we ignore, and it is a number the **bucket**
+ * enforces as well as the form — a signed URL is a write nobody checks twice.
+ *
+ * It replaces a 3.9 MB limit that existed because of the request body rather
+ * than because of the data, and which cut the file at about 30,000 rows: two
+ * thirds of one authority.
+ */
+export const MAX_INGEST_BYTES = 32 * 1024 * 1024;
+
+/**
+ * What a browser calls a `.csv`, which is three things.
+ *
+ * `text/csv` is the correct one. Windows with Excel installed reports
+ * `application/vnd.ms-excel` for a plain CSV and some browsers report nothing
+ * at all, so an allow-list of one would refuse an ops lead's own export on
+ * their own laptop for a reason no screen could explain. The parser reads text
+ * either way and a file that is not CSV fails on its header, which is a better
+ * refusal than a MIME type.
+ */
+export const INGEST_TYPES = ["text/csv", "application/vnd.ms-excel", "text/plain"] as const;
+
 export const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/avif"] as const;
 export const DOCUMENT_TYPES = ["application/pdf", "image/jpeg", "image/png"] as const;
 
@@ -99,6 +145,22 @@ export function mediaPath(businessId: string, kind: string, filename: string): s
 
 export function documentPath(businessId: string, kind: string, filename: string): string {
   return `${businessId}/${kind}/${safeName(filename)}`;
+}
+
+/**
+ * Where one staged export's bytes live — T4.1.
+ *
+ * Under the **staff id that uploaded it**, which is both the audit trail the
+ * importer already keeps and the thing the signing action can prove. The path
+ * is built on the server from the seat, never from the form, so a signature
+ * cannot be talked into writing somewhere else.
+ *
+ * Through `safeName`, so two uploads of `licences.csv` in one afternoon are two
+ * files. The run row records the path it was staged from, which is the only
+ * reader: nothing derives this path a second time.
+ */
+export function ingestPath(actorId: string, filename: string): string {
+  return `${actorId}/${safeName(filename)}`;
 }
 
 /**
@@ -146,6 +208,33 @@ export function checkImage(type: string, bytes: number): UploadAccepted | Upload
     return {
       ok: false,
       reason: `That photograph is ${megabytes(bytes)} MB after resizing. The limit is ${megabytes(MAX_IMAGE_BYTES)} MB.`,
+    };
+  }
+  return { ok: true };
+}
+
+/**
+ * Refuse a licence export before it is uploaded — T4.1.
+ *
+ * The size is the real check. The type is advisory for the reason
+ * `INGEST_TYPES` gives, and an empty type passes rather than failing: a file
+ * dragged from some file managers arrives with none, and the header check in
+ * `stageRun` is the refusal that means something.
+ */
+export function checkIngest(type: string, bytes: number): UploadAccepted | UploadRefusal {
+  if (type && !(INGEST_TYPES as readonly string[]).includes(type)) {
+    return {
+      ok: false,
+      reason: `That is a ${type}. A licence export has to be a CSV.`,
+    };
+  }
+  if (bytes <= 0) {
+    return { ok: false, reason: "That file is empty." };
+  }
+  if (bytes > MAX_INGEST_BYTES) {
+    return {
+      ok: false,
+      reason: `That export is ${megabytes(bytes)} MB. The limit is ${megabytes(MAX_INGEST_BYTES)} MB — split it by emirate or by month and stage each part as its own run.`,
     };
   }
   return { ok: true };

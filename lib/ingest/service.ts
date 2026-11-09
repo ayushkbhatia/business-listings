@@ -1,6 +1,8 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
 import { prisma } from "@/lib/db/client";
+import { readIngestText } from "@/lib/storage";
+import { t } from "@/lib/i18n";
 import "@/lib/audit/prisma-writer";
 import { staffMutation } from "@/lib/audit/staff-mutation";
 import { assertCan } from "@/lib/auth/can";
@@ -11,7 +13,7 @@ import { buildBusinessSearchText } from "@/lib/search/index-text";
 import { normaliseLicenceNumber } from "@/lib/verification/licence/number";
 import { buildMatchIndex, bestMatch } from "@/lib/dedupe/match";
 import { licenceDigits } from "@/lib/dedupe/similarity";
-import { loadMatchListings, readBands, recordAsListing } from "@/lib/dedupe/source";
+import { candidateBlockCap, loadCandidateListings, readBands, recordAsListing } from "@/lib/dedupe/source";
 import { runMergePlan, unwindRunTx, withdrawRunPairsTx } from "@/lib/dedupe/resolve";
 import { can } from "@/lib/auth/can";
 import { $Enums, Prisma } from "@/lib/db/generated/client";
@@ -64,6 +66,17 @@ export { KEPT_BECAUSE, type KeptBecause, type RollbackManifest };
 
 /** B4. Every run is reversible for this long after its first publish. */
 export const REVERSIBLE_DAYS = 30;
+
+/**
+ * Records matched against one candidate read — T4.4.
+ *
+ * Smaller than the write chunk's five hundred, and for a different reason: the
+ * candidate query's cost is in the number of **distinct words** this many
+ * records carry, each of which is a trigram lookup. Two hundred records is a
+ * few hundred words, which is one indexed read of a sensible size; five hundred
+ * was measurably worse for no fewer candidates.
+ */
+const MATCH_CHUNK = 200;
 
 const DAY_MS = 86_400_000;
 
@@ -155,14 +168,48 @@ function validDate(year: number, month: number, day: number): Date | null {
 export const MAX_LICENCE_ROWS = 50_000;
 
 export type StageResult =
-  | { ok: true; runId: string; totals: ReturnType<typeof tally>; truncated: number }
-  | { ok: false; error: "empty" | "no_trade_name_column"; message: string };
+  | {
+      ok: true;
+      runId: string;
+      totals: ReturnType<typeof tally>;
+      truncated: number;
+      /**
+       * Records actually written — T4.2.
+       *
+       * The same as `totals.rows` on a run that finished, and lower on one
+       * that did not: the chunks commit as they go, so the two numbers are
+       * genuinely different questions now. The caller reports the shortfall
+       * rather than the intention.
+       */
+      written: number;
+    }
+  | { ok: false; error: "empty" | "no_trade_name_column" | "no_file"; message: string };
 
 export interface StageInput {
   actor: Actor;
   source: string;
   filename: string;
-  text: string;
+  /**
+   * The file's text, when the caller already has it.
+   *
+   * The seed and the integration tests do, and they should: putting a fixture
+   * through object storage to test the classifier would be testing Supabase.
+   * The console does not — see `uploadPath`.
+   */
+  text?: string;
+  /**
+   * Where the browser put the file in `ingest-uploads` — task T4.1.
+   *
+   * The console's path. The file used to travel in the server action's request
+   * body, under a 4 MB `bodySizeLimit` against a declared 50,000-row ceiling —
+   * and a 40,000-row register export is 6–10 MB, so the importer refused the
+   * file the feature was built for. The browser writes to a signed URL and this
+   * is the object the server reads.
+   *
+   * Recorded on the run, because a resumed stage re-reads it and because a
+   * rejection has to be arguable from the file it came from.
+   */
+  uploadPath?: string;
   /** B8: the upload is logged with a written reason, like approval and rollback. */
   reason: string;
 }
@@ -203,33 +250,58 @@ export async function separatedLicences(
   return map;
 }
 
-/**
- * Parse, classify, stage. Publishes nothing.
- *
- * **Whole or not at all.** The run row and every staged record are written in
- * one transaction, so a failure at record 6,000 leaves no run rather than a
- * run of 5,999 that reads as the file ("Parse failure: the run fails whole. A
- * half-imported registry file is worse than none").
- *
- * This used to sit outside `staffMutation`, on the argument that staging
- * changes nothing a buyer sees. B8 moved it inside: an upload is the start of
- * the one path in the product that mints thousands of listings, and "who
- * loaded this file, and why" is the first question anybody asks of a bad run —
- * run 10 duplicated a whole free zone.
- */
-export async function stageRun(input: StageInput, now = new Date()): Promise<StageResult> {
-  // Refused before an 8,000-row file is parsed, not after. `staffMutation`
-  // asserts it again at the write, which is the check that counts.
-  assertCan(input.actor, "queue.decide");
+/* ── Parse and classify, which is the part that is pure of writes ────────── */
 
+/**
+ * Everything `stageRun` works out before it writes anything — T4.2.
+ *
+ * Lifted out of `stageRun` whole, because the resume needs exactly it: a run
+ * that stopped at record 19,500 is continued by reading the same file, working
+ * out the same answers, and writing the rows that are not there yet. Two
+ * implementations of "what does this file say" is the one thing that could not
+ * be allowed, so there is one.
+ *
+ * It reads the database — categories, the match index, the bands, the areas,
+ * the separations — and writes nothing.
+ */
+interface StagedRow {
+  rowNumber: number;
+  /** Every column as it arrived (B5). A rejection has to be arguable. */
+  raw: Record<string, string>;
+  record: LicenceRecord;
+  key: string;
+  licence: string | null;
+  verdict: ReturnType<typeof classify>;
+  outcome: ReturnType<typeof stagedOutcome>;
+  duplicateOfId: string | null;
+  duplicateOfRow: number | null;
+  pair: { score: number; band: "certain" | "probable"; signals: unknown } | null;
+}
+
+interface Prepared {
+  headers: string[];
+  truncated: number;
+  belowFloor: number;
+  staged: StagedRow[];
+  totals: ReturnType<typeof tally>;
+}
+
+async function prepareStage(
+  text: string,
+  sourceInput: string,
+  now: Date,
+): Promise<
+  | { ok: true; prepared: Prepared }
+  | { ok: false; error: "empty" | "no_trade_name_column"; message: string }
+> {
   /*
    * A ceiling of its own. `MAX_ROWS` is 5,000, which is right for a seller's
    * catalogue and wrong for an authority export — criterion 1 names 8,000, and
    * an emirate has rather more companies than that.
    */
-  const { headers, rows: body, truncated } = parseCsv(input.text, MAX_LICENCE_ROWS);
+  const { headers, rows: body, truncated } = parseCsv(text, MAX_LICENCE_ROWS);
   if (body.length === 0) {
-    return { ok: false, error: "empty", message: "That file has no rows under its header." };
+    return { ok: false, error: "empty", message: t("ingest.refuse.empty") };
   }
 
   const columns = mapColumns(headers);
@@ -238,8 +310,7 @@ export async function stageRun(input: StageInput, now = new Date()): Promise<Sta
     return {
       ok: false,
       error: "no_trade_name_column",
-      message:
-        "No column looks like a trade name. The importer needs one — everything else it can do without.",
+      message: t("ingest.refuse.no_trade_name_column"),
     };
   }
 
@@ -248,7 +319,7 @@ export async function stageRun(input: StageInput, now = new Date()): Promise<Sta
     return index === undefined ? undefined : row[index];
   };
 
-  const source = input.source.trim().toUpperCase();
+  const source = sourceInput.trim().toUpperCase();
 
   const records = body.map((row, index) => {
     const record: LicenceRecord = {
@@ -274,7 +345,7 @@ export async function stageRun(input: StageInput, now = new Date()): Promise<Sta
     };
   });
 
-  const [categories, mappings, listings, bands, areas, separations] = await Promise.all([
+  const [categories, mappings, bands, areas, separations, blockCap] = await Promise.all([
     prisma.category.findMany({ select: { id: true, slug: true } }),
     prisma.licenceActivityMapping.findMany({
       where: { activityKey: { in: [...new Set(records.map((r) => r.key).filter(Boolean))] } },
@@ -288,7 +359,6 @@ export async function stageRun(input: StageInput, now = new Date()): Promise<Sta
        matched licence numbers exactly and nothing else, so `DED-441908-01`
        staged as a new company beside `DED-441908`.
     */
-    loadMatchListings(),
     readBands(),
     prisma.area.findMany({ select: { id: true, name: true, emirate: true } }),
     /*
@@ -297,76 +367,205 @@ export async function stageRun(input: StageInput, now = new Date()): Promise<Sta
        file re-sends it.
     */
     separatedLicences(),
+    /*
+       T4.5 — how many listings one word may block, for a directory this size.
+       Counted **once per run** rather than per chunk: it is one `count` on an
+       indexed predicate and the answer cannot meaningfully move while a file is
+       being staged.
+    */
+    candidateBlockCap(),
   ]);
 
   const categoryBySlug = new Map(categories.map((category) => [category.slug, category.id]));
   const mappedCategory = new Map(mappings.map((m) => [m.activityKey, m.categoryId]));
-  const index = buildMatchIndex(listings);
   const areaById = new Map(areas.map((area) => [area.id, area]));
 
   // The first row of the file carrying a licence keeps it; a later one repeats it.
   const firstRowFor = new Map<string, number>();
   let belowFloor = 0;
+  const staged: StagedRow[] = [];
 
-  const staged = records.map((row) => {
-    let duplicateOfId: string | null = null;
-    let duplicateOfRow: number | null = null;
-    let pair: { score: number; band: "certain" | "probable"; signals: unknown } | null = null;
+  /*
+     T4.4 — matched a chunk at a time, against the candidates for that chunk.
 
-    if (row.verdict.disposition !== "rejected") {
-      const earlier = row.licence ? firstRowFor.get(row.licence) : undefined;
-      if (row.licence && earlier !== undefined) {
-        // An exact repeat inside one file is the file repeating itself, not a
-        // company to argue about. It does not reach the dedupe queue.
-        duplicateOfRow = earlier;
-      } else {
-        if (row.licence) firstRowFor.set(row.licence, row.rowNumber);
-        const emirate = normaliseEmirate(row.record.emirate);
-        const areaId = resolveEnquiryArea(row.record.areaName, emirate, areas);
-        const authority = effectiveAuthority(row.record.licenceAuthority, source, KNOWN_AUTHORITIES);
-        const result = bestMatch(
-          recordAsListing({
-            id: String(row.rowNumber),
-            tradeName: row.record.tradeName ?? null,
-            licenceNumber: row.record.licenceNumber ?? null,
-            authority: authority.code ?? authority.stated ?? source,
-            emirate,
-            areaId,
-            areaName: areaId ? (areaById.get(areaId)?.name ?? null) : (row.record.areaName ?? null),
-            phone: row.record.phone ?? null,
-            activityKey: row.key,
-          }),
-          index,
-          bands,
-          separations.get(licenceDigits(row.record.licenceNumber ?? "")) ?? new Set(),
-        );
-        if (result.match) {
-          duplicateOfId = result.match.listing.id;
-          pair = {
-            score: result.match.similarity.score,
-            band: result.match.similarity.band as "certain" | "probable",
-            signals: result.match.similarity.signals,
-          };
-        } else if (result.nearMiss) {
-          belowFloor += 1;
+     This used to call `loadMatchListings()`: every listing in the directory,
+     with all of its locations and each location's area, and an in-process
+     blocking index over all of it — built here and again at publish. At 41,000
+     listings that is tens of megabytes held in a serverless function and
+     150,000 keys indexed to answer questions about a few hundred records, with
+     a cost that grows with the directory rather than with the file.
+
+     `loadCandidateListings` asks the database the same question the blocking
+     index answered — which listings share a licence, a phone or an identifying
+     word with these records — over three indexed reads. The matcher is
+     untouched: the index is still built with `buildMatchIndex` and the pair is
+     still found by `bestMatch`, from a smaller set.
+  */
+  for (let i = 0; i < records.length; i += MATCH_CHUNK) {
+    const slice = records.slice(i, i + MATCH_CHUNK);
+
+    /*
+       Each record in the matcher's shape, built once: the candidate query reads
+       their blocking keys and `bestMatch` then compares against them. A record
+       the classifier rejected outright is left out — it will never be paired,
+       so its words should not widen the query either.
+    */
+    const asListing = new Map(
+      slice
+        .filter((row) => row.verdict.disposition !== "rejected")
+        .map((row) => {
+          const emirate = normaliseEmirate(row.record.emirate);
+          const areaId = resolveEnquiryArea(row.record.areaName, emirate, areas);
+          const authority = effectiveAuthority(row.record.licenceAuthority, source, KNOWN_AUTHORITIES);
+          return [
+            row.rowNumber,
+            recordAsListing({
+              id: String(row.rowNumber),
+              tradeName: row.record.tradeName ?? null,
+              licenceNumber: row.record.licenceNumber ?? null,
+              authority: authority.code ?? authority.stated ?? source,
+              emirate,
+              areaId,
+              areaName: areaId ? (areaById.get(areaId)?.name ?? null) : (row.record.areaName ?? null),
+              phone: row.record.phone ?? null,
+              activityKey: row.key,
+            }),
+          ] as const;
+        }),
+    );
+
+    /*
+       The cap travels with the candidates — T4.5.
+
+       `loadCandidateListings` has already dropped the words that identify
+       nobody *in the directory*, so the index must not apply a second, tighter
+       cap to the two hundred rows it brought back: a word shared by three of
+       three hundred candidates is the signal, not the noise.
+    */
+    const index = buildMatchIndex(
+      await loadCandidateListings([...asListing.values()], prisma, blockCap),
+      blockCap,
+    );
+
+    for (const row of slice) {
+      let duplicateOfId: string | null = null;
+      let duplicateOfRow: number | null = null;
+      let pair: { score: number; band: "certain" | "probable"; signals: unknown } | null = null;
+
+      const self = asListing.get(row.rowNumber);
+      if (self) {
+        const earlier = row.licence ? firstRowFor.get(row.licence) : undefined;
+        if (row.licence && earlier !== undefined) {
+          // An exact repeat inside one file is the file repeating itself, not a
+          // company to argue about. It does not reach the dedupe queue.
+          duplicateOfRow = earlier;
+        } else {
+          if (row.licence) firstRowFor.set(row.licence, row.rowNumber);
+          const result = bestMatch(
+            self,
+            index,
+            bands,
+            separations.get(licenceDigits(row.record.licenceNumber ?? "")) ?? new Set(),
+          );
+          if (result.match) {
+            duplicateOfId = result.match.listing.id;
+            pair = {
+              score: result.match.similarity.score,
+              band: result.match.similarity.band as "certain" | "probable",
+              signals: result.match.similarity.signals,
+            };
+          } else if (result.nearMiss) {
+            belowFloor += 1;
+          }
         }
       }
+
+      const signalSlug = row.verdict.categorySlug;
+      const outcome = stagedOutcome({
+        verdict: row.verdict,
+        duplicate: duplicateOfId !== null || duplicateOfRow !== null,
+        mappedCategoryId: row.key ? (mappedCategory.get(row.key) ?? null) : null,
+        signalCategoryId: signalSlug ? (categoryBySlug.get(signalSlug) ?? null) : null,
+      });
+
+      staged.push({ ...row, outcome, duplicateOfId, duplicateOfRow, pair });
     }
-
-    const signalSlug = row.verdict.categorySlug;
-    const outcome = stagedOutcome({
-      verdict: row.verdict,
-      duplicate: duplicateOfId !== null || duplicateOfRow !== null,
-      mappedCategoryId: row.key ? (mappedCategory.get(row.key) ?? null) : null,
-      signalCategoryId: signalSlug ? (categoryBySlug.get(signalSlug) ?? null) : null,
-    });
-
-    return { ...row, outcome, duplicateOfId, duplicateOfRow, pair };
-  });
-
+  }
   const totals = tally(staged.map((row) => row.outcome));
+  return { ok: true, prepared: { headers, truncated, belowFloor, staged, totals } };
+}
+
+/**
+ * Parse, classify, stage. Publishes nothing.
+ *
+ * **Whole or not at all.** The run row and every staged record are written in
+ * one transaction, so a failure at record 6,000 leaves no run rather than a
+ * run of 5,999 that reads as the file ("Parse failure: the run fails whole. A
+ * half-imported registry file is worse than none").
+ *
+ * This used to sit outside `staffMutation`, on the argument that staging
+ * changes nothing a buyer sees. B8 moved it inside: an upload is the start of
+ * the one path in the product that mints thousands of listings, and "who
+ * loaded this file, and why" is the first question anybody asks of a bad run —
+ * run 10 duplicated a whole free zone.
+ */
+export async function stageRun(input: StageInput, now = new Date()): Promise<StageResult> {
+  // Refused before an 8,000-row file is parsed, not after. `staffMutation`
+  // asserts it again at the write, which is the check that counts.
+  assertCan(input.actor, "queue.decide");
+
+  /*
+     The bytes, from wherever this caller has them — T4.1.
+
+     Read *after* the capability check and before anything else, so a request
+     with no file costs one storage round trip rather than a parse. A path that
+     storage no longer holds is a sentence rather than a throw: the object can
+     be gone because somebody staged, failed, and came back an hour later, and
+     "upload the file again" is the whole of what they need to know.
+  */
+  const text = input.uploadPath ? await readIngestText(input.uploadPath) : (input.text ?? null);
+  if (text === null) {
+    return {
+      ok: false,
+      error: "no_file",
+      message: input.uploadPath
+        ? t("ingest.refuse.upload_gone")
+        : t("ingest.refuse.no_file"),
+    };
+  }
+
+  const source = input.source.trim().toUpperCase();
+  const prep = await prepareStage(text, source, now);
+  if (!prep.ok) return prep;
+  const { headers, truncated, belowFloor, staged, totals } = prep.prepared;
+
   const runId = newRunId();
 
+  /*
+     Three phases, and the transaction boundaries are the task — T4.2.
+
+     This used to be **one** interactive transaction: the audit row, the run,
+     every staged record and the status change, with `timeout: 120_000`, on a
+     pooled connection the app opens with `connection_limit=1`. At 41,000
+     records that is one transaction holding the only connection for minutes,
+     with no `maxDuration` declared anywhere on the path — so the platform kills
+     the function, Postgres rolls the whole thing back, and forty thousand
+     records of work is gone with nothing to show that it was ever attempted.
+
+     Now:
+
+       1 · the run and its audit row, in one short transaction;
+       2 · the records, five hundred at a time, each chunk its own transaction;
+       3 · `staged`, once every record is in.
+
+     **The invariant the one big transaction was protecting still holds.** The
+     old comment put it as "whole or not at all", because a run of 5,999 that
+     reads as the file is worse than no run. What actually must not happen is a
+     run *reading as complete* while partial — and that is phase 3's job, not
+     the transaction's. A run interrupted between chunks stays `parsing`, which
+     every screen already renders, nothing publishes from, and
+     `resumeStageRun` continues.
+  */
   await prisma.$transaction(
     async (tx) =>
       staffMutation(
@@ -384,6 +583,7 @@ export async function stageRun(input: StageInput, now = new Date()): Promise<Sta
               actorId: input.actor.id,
               source,
               filename: input.filename.trim() || "export.csv",
+              uploadPath: input.uploadPath ?? null,
               status: "parsing",
               rowCount: totals.rows,
               truncatedCount: truncated,
@@ -398,67 +598,6 @@ export async function stageRun(input: StageInput, now = new Date()): Promise<Sta
             select: { id: true },
           });
 
-          /*
-           * Chunked. `createMany` with 8,000 rows in one statement is a parameter
-           * count Postgres refuses, and finding that out at 8,000 rather than at
-           * 40 is the whole reason criterion 1 names a real number.
-           */
-          const CHUNK = 500;
-          let pairs = 0;
-          // B4: the records this upload staged, counted from the rows each
-          // `createManyAndReturn` gave back.
-          let recordsStaged = 0;
-          for (let i = 0; i < staged.length; i += CHUNK) {
-            const slice = staged.slice(i, i + CHUNK);
-            const created = await tx.stagedListing.createManyAndReturn({
-              data: slice.map((row) => ({
-                runId,
-                rowNumber: row.rowNumber,
-                raw: row.raw,
-                tradeName: row.record.tradeName ?? null,
-                licenceNumber: row.record.licenceNumber ?? null,
-                licenceAuthority: row.record.licenceAuthority ?? null,
-                licenceExpiry: row.record.licenceExpiry ?? null,
-                emirate: normaliseEmirate(row.record.emirate),
-                areaName: row.record.areaName ?? null,
-                activity: row.record.activity ?? null,
-                activityKey: row.key,
-                phone: row.record.phone ?? null,
-                categoryId: row.outcome.categoryId,
-                categorySource: row.outcome.categorySource,
-                disposition: row.outcome.disposition,
-                rejectionGround: row.outcome.ground,
-                duplicateOfId: row.duplicateOfId,
-                duplicateOfRow: row.duplicateOfRow,
-              })),
-              select: { id: true, rowNumber: true },
-            });
-            recordsStaged += created.length;
-
-            // The pair each duplicate goes to board 12b as, in the same
-            // transaction: a record marked duplicate with no pair is a record
-            // no screen can ever resolve.
-            const idByRow = new Map(created.map((row) => [row.rowNumber, row.id]));
-            const candidates = slice
-              .filter((row) => row.pair && row.duplicateOfId)
-              .map((row) => ({
-                keepId: row.duplicateOfId!,
-                stagedListingId: idByRow.get(row.rowNumber)!,
-                sourceRunId: runId,
-                score: row.pair!.score,
-                band: row.pair!.band,
-                signals: row.pair!.signals as Prisma.InputJsonValue,
-              }));
-            if (candidates.length > 0) {
-              await tx.mergeCandidate.createMany({ data: candidates });
-              pairs += candidates.length;
-            }
-          }
-
-          // Staged only once every record is in. `parsing` is never visible
-          // outside this transaction, which is the point of it.
-          await tx.licenceImportRun.update({ where: { id: runId }, data: { status: "staged" } });
-
           return {
             result: runId,
             before: null,
@@ -471,19 +610,265 @@ export async function stageRun(input: StageInput, now = new Date()): Promise<Sta
               categorised: totals.categorised,
               queued: totals.queued,
               duplicates: totals.duplicates,
-              pairs,
               belowFloor,
               rejected: totals.rejected,
               truncated,
             },
-            blastRadius: { count: recordsStaged, unit: "records" },
+            /*
+               B4: what this decision is about, which is the whole file.
+
+               Counted from the classified records rather than from the rows
+               `createManyAndReturn` gave back, because the rows are no longer
+               written in this transaction. It is the same number unless a chunk
+               fails, and a run that stopped half way is a run whose audit row
+               should still say what was being attempted.
+            */
+            blastRadius: { count: staged.length, unit: "records" },
           };
         },
       ),
-    { timeout: 120_000, maxWait: 10_000 },
+    // Short, because all it writes is two rows. The 120 seconds this used to
+    // ask for was the chunk loop's, and the chunk loop has left.
+    { timeout: 20_000, maxWait: 10_000 },
   );
 
-  return { ok: true, runId, totals, truncated };
+  const written = await writeStagedChunks(runId, staged, 0);
+  await finishStaging(runId);
+
+  return { ok: true, runId, totals, truncated, written };
+}
+
+/** Five hundred records per transaction. See `writeStagedChunks`. */
+const STAGE_CHUNK = 500;
+
+/**
+ * Write the records from `from` onwards, a chunk per transaction — T4.2.
+ *
+ * `createMany` with 41,000 rows in one statement is a parameter count Postgres
+ * refuses, so the loop was always chunked; what has changed is that each chunk
+ * **commits**. A run interrupted at chunk 40 has 20,000 records durably staged
+ * and a cursor that says so.
+ *
+ * ## The cursor is the data
+ *
+ * There is no `staged_through` column, deliberately. `staged_listing` has a
+ * unique key on `(run_id, row_number)`, so the rows themselves say exactly how
+ * far this run got — `max(row_number)` — and a number stored beside them is a
+ * second source of that truth that can disagree with it. `skipDuplicates` makes
+ * a chunk that is re-run a no-op rather than a constraint violation, so a
+ * resume that overlaps by one chunk is correct rather than fatal.
+ *
+ * That is why this takes an index: the resume works out where to start by
+ * asking the table, and passes it.
+ */
+async function writeStagedChunks(
+  runId: string,
+  staged: readonly StagedRow[],
+  from: number,
+): Promise<number> {
+  let written = 0;
+
+  for (let i = from; i < staged.length; i += STAGE_CHUNK) {
+    const slice = staged.slice(i, i + STAGE_CHUNK);
+    await prisma.$transaction(
+      async (tx) => {
+        const created = await tx.stagedListing.createManyAndReturn({
+          data: slice.map((row) => ({
+            runId,
+            rowNumber: row.rowNumber,
+            raw: row.raw,
+            tradeName: row.record.tradeName ?? null,
+            licenceNumber: row.record.licenceNumber ?? null,
+            licenceAuthority: row.record.licenceAuthority ?? null,
+            licenceExpiry: row.record.licenceExpiry ?? null,
+            emirate: normaliseEmirate(row.record.emirate),
+            areaName: row.record.areaName ?? null,
+            activity: row.record.activity ?? null,
+            activityKey: row.key,
+            phone: row.record.phone ?? null,
+            categoryId: row.outcome.categoryId,
+            categorySource: row.outcome.categorySource,
+            disposition: row.outcome.disposition,
+            rejectionGround: row.outcome.ground,
+            duplicateOfId: row.duplicateOfId,
+            duplicateOfRow: row.duplicateOfRow,
+          })),
+          skipDuplicates: true,
+          select: { id: true, rowNumber: true },
+        });
+        written += created.length;
+
+        /*
+           The pair each duplicate goes to board 12b as, in the **same**
+           transaction as the record: a record marked duplicate with no pair is
+           a record no screen can ever resolve, and that invariant is per
+           record rather than per file — which is exactly why chunking the
+           transaction is safe here.
+        */
+        const idByRow = new Map(created.map((row) => [row.rowNumber, row.id]));
+        const candidates = slice
+          .filter((row) => row.pair && row.duplicateOfId && idByRow.has(row.rowNumber))
+          .map((row) => ({
+            keepId: row.duplicateOfId!,
+            stagedListingId: idByRow.get(row.rowNumber)!,
+            sourceRunId: runId,
+            score: row.pair!.score,
+            band: row.pair!.band,
+            signals: row.pair!.signals as Prisma.InputJsonValue,
+          }));
+        if (candidates.length > 0) {
+          await tx.mergeCandidate.createMany({ data: candidates, skipDuplicates: true });
+        }
+      },
+      // One chunk is two statements over five hundred rows. Seconds, not
+      // minutes — and a timeout that cannot outlive the route's `maxDuration`.
+      { timeout: 30_000, maxWait: 10_000 },
+    );
+  }
+
+  return written;
+}
+
+/**
+ * `staged`, and the counts, once every record is in — T4.2 phase 3.
+ *
+ * The status change is the thing that makes a run read as the file, so it is
+ * the last write and it is its own statement. `runCounts` recounts from the
+ * rows rather than trusting the tally, which is also what makes a resumed run's
+ * figures right: the tally describes the file and the rows describe what was
+ * stored.
+ */
+async function finishStaging(runId: string): Promise<void> {
+  const counts = await runCounts(prisma, runId);
+  await prisma.licenceImportRun.update({
+    where: { id: runId },
+    data: { ...counts, status: "staged" },
+  });
+}
+
+/* ── Resuming a run that stopped between chunks ──────────────────────────── */
+
+export type ResumeResult =
+  | { ok: true; written: number; remaining: number }
+  | {
+      ok: false;
+      error: "not_found" | "not_parsing" | "no_file" | "empty" | "no_trade_name_column";
+      message: string;
+    };
+
+/**
+ * Continue a run left `parsing` — T4.2.
+ *
+ * The staging loop commits a chunk at a time, so an interrupted run is 20,000
+ * records that are really there and 21,000 that are not. This reads the same
+ * file out of `ingest-uploads`, works out the same answers, and writes the rows
+ * that are missing.
+ *
+ * ## Four things make it safe to run twice
+ *
+ * 1. **The file.** T4.1 keeps the object, so the bytes are the same bytes.
+ * 2. **The clock.** It classifies against the run's own `createdAt`, not
+ *    against now. `classify` reads the expiry date against a date, so a resume
+ *    an hour later would otherwise hold back a licence that expired in between
+ *    and the run would answer two different things about one file.
+ * 3. **The cursor.** `max(row_number)` for the run, from the rows themselves.
+ * 4. **The unique key.** `(run_id, row_number)` plus `skipDuplicates`, so an
+ *    overlap is a no-op rather than a constraint violation.
+ *
+ * ## Audited as its own decision
+ *
+ * It takes a reason, and writes a row. An ops lead continuing somebody else's
+ * interrupted run hours later is exactly the question the log exists to answer,
+ * and the uploader's reason cannot be made to stand in for a decision they were
+ * not there for.
+ *
+ * What it does **not** re-decide: a record already written keeps the verdict it
+ * was written with. The live match index may have moved since — another run may
+ * have published a company this file also carries — and the rows that have not
+ * been written yet are matched against the index as it is now. That is the same
+ * re-match `publishRun` does at its own moment, and it is why the pairs go to a
+ * person rather than straight into the directory.
+ */
+export async function resumeStageRun(input: {
+  actor: Actor;
+  runId: string;
+  reason: string;
+}): Promise<ResumeResult> {
+  assertCan(input.actor, "queue.decide");
+
+  const run = await prisma.licenceImportRun.findUnique({
+    where: { id: input.runId },
+    select: { id: true, status: true, source: true, uploadPath: true, createdAt: true, rowCount: true },
+  });
+  if (!run) return { ok: false, error: "not_found", message: t("ingest.refuse.run_not_found") };
+  if (run.status !== "parsing") {
+    return {
+      ok: false,
+      error: "not_parsing",
+      message: t("ingest.refuse.not_parsing", { status: run.status }),
+    };
+  }
+  if (!run.uploadPath) {
+    return {
+      ok: false,
+      error: "no_file",
+      message: t("ingest.refuse.staged_from_text"),
+    };
+  }
+
+  const text = await readIngestText(run.uploadPath);
+  if (text === null) {
+    return {
+      ok: false,
+      error: "no_file",
+      message: t("ingest.refuse.upload_gone_resume"),
+    };
+  }
+
+  // The run's own clock, not this moment. See point 2 above.
+  const prep = await prepareStage(text, run.source, run.createdAt);
+  if (!prep.ok) return prep;
+  const { staged } = prep.prepared;
+
+  /*
+     Where it got to, asked of the rows. `_max` over an indexed column on one
+     run's rows, which is a single index read however large the run is.
+  */
+  const cursor = await prisma.stagedListing.aggregate({
+    where: { runId: run.id },
+    _max: { rowNumber: true },
+  });
+  const through = cursor._max.rowNumber ?? 0;
+  const from = staged.findIndex((row) => row.rowNumber > through);
+
+  let written = 0;
+  if (from !== -1) {
+    written = await writeStagedChunks(run.id, staged, from);
+  }
+
+  await prisma.$transaction(
+    async (tx) =>
+      staffMutation(
+        {
+          actor: input.actor,
+          capability: "queue.decide",
+          subject: `LicenceImportRun:${run.id}`,
+          reason: input.reason,
+          tx,
+        },
+        async () => ({
+          result: written,
+          before: { status: "parsing", stagedThrough: through },
+          after: { status: "staged", stagedThrough: staged.at(-1)?.rowNumber ?? through },
+          blastRadius: { count: written, unit: "records" },
+        }),
+      ),
+    { timeout: 20_000, maxWait: 10_000 },
+  );
+
+  await finishStaging(run.id);
+
+  return { ok: true, written, remaining: 0 };
 }
 
 /* ── Publishing ──────────────────────────────────────────────────────────── */
@@ -495,6 +880,149 @@ export type PublishResult =
       error: "not_found" | "not_open" | "nothing_ready";
       message: string;
     };
+
+/**
+ * A free slug for each base, resolved against the index rather than the table —
+ * T4.3.
+ *
+ * ## What it replaced
+ *
+ * `findMany({ select: { slug: true } })` — every slug in the directory, read
+ * into a Set on every publish, to answer a question about at most six thousand
+ * of them. A sequential scan whose cost grows with the directory instead of
+ * with the run.
+ *
+ * ## What it does
+ *
+ * One indexed read for the bases this run actually wants (`slug IN (…)`, at most
+ * a few thousand keys), and a second read **only for the bases that turn out to
+ * be taken** (`slug LIKE 'base-%'`), to find the lowest free suffix. A run whose
+ * trade names are all new — the common case for a register export — costs one
+ * query.
+ *
+ * ## And the constraint is still the authority
+ *
+ * Two rows of one file can want the same slug, so the batch resolves against
+ * itself as well. But nothing here holds a lock: another publish, or a seller
+ * claiming a listing, can take a slug between this read and the insert. That
+ * race is not closed by reading more — it is closed by `business.slug` being
+ * `@unique`, and by `insertBusinessChunk` retrying the rows Postgres refuses.
+ * This function's job is to make the refusal rare, not to make it impossible.
+ */
+async function claimSlugs(bases: readonly string[]): Promise<string[]> {
+  const wanted = [...new Set(bases)];
+  const exact =
+    wanted.length === 0
+      ? []
+      : await prisma.business.findMany({
+          where: { slug: { in: wanted } },
+          select: { slug: true },
+        });
+  const taken = new Set(exact.map((row) => row.slug));
+  // Suffixed siblings, read lazily: one query per base that is actually taken.
+  const families = new Map<string, Set<string>>();
+
+  const out: string[] = [];
+  for (const base of bases) {
+    if (!taken.has(base)) {
+      taken.add(base);
+      out.push(base);
+      continue;
+    }
+    let family = families.get(base);
+    if (!family) {
+      const rows = await prisma.business.findMany({
+        where: { slug: { startsWith: `${base}-` } },
+        select: { slug: true },
+      });
+      family = new Set(rows.map((row) => row.slug));
+      families.set(base, family);
+    }
+    let n = 2;
+    while (taken.has(`${base}-${String(n)}`) || family.has(`${base}-${String(n)}`)) n += 1;
+    const slug = `${base}-${String(n)}`;
+    taken.add(slug);
+    family.add(slug);
+    out.push(slug);
+  }
+  return out;
+}
+
+/** The suffix a row gets when Postgres refuses the slug this run chose. */
+function reslug(slug: string): string {
+  return `${slug}-${randomBytes(3).toString("hex")}`;
+}
+
+/**
+ * One chunk of listings, with the slug collisions Postgres finds — T4.3.
+ *
+ * The happy path is one statement for five hundred rows, which is what it was
+ * before. What is new is the refusal: `business.slug` is `@unique`, so a slug
+ * another writer took between `claimSlugs` and here comes back as `P2002`, and
+ * one `createMany` is all-or-nothing.
+ *
+ * On that refusal the chunk is retried **row by row**, each row keeping the slug
+ * it was given and the refused ones taking a random suffix — `safeName`'s
+ * answer to the same problem one layer down. Five hundred round trips, for a
+ * chunk that actually collided, which is the trade the task asks for: the cost
+ * lands on the rare case instead of on every publish.
+ *
+ * It returns the rows it created, in the shape `createManyAndReturn` does, so
+ * the caller's `idBySlug` map is built the same way either route was taken.
+ *
+ * ## Why the retry is not a loop
+ *
+ * A random three-byte suffix on a slug that was already free a moment ago does
+ * not collide twice in any realistic world, and a `while (true)` around an
+ * insert is how a function that should have failed loudly becomes one that
+ * spends its whole `maxDuration` instead. A second refusal on the same row
+ * throws, with the slug in the message.
+ */
+async function insertBusinessChunk(
+  tx: Prisma.TransactionClient,
+  slice: readonly { business: { slug: string } & Record<string, unknown> }[],
+): Promise<{ id: string; slug: string }[]> {
+  try {
+    return await tx.business.createManyAndReturn({
+      data: slice.map((item) => item.business as never),
+      select: { id: true, slug: true },
+    });
+  } catch (error) {
+    if (!isSlugCollision(error)) throw error;
+
+    const rows: { id: string; slug: string }[] = [];
+    for (const item of slice) {
+      try {
+        rows.push(
+          await tx.business.create({ data: item.business as never, select: { id: true, slug: true } }),
+        );
+      } catch (first) {
+        if (!isSlugCollision(first)) throw first;
+        /*
+           Renamed, and the **caller's** map is keyed by the slug that was
+           actually written — which is why this returns the row rather than the
+           slug it asked for. A location pointing at a business by a slug the
+           database refused is the defect this would otherwise introduce.
+        */
+        rows.push(
+          await tx.business.create({
+            data: { ...item.business, slug: reslug(item.business.slug) } as never,
+            select: { id: true, slug: true },
+          }),
+        );
+      }
+    }
+    return rows;
+  }
+}
+
+/** A unique violation naming the slug, and nothing else. */
+function isSlugCollision(error: unknown): boolean {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") return false;
+  const target = (error.meta as { target?: unknown } | undefined)?.target;
+  const fields = Array.isArray(target) ? target.map(String) : [String(target ?? "")];
+  return fields.some((field) => field.includes("slug"));
+}
 
 function slugify(value: string): string {
   return value
@@ -535,15 +1063,15 @@ export async function publishRun(
     where: { id: input.runId },
     select: { id: true, status: true, source: true, reversibleUntil: true },
   });
-  if (!run) return { ok: false, error: "not_found", message: "That run is not in the importer." };
+  if (!run) return { ok: false, error: "not_found", message: t("ingest.refuse.run_not_found") };
   if (run.status !== "staged" && run.status !== "approved") {
     return {
       ok: false,
       error: "not_open",
       message:
         run.status === "rolled_back"
-          ? "That run was rolled back. Nothing more publishes from it."
-          : `That run is ${run.status}. Nothing publishes from it.`,
+          ? t("ingest.refuse.rolled_back_publish")
+          : t("ingest.refuse.not_open", { status: run.status }),
     };
   }
 
@@ -579,47 +1107,72 @@ export async function publishRun(
      Separations a person already made are honoured, so a record kept separate
      is not sent straight back.
   */
-  const [listings, bands, areas, separations] = await Promise.all([
-    candidates.length > 0 ? loadMatchListings() : Promise.resolve([]),
+  const [bands, areas, separations, blockCap] = await Promise.all([
     readBands(),
     prisma.area.findMany({ select: { id: true, name: true, emirate: true } }),
     candidates.length > 0 ? separatedLicences() : Promise.resolve(new Map<string, Set<string>>()),
+    candidateBlockCap(),
   ]);
-  const index = buildMatchIndex(listings);
   const areaName = new Map(areas.map((area) => [area.id, area.name]));
 
   const collided: { id: string; businessId: string; score: number; band: string; signals: unknown }[] = [];
-  const ready = candidates.filter((row) => {
-    const authority = effectiveAuthority(row.licenceAuthority, run.source, KNOWN_AUTHORITIES).code!;
-    const areaId = resolveEnquiryArea(row.areaName, row.emirate, areas);
-    const { match } = bestMatch(
-      recordAsListing({
-        id: row.id,
-        tradeName: row.tradeName,
-        licenceNumber: row.licenceNumber,
-        authority,
-        emirate: row.emirate,
-        areaId,
-        areaName: areaId ? (areaName.get(areaId) ?? null) : row.areaName,
-        phone: row.phone,
-        activityKey: row.activityKey,
+  const ready: typeof candidates = [];
+
+  /*
+     T4.4 — a chunk at a time here too, against that chunk's candidates.
+
+     `loadMatchListings()` read the whole directory into memory for the second
+     time in one run, after staging had already done it once. Same three indexed
+     reads as the staging side, and the same untouched matcher over what comes
+     back.
+  */
+  for (let i = 0; i < candidates.length; i += MATCH_CHUNK) {
+    const slice = candidates.slice(i, i + MATCH_CHUNK);
+    const asListing = new Map(
+      slice.map((row) => {
+        const authority = effectiveAuthority(row.licenceAuthority, run.source, KNOWN_AUTHORITIES).code!;
+        const areaId = resolveEnquiryArea(row.areaName, row.emirate, areas);
+        return [
+          row.id,
+          recordAsListing({
+            id: row.id,
+            tradeName: row.tradeName,
+            licenceNumber: row.licenceNumber,
+            authority,
+            emirate: row.emirate,
+            areaId,
+            areaName: areaId ? (areaName.get(areaId) ?? null) : row.areaName,
+            phone: row.phone,
+            activityKey: row.activityKey,
+          }),
+        ] as const;
       }),
-      index,
-      bands,
-      separations.get(licenceDigits(row.licenceNumber ?? "")) ?? new Set(),
     );
-    if (match) {
-      collided.push({
-        id: row.id,
-        businessId: match.listing.id,
-        score: match.similarity.score,
-        band: match.similarity.band,
-        signals: match.similarity.signals,
-      });
-      return false;
+    const index = buildMatchIndex(
+      await loadCandidateListings([...asListing.values()], prisma, blockCap),
+      blockCap,
+    );
+
+    for (const row of slice) {
+      const { match } = bestMatch(
+        asListing.get(row.id)!,
+        index,
+        bands,
+        separations.get(licenceDigits(row.licenceNumber ?? "")) ?? new Set(),
+      );
+      if (match) {
+        collided.push({
+          id: row.id,
+          businessId: match.listing.id,
+          score: match.similarity.score,
+          band: match.similarity.band,
+          signals: match.similarity.signals,
+        });
+        continue;
+      }
+      ready.push(row);
     }
-    return true;
-  });
+  }
 
   const firstDecision = run.status === "staged";
 
@@ -632,33 +1185,35 @@ export async function publishRun(
     return {
       ok: false,
       error: "nothing_ready",
-      message:
-        held > 0
-          ? "Nothing in this run can publish yet. The records left are waiting on the categorisation queue or on a fix."
-          : "Everything in this run that can publish already has.",
+      message: held > 0 ? t("ingest.refuse.all_waiting") : t("ingest.refuse.nothing_left"),
     };
   }
 
   const categoryIds = [...new Set(ready.map((row) => row.categoryId!))];
-  const [categories, takenSlugs] = await Promise.all([
-    prisma.category.findMany({
-      where: { id: { in: categoryIds } },
-      select: { id: true, name: true, synonyms: true },
-    }),
-    // Slugs must be free on arrival, and two rows of one export can want the
-    // same one. Resolved against the database and against each other.
-    prisma.business.findMany({ select: { slug: true } }),
-  ]);
+  const categories = await prisma.category.findMany({
+    where: { id: { in: categoryIds } },
+    select: { id: true, name: true, synonyms: true },
+  });
   const categoryById = new Map(categories.map((category) => [category.id, category]));
-  const taken = new Set(takenSlugs.map((row) => row.slug));
 
-  const prepared = ready.map((row) => {
+  /*
+     T4.3 — the slugs this run wants, asked for by name.
+
+     This used to be `prisma.business.findMany({ select: { slug: true } })`:
+     **every slug in the directory**, into one Set, on every publish. At 41,000
+     listings that is a sequential scan and 41,000 strings in the function's
+     memory before a single listing is written, and it grows with the directory
+     rather than with the run — the one shape that is certain to be fine in
+     testing and wrong in production.
+  */
+  const slugFor = await claimSlugs(
+    ready.map((row) => slugify(row.tradeName ?? "") || `listing-${row.id.slice(-8)}`),
+  );
+
+  const prepared = ready.map((row, index) => {
     const authority = effectiveAuthority(row.licenceAuthority, run.source, KNOWN_AUTHORITIES)
       .code as $Enums.Authority;
-    const base = slugify(row.tradeName ?? "") || `listing-${row.id.slice(-8)}`;
-    let slug = base;
-    for (let n = 2; taken.has(slug); n += 1) slug = `${base}-${n}`;
-    taken.add(slug);
+    const slug = slugFor[index]!;
 
     const normalised = normaliseLicenceNumber(row.licenceNumber!, authority);
     const category = categoryById.get(row.categoryId!);
@@ -703,7 +1258,30 @@ export async function publishRun(
 
   const withoutAddress = prepared.filter((item) => item.areaId === null).length;
 
-  const created = await prisma.$transaction(
+  /*
+     Three phases again — T4.2, and the same reason as staging.
+
+     This was one interactive transaction with `timeout: 120_000` holding the
+     app's single pooled connection while it created six thousand businesses,
+     six thousand locations and six thousand staged-row updates. A platform
+     timeout anywhere in it rolled back the whole publish, and an ops lead who
+     had pressed Approve was left with a run that said `staged` and no
+     explanation.
+
+       1 · the decision: the audit row and the status change.
+       2 · the listings, five hundred at a time, each chunk its own transaction.
+       3 · the duplicates found at publish, and the recounted figures.
+
+     **The cursor is the data here too, and more cleanly than in staging.** A
+     staged row that has published carries `disposition = 'published'`, and the
+     query that chooses what to publish asks for `ready` and `needs_category` —
+     so a publish that stopped at chunk 9 has nothing to skip on the next
+     attempt, because the rows it wrote have left the set. `publishRun` was
+     already callable twice on an `approved` run, for the records the
+     categorisation queue clears afterwards (B3); an interrupted publish is the
+     same shape and resumes through the same control.
+  */
+  await prisma.$transaction(
     async (tx) =>
       staffMutation(
         {
@@ -714,124 +1292,159 @@ export async function publishRun(
           tx,
         },
         async () => {
-          /*
-           * Three statements per five hundred listings, not three per listing.
-           * The first version created each business, then updated its staged
-           * row, one round trip at a time — 12,000 of them for a 6,000-listing
-           * run, inside one transaction, against a pooled database.
-           */
-          const CHUNK = 500;
-          let count = 0;
-
-          for (let i = 0; i < prepared.length; i += CHUNK) {
-            const slice = prepared.slice(i, i + CHUNK);
-            const rows = await tx.business.createManyAndReturn({
-              data: slice.map((item) => item.business),
-              select: { id: true, slug: true },
-            });
-            const idBySlug = new Map(rows.map((row) => [row.slug, row.id]));
-
-            /*
-             * The register's address, where its area is one we know. An area we
-             * cannot match exactly gets no branch rather than a guessed one —
-             * `resolveEnquiryArea`'s rule, and for the same reason: a wrong area
-             * sends a buyer to the wrong part of the emirate.
-             */
-            const locations = slice
-              .filter((item) => item.areaId !== null)
-              .map((item) => ({
-                businessId: idBySlug.get(item.slug)!,
-                type: "head_office" as const,
-                emirate: item.row.emirate as $Enums.Emirate,
-                areaId: item.areaId!,
-                addressLine: item.row.areaName!.trim(),
-                phone: item.row.phone,
-                phoneVerified: false,
-                published: true,
-                publishedAt: now,
-              }));
-            if (locations.length > 0) await tx.location.createMany({ data: locations });
-
-            const pairs = slice.map((item) => Prisma.sql`(${item.row.id}, ${idBySlug.get(item.slug)!})`);
-            await tx.$executeRaw`
-              UPDATE "staged_listing" AS s
-                 SET "disposition" = 'published'::"staged_disposition",
-                     "business_id" = v.business_id
-                FROM (VALUES ${Prisma.join(pairs)}) AS v(id, business_id)
-               WHERE s."id" = v.id`;
-            count += rows.length;
-          }
-
-          if (collided.length > 0) {
-            const pairs = collided.map((item) => Prisma.sql`(${item.id}, ${item.businessId})`);
-            await tx.$executeRaw`
-              UPDATE "staged_listing" AS s
-                 SET "disposition" = 'duplicate'::"staged_disposition",
-                     "duplicate_of_id" = v.business_id,
-                     "category_id" = NULL,
-                     "category_source" = NULL,
-                     "categorised_by_id" = NULL,
-                     "categorised_at" = NULL
-                FROM (VALUES ${Prisma.join(pairs)}) AS v(id, business_id)
-               WHERE s."id" = v.id`;
-            await tx.mergeCandidate.createMany({
-              data: collided.map((item) => ({
-                keepId: item.businessId,
-                stagedListingId: item.id,
-                sourceRunId: run.id,
-                score: item.score,
-                band: item.band as "certain" | "probable",
-                signals: item.signals as Prisma.InputJsonValue,
-              })),
-              skipDuplicates: true,
+          if (firstDecision) {
+            await tx.licenceImportRun.update({
+              where: { id: run.id },
+              data: {
+                status: "approved",
+                decisionReason: input.reason.trim(),
+                decidedAt: now,
+                decidedById: input.actor.id,
+              },
             });
           }
-
-          const counts = await runCounts(tx, run.id);
-
-          await tx.licenceImportRun.update({
-            where: { id: run.id },
-            data: {
-              ...counts,
-              ...(firstDecision
-                ? {
-                    status: "approved" as const,
-                    decisionReason: input.reason.trim(),
-                    decidedAt: now,
-                    decidedById: input.actor.id,
-                  }
-                : {}),
-              // The window opens on the first listing, not on the decision: a
-              // run approved with nothing new has nothing to take back.
-              ...(run.reversibleUntil === null && count > 0
-                ? { reversibleUntil: new Date(now.getTime() + REVERSIBLE_DAYS * DAY_MS) }
-                : {}),
-            },
-          });
-
           return {
-            result: count,
+            result: ready.length,
             before: { status: run.status },
             after: {
               status: "approved",
-              listingsCreated: count,
+              /*
+                 What this decision is about, not what the loop managed. The
+                 listings are written after this commits, so a number counted
+                 from them would either be zero or would need the audit row to
+                 be rewritten afterwards — and an audit row that gets rewritten
+                 is not a log.
+              */
+              willPublish: ready.length,
               heldBack: held,
               newDuplicates: collided.length,
               withoutAddress,
             },
-            /*
-               B4: the listings this decision put live, counted from the rows
-               `createManyAndReturn` gave back. Zero is a real result here — a
-               monthly delta with nothing new is still a decision about a run.
-            */
-            blastRadius: { count, unit: "listings" },
+            blastRadius: { count: ready.length, unit: "listings" },
           };
         },
       ),
-    // 8,000 rows is a long transaction. The default 5s timeout is for a
-    // request, not for an import somebody kicked off and walked away from.
-    { timeout: 120_000, maxWait: 10_000 },
+    { timeout: 20_000, maxWait: 10_000 },
   );
+
+  /*
+   * Three statements per five hundred listings, not three per listing. The
+   * first version created each business, then updated its staged row, one
+   * round trip at a time — 12,000 of them for a 6,000-listing run, inside one
+   * transaction, against a pooled database.
+   */
+  const CHUNK = 500;
+  let created = 0;
+
+  for (let i = 0; i < prepared.length; i += CHUNK) {
+    const slice = prepared.slice(i, i + CHUNK);
+    created += await prisma.$transaction(
+      async (tx) => {
+        /*
+           T4.3 — the constraint decides, and a refused row is renamed rather
+           than losing the chunk.
+
+           `claimSlugs` read the index a moment ago, which makes a collision
+           rare; it does not make it impossible, because nothing holds a lock
+           over a slug between that read and this insert. One `createMany` is
+           all-or-nothing, so a single colliding row used to be the whole
+           chunk's problem — and under the old whole-table read it was the whole
+           *publish's* problem, since the Set was built once.
+        */
+        const rows = await insertBusinessChunk(tx, slice);
+        const idBySlug = new Map(rows.map((row) => [row.slug, row.id]));
+
+        /*
+         * The register's address, where its area is one we know. An area we
+         * cannot match exactly gets no branch rather than a guessed one —
+         * `resolveEnquiryArea`'s rule, and for the same reason: a wrong area
+         * sends a buyer to the wrong part of the emirate.
+         */
+        const locations = slice
+          .filter((item) => item.areaId !== null)
+          .map((item) => ({
+            businessId: idBySlug.get(item.slug)!,
+            type: "head_office" as const,
+            emirate: item.row.emirate as $Enums.Emirate,
+            areaId: item.areaId!,
+            addressLine: item.row.areaName!.trim(),
+            phone: item.row.phone,
+            phoneVerified: false,
+            published: true,
+            publishedAt: now,
+          }));
+        if (locations.length > 0) await tx.location.createMany({ data: locations });
+
+        /*
+           The staged row is marked published in the **same** transaction as the
+           listing it points at. That pairing is the one that must not break: a
+           business whose staged row still says `ready` would be published a
+           second time by the next attempt, and `business_id` on a row not
+           marked `published` is refused by a CHECK.
+        */
+        const pairs = slice.map((item) => Prisma.sql`(${item.row.id}, ${idBySlug.get(item.slug)!})`);
+        await tx.$executeRaw`
+          UPDATE "staged_listing" AS s
+             SET "disposition" = 'published'::"staged_disposition",
+                 "business_id" = v.business_id
+            FROM (VALUES ${Prisma.join(pairs)}) AS v(id, business_id)
+           WHERE s."id" = v.id`;
+
+        return rows.length;
+      },
+      { timeout: 30_000, maxWait: 10_000 },
+    );
+  }
+
+  if (collided.length > 0) {
+    await prisma.$transaction(
+      async (tx) => {
+        const pairs = collided.map((item) => Prisma.sql`(${item.id}, ${item.businessId})`);
+        await tx.$executeRaw`
+          UPDATE "staged_listing" AS s
+             SET "disposition" = 'duplicate'::"staged_disposition",
+                 "duplicate_of_id" = v.business_id,
+                 "category_id" = NULL,
+                 "category_source" = NULL,
+                 "categorised_by_id" = NULL,
+                 "categorised_at" = NULL
+            FROM (VALUES ${Prisma.join(pairs)}) AS v(id, business_id)
+           WHERE s."id" = v.id`;
+        await tx.mergeCandidate.createMany({
+          data: collided.map((item) => ({
+            keepId: item.businessId,
+            stagedListingId: item.id,
+            sourceRunId: run.id,
+            score: item.score,
+            band: item.band as "certain" | "probable",
+            signals: item.signals as Prisma.InputJsonValue,
+          })),
+          skipDuplicates: true,
+        });
+      },
+      { timeout: 30_000, maxWait: 10_000 },
+    );
+  }
+
+  /*
+     The figures, recounted from the rows — phase 3.
+
+     `runCounts` reads the staged rows rather than adding up what the loop
+     thought it did, which is what makes an interrupted publish's figures
+     honest: the cards say how many listings exist, not how many were intended.
+  */
+  const counts = await runCounts(prisma, run.id);
+  await prisma.licenceImportRun.update({
+    where: { id: run.id },
+    data: {
+      ...counts,
+      // The window opens on the first listing, not on the decision: a run
+      // approved with nothing new has nothing to take back.
+      ...(run.reversibleUntil === null && created > 0
+        ? { reversibleUntil: new Date(now.getTime() + REVERSIBLE_DAYS * DAY_MS) }
+        : {}),
+    },
+  });
 
   return { ok: true, created, held, duplicates: collided.length, withoutAddress };
 }
@@ -855,15 +1468,15 @@ export async function discardRun(
     where: { id: input.runId },
     select: { id: true, status: true },
   });
-  if (!run) return { ok: false, error: "not_found", message: "That run is not in the importer." };
+  if (!run) return { ok: false, error: "not_found", message: t("ingest.refuse.run_not_found") };
   if (run.status !== "staged") {
     return {
       ok: false,
       error: "not_staged",
       message:
         run.status === "approved"
-          ? "That run has published. Roll it back instead of discarding it."
-          : `That run is already ${run.status.replace("_", " ")}.`,
+          ? t("ingest.refuse.discard_published")
+          : t("ingest.refuse.already", { status: run.status.replace("_", " ") }),
     };
   }
 
@@ -1025,24 +1638,25 @@ export async function rollbackRun(
     where: { id: input.runId },
     select: { id: true, status: true, reversibleUntil: true },
   });
-  if (!run) return { ok: false, error: "not_found", message: "That run is not in the importer." };
+  if (!run) return { ok: false, error: "not_found", message: t("ingest.refuse.run_not_found") };
   if (run.status !== "approved" || run.reversibleUntil === null) {
     return {
       ok: false,
       error: "not_approved",
       message:
         run.status === "rolled_back"
-          ? "That run was already rolled back."
-          : "Only a run that has published listings can be rolled back.",
+          ? t("ingest.refuse.already_rolled_back")
+          : t("ingest.refuse.never_published"),
     };
   }
   if (run.reversibleUntil.getTime() < now.getTime()) {
     return {
       ok: false,
       error: "window_closed",
-      message: `A run is reversible for ${REVERSIBLE_DAYS} days. This one closed on ${run.reversibleUntil
-        .toISOString()
-        .slice(0, 10)}.`,
+      message: t("ingest.refuse.window_closed", {
+        days: REVERSIBLE_DAYS,
+        date: run.reversibleUntil.toISOString().slice(0, 10),
+      }),
     };
   }
 
@@ -1059,7 +1673,7 @@ export async function rollbackRun(
     return {
       ok: false,
       error: "merges_confirmed",
-      message: `Records from this run became branches that their owners confirmed: ${names.join(", ")}. Those are the owners' now, so the run cannot be rolled back.`,
+      message: t("ingest.refuse.merges_confirmed", { names: names.join(", ") }),
     };
   }
   // Putting merges back is the merge role's work. A seat that may roll a run
@@ -1068,7 +1682,9 @@ export async function rollbackRun(
     return {
       ok: false,
       error: "merges_need_merge_role",
-      message: `Records from this run were merged into ${merges.unwind.length + merges.looseMerges.length} listings. Rolling it back puts those merges back, which only an ops lead can do.`,
+      message: t("ingest.refuse.merges_need_merge_role", {
+        count: merges.unwind.length + merges.looseMerges.length,
+      }),
     };
   }
 

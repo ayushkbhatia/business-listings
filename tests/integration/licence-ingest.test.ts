@@ -7,6 +7,7 @@ import {
   parseLicenceDate,
   publishRun,
   rollbackPreview,
+  resumeStageRun,
   rollbackRun,
   stageRun,
 } from "@/lib/ingest/service";
@@ -20,6 +21,8 @@ import { activityKey } from "@/lib/ingest/classify";
 import { AuditReasonError, PermissionError } from "@/lib/auth/errors";
 import type { Actor, Role } from "@/lib/auth/roles";
 import { purgeAuditRows } from "./audit-cleanup";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { INGEST_BUCKET } from "@/lib/storage/buckets";
 
 /**
  * Board 12a — the licence importer, end to end against a real database.
@@ -850,5 +853,284 @@ describe("criterion 3 — rejects export with the raw row", () => {
       "Extra",
     ]);
     expect(orderRaw(raw, []).map(([h]) => h)).toEqual(["Trade Name", "Licence No", "Phone", "Extra"]);
+  });
+});
+
+/* ── T4.2 · a run that stopped between chunks ───────────────────────────── */
+
+describe("T4.2 — staging commits as it goes, and can be continued", () => {
+  /*
+     The defect, as a test.
+
+     Staging was one interactive transaction with `timeout: 120_000` holding the
+     app's single pooled connection: the audit row, the run, every staged record
+     and the status change. A platform timeout anywhere in it rolled the whole
+     thing back, so 41,000 records of work ended as nothing — and nothing in the
+     product could tell the difference between "that file was never uploaded"
+     and "that file took longer than the function was allowed to live".
+
+     What is asserted is the property that replaced it:
+
+       · a run interrupted between chunks keeps the records it wrote;
+       · it stays `parsing`, so nothing reads it as the file and nothing
+         publishes from it;
+       · `resumeStageRun` writes exactly what is missing and nothing twice;
+       · the figures afterwards are the figures of a run that staged in one go.
+
+     The interruption is simulated by deleting the tail and putting the run back
+     to `parsing`, because a real timeout cannot be arranged from a test. What
+     cannot be faked is the resume: it re-reads the **real object** out of
+     `ingest-uploads`, which is why this test uploads one.
+  */
+  const RESUME_REASON = "Continuing run after the function timed out mid-file.";
+
+  it("keeps what it wrote, stays parsing, and finishes on a resume", async () => {
+    const admin = createAdminClient();
+    const path = `${opsLead.id}/it-resume-${TAG}.csv`;
+    const { error: upload } = await admin.storage
+      .from(INGEST_BUCKET)
+      .upload(path, new Blob([csv60], { type: "text/csv" }), {
+        contentType: "text/csv",
+        upsert: true,
+      });
+    // A bucket this environment does not have is a setup problem, not a result.
+    expect(upload?.message ?? null, "ingest-uploads must exist — run pnpm storage:setup").toBeNull();
+
+    const staged = await stageRun({
+      actor: opsLead,
+      source: "DED",
+      filename: `${PREFIX}resume-${TAG}.csv`,
+      uploadPath: path,
+      reason: REASON,
+    });
+    expect(staged.ok).toBe(true);
+    if (!staged.ok) return;
+
+    const runId = staged.runId;
+    expect(staged.written).toBe(staged.totals.rows);
+
+    // The interruption: the last twenty records never got written, and the
+    // status never advanced.
+    const tail = await prisma.stagedListing.findMany({
+      where: { runId },
+      orderBy: { rowNumber: "desc" },
+      take: 20,
+      select: { id: true, rowNumber: true },
+    });
+    const cut = Math.min(...tail.map((row) => row.rowNumber));
+    await prisma.mergeCandidate.deleteMany({
+      where: { stagedListingId: { in: tail.map((row) => row.id) } },
+    });
+    await prisma.stagedListing.deleteMany({ where: { id: { in: tail.map((row) => row.id) } } });
+    await prisma.licenceImportRun.update({ where: { id: runId }, data: { status: "parsing" } });
+
+    const half = await runOverview(runId);
+    expect(half?.status).toBe("parsing");
+    // Honest on the screen: the file's length and what is stored are different
+    // numbers, and the run offers to finish rather than to be approved.
+    expect(half?.stored).toBe(staged.totals.rows - 20);
+    expect(half?.rowCount).toBe(staged.totals.rows);
+    expect(half?.resumable).toBe(true);
+    expect(half?.publishable).toBe(0);
+
+    // Nothing publishes from a run that is still staging.
+    const early = await publishRun({ actor: opsLead, runId, reason: REASON });
+    expect(early.ok).toBe(false);
+    if (!early.ok) expect(early.error).toBe("not_open");
+
+    const resumed = await resumeStageRun({ actor: opsLead, runId, reason: RESUME_REASON });
+    expect(resumed.ok).toBe(true);
+    if (!resumed.ok) return;
+    expect(resumed.written).toBe(20);
+
+    const after = await runOverview(runId);
+    expect(after?.status).toBe("staged");
+    expect(after?.stored).toBe(staged.totals.rows);
+    expect(after?.resumable).toBe(false);
+    // The rows that came back are the rows that went away, by row number.
+    const numbers = await prisma.stagedListing.findMany({
+      where: { runId, rowNumber: { gte: cut } },
+      select: { rowNumber: true },
+    });
+    expect(numbers).toHaveLength(20);
+
+    // And it is audited as its own decision, by the person who continued it.
+    const rows = await prisma.auditEvent.findMany({
+      where: { subject: `LicenceImportRun:${runId}` },
+      select: { reason: true },
+    });
+    expect(rows.map((row) => row.reason)).toContain(RESUME_REASON);
+
+    await admin.storage.from(INGEST_BUCKET).remove([path]);
+  });
+
+  it("writes nothing twice when the resume overlaps what is already there", async () => {
+    /*
+       `(run_id, row_number)` is unique and the chunk write is
+       `skipDuplicates`, which is what makes the cursor safe to be approximate.
+       Resuming a run that is already whole must therefore be a no-op rather
+       than a constraint violation — and the figures must not move.
+    */
+    const admin = createAdminClient();
+    const path = `${opsLead.id}/it-resume-twice-${TAG}.csv`;
+    await admin.storage
+      .from(INGEST_BUCKET)
+      .upload(path, new Blob([csv60], { type: "text/csv" }), {
+        contentType: "text/csv",
+        upsert: true,
+      });
+
+    const staged = await stageRun({
+      actor: opsLead,
+      source: "DED",
+      filename: `${PREFIX}resume-twice-${TAG}.csv`,
+      uploadPath: path,
+      reason: REASON,
+    });
+    expect(staged.ok).toBe(true);
+    if (!staged.ok) return;
+
+    await prisma.licenceImportRun.update({
+      where: { id: staged.runId },
+      data: { status: "parsing" },
+    });
+
+    const resumed = await resumeStageRun({
+      actor: opsLead,
+      runId: staged.runId,
+      reason: RESUME_REASON,
+    });
+    expect(resumed.ok).toBe(true);
+    if (resumed.ok) expect(resumed.written).toBe(0);
+
+    const after = await runOverview(staged.runId);
+    expect(after?.stored).toBe(staged.totals.rows);
+    expect(after?.status).toBe("staged");
+
+    await admin.storage.from(INGEST_BUCKET).remove([path]);
+  });
+
+  it("refuses to continue a run that was staged from text", async () => {
+    // The seed and every other test in this file stage from text, so this is
+    // the common case and the message has to name it.
+    const staged = await stageRun({
+      actor: opsLead,
+      source: "DED",
+      filename: `${PREFIX}resume-text-${TAG}.csv`,
+      text: csv60,
+      reason: REASON,
+    });
+    expect(staged.ok).toBe(true);
+    if (!staged.ok) return;
+
+    await prisma.licenceImportRun.update({
+      where: { id: staged.runId },
+      data: { status: "parsing" },
+    });
+    const resumed = await resumeStageRun({
+      actor: opsLead,
+      runId: staged.runId,
+      reason: RESUME_REASON,
+    });
+    expect(resumed.ok).toBe(false);
+    if (!resumed.ok) {
+      expect(resumed.error).toBe("no_file");
+      expect(resumed.message).toContain("no file to read again");
+    }
+    expect((await runOverview(staged.runId))?.resumable).toBe(false);
+  });
+});
+
+/* ── T4.3 · slugs resolved on the constraint ────────────────────────────── */
+
+describe("T4.3 — a slug collision costs one row, not the directory", () => {
+  /*
+     What this replaced: `findMany({ select: { slug: true } })` — every slug in
+     the directory read into a Set on every publish, to answer a question about
+     the few thousand in the run. The cost grew with the directory rather than
+     with the file.
+
+     The behaviour that has to survive the change is what the old Set bought:
+     two rows of one file wanting the same slug must not collide, and a name
+     already in the directory must not be overwritten.
+  */
+  it("suffixes against the directory and against the rest of the file", async () => {
+    const name = `Slug Twin ${TAG}`;
+    /*
+       Three rows, one trade name, three licences and three *different* areas
+       and phones — so board 12b's matcher does not pair them with each other
+       and every one publishes. One stem, three slugs.
+    */
+    const staged = await stage(
+      [
+        row({ name, area: "Deira", phone: "042220001" }),
+        row({ name, area: "Al Quoz Industrial 2", phone: "043330002" }),
+        row({ name, area: "Jebel Ali Free Zone", phone: "048880003" }),
+      ],
+      `slug-${TAG}`,
+    );
+
+    const published = await publishRun({ actor: opsLead, runId: staged.runId, reason: REASON });
+    expect(published.ok).toBe(true);
+
+    const created = await prisma.business.findMany({
+      where: { licenceImportRunId: staged.runId },
+      orderBy: { slug: "asc" },
+      select: { slug: true },
+    });
+    const slugs = created.map((row) => row.slug);
+    /*
+       Three listings, three distinct slugs, one stem. `toBe(3)` rather than
+       `toBeGreaterThan(0)`: if the matcher paired two of these rows the test
+       would still pass on a weaker assertion while proving nothing about
+       suffixing, which is the only thing it is here for.
+    */
+    expect(slugs).toHaveLength(3);
+    expect(new Set(slugs).size).toBe(3);
+    /*
+       The stem is the shortest of the three, which is the one row that got the
+       name unsuffixed. Not `replace(/-\d+$/, "")` — `TAG` ends in digits, so
+       that strips part of the name and every slug then looks suffixed.
+    */
+    const stem = [...slugs].sort((a, b) => a.length - b.length)[0]!;
+    expect(slugs).toContain(stem);
+    expect(slugs.filter((slug) => slug === `${stem}-2` || slug === `${stem}-3`)).toHaveLength(2);
+  });
+
+  it("does not take a slug a listing already has", async () => {
+    /*
+       The directory read is gone, so the only thing standing between an
+       imported listing and an existing seller's address is the indexed lookup
+       plus the unique constraint. A seeded storefront's slug is the fixture.
+    */
+    const existing = await prisma.business.findFirstOrThrow({
+      where: { publishedAt: { not: null }, licenceImportRunId: null },
+      orderBy: { slug: "asc" },
+      select: { slug: true, displayName: true, tradeName: true },
+    });
+
+    const staged = await stage(
+      [row({ name: existing.tradeName ?? existing.displayName })],
+      `slug-clash-${TAG}`,
+    );
+
+    const published = await publishRun({ actor: opsLead, runId: staged.runId, reason: REASON });
+    expect(published.ok).toBe(true);
+
+    /*
+       Either the record published under a suffixed slug, or it was paired with
+       the listing as a duplicate and published nothing — board 12b's job and
+       the better outcome. What must not happen is the existing listing losing
+       its address.
+    */
+    const mine = await prisma.business.findMany({
+      where: { licenceImportRunId: staged.runId },
+      select: { slug: true },
+    });
+    for (const row of mine) expect(row.slug).not.toBe(existing.slug);
+    const still = await prisma.business.count({
+      where: { slug: existing.slug, licenceImportRunId: null },
+    });
+    expect(still, "the seeded listing keeps its slug").toBe(1);
   });
 });

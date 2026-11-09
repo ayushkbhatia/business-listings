@@ -56,6 +56,10 @@ function bar(over: Partial<DecisionBarProps>): DecisionBarProps {
     heldBecause: held({ needs_category: 1196, expiry_missing: 12 }),
     rejected: 464,
     live: 0,
+    // T4.2: a finished run has every row stored and nothing to continue.
+    rowCount: 8412,
+    stored: 8412,
+    resumable: false,
     decidedLabel: null,
     decidedBy: null,
     decisionReason: null,
@@ -69,6 +73,7 @@ function bar(over: Partial<DecisionBarProps>): DecisionBarProps {
     publish: inert,
     discard: inert,
     rollbackAction: inert,
+    resume: inert,
     ...over,
   };
 }
@@ -83,6 +88,9 @@ const RUN: RunOverview = {
   uploadedBy: "R. Haddad",
   rowCount: 8412,
   truncatedCount: 0,
+  // T4.2: a finished run has every row stored, which is the common case.
+  stored: 8412,
+  resumable: false,
   newListings: 7312,
   duplicates: 636,
   pairs: { pending: 412, merged: 188, separated: 29, discarded: 7, belowFloor: 23 },
@@ -118,7 +126,49 @@ export function Ingest() {
               publish={inert}
               discard={inert}
               rollback={inert}
+              resume={inert}
               reversibleDays={30}
+            />
+          </div>
+        </States>
+
+        {/*
+           T4.2. `parsing` used to be a state nothing could be found in: it
+           lived inside one transaction and was replaced by `staged` before the
+           commit. The chunks commit as they go now, so an interrupted run is a
+           real thing an ops lead opens, and it gets drawn here for the same
+           reason every other state is.
+        */}
+        <States label="staging, interrupted" stack>
+          <div className="w-full">
+            <DecisionBar
+              {...bar({
+                status: "parsing",
+                rowCount: 41_308,
+                stored: 19_500,
+                resumable: true,
+                publishable: 0,
+                held: 0,
+                heldBecause: held(),
+                rejected: 0,
+              })}
+            />
+          </div>
+        </States>
+
+        <States label="staging, and the file has gone" stack>
+          <div className="w-full">
+            <DecisionBar
+              {...bar({
+                status: "parsing",
+                rowCount: 41_308,
+                stored: 19_500,
+                resumable: false,
+                publishable: 0,
+                held: 0,
+                heldBecause: held(),
+                rejected: 0,
+              })}
             />
           </div>
         </States>

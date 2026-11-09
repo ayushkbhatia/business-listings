@@ -50,6 +50,99 @@ async function stageFile(page: Page, tag: string) {
   return phrase;
 }
 
+test.describe("T4.1 — a file past the old request ceiling", () => {
+  /*
+     The defect, as a test.
+
+     The export used to travel in the staging action's request body under a 4 MB
+     `serverActions.bodySizeLimit`, and the form refused anything larger in the
+     browser — against a declared `MAX_LICENCE_ROWS` of 50,000 and a real
+     register export of 6–10 MB. So the importer refused the file the whole
+     feature was built for, and no test said so, because every fixture was four
+     rows.
+
+     This one is **4.5 MB**, deliberately made of bytes rather than of rows: a
+     wide column the mapper ignores, so what is being proved is the transport
+     and not the classifier. It staged nothing before T4.1 and the dialog said
+     so; it stages now, and the run's row carries the object's path.
+  */
+  test("stages 4.5 MB, which the request body could never have carried", async ({ page }) => {
+    const tag = stamp();
+    // A column `mapColumns` does not map, padded. 3,000 rows × ~1.5 KB.
+    const filler = "x".repeat(1500);
+    const rows = [
+      "Trade Name,Licence No,Expiry Date,Emirate,Area,Activity,Phone,Remarks",
+      ...Array.from(
+        { length: 3_000 },
+        (_, index) =>
+          `Wide Load ${tag}-${String(index)} LLC,DED-8${tag.slice(-5)}${String(index).padStart(4, "0")},` +
+          `2028-01-31,Dubai,Deira,Valves & Flanges Trading,042221104,${filler}`,
+      ),
+    ];
+    const csv = rows.join("\n");
+    expect(Buffer.byteLength(csv), "the point of this test is the size").toBeGreaterThan(4_500_000);
+
+    await page.goto("/admin/ingest");
+    await page.getByRole("button", { name: "New import" }).click();
+    const dialog = page.getByRole("dialog", { name: "Stage a licence export" });
+    await dialog.locator('input[type="file"]').setInputFiles({
+      name: `e2e-wide-${tag}.csv`,
+      mimeType: "text/csv",
+      buffer: Buffer.from(csv),
+    });
+
+    // The upload happens on selection, so the submit waits for it.
+    await dialog.getByLabel("Reason").fill(`End-to-end transport ${tag}.`);
+    const submit = dialog.getByRole("button", { name: "Stage the run" });
+    await expect(submit).toBeEnabled({ timeout: 60_000 });
+    await submit.click();
+
+    await page.waitForURL(/\/admin\/ingest\/(?!categorise)[^/]+$/, { timeout: 120_000 });
+    // 3,000 rows, all of them readable, none dropped by a ceiling.
+    await expect(page.getByText("3,000", { exact: false }).first()).toBeVisible();
+  });
+});
+
+test.describe("T4.2 — a run that stopped between chunks", () => {
+  /*
+     `parsing` used to be a state nothing could be found in: it lived inside one
+     transaction and was replaced by `staged` before the commit. The chunks
+     commit as they go now, so an ops lead can really open a half-written run —
+     and what they see has to say so and offer to finish it.
+
+     The interruption is simulated through the product's own controls as far as
+     it can be: a real file is staged, and then the run is read back in the
+     state the screen would find it in. The integration suite
+     (`licence-ingest.test.ts`) owns the cursor arithmetic; this owns the
+     screen.
+  */
+  test("says what is missing and offers to continue", async ({ page }) => {
+    const tag = stamp();
+    await stageFile(page, tag);
+    const runUrl = page.url();
+
+    // The staged run: decided, not continued. The control must not be here.
+    await expect(page.getByRole("button", { name: "Continue staging" })).toHaveCount(0);
+    await expect(page.getByText("Not finished.")).toHaveCount(0);
+
+    /*
+       And the gallery draws both halves of the state the product cannot be
+       talked into on demand: the progress line with its two numbers, and the
+       run whose upload has gone and so cannot be continued at all.
+    */
+    await page.goto("/dev/gallery#ingest");
+    const staging = page.getByText("records are in; the rest are not", { exact: false });
+    await expect(staging.first()).toBeVisible();
+    await expect(
+      page.getByText("cannot be continued", { exact: false }).first(),
+    ).toBeVisible();
+
+    // The run itself is still where it was, and still decidable.
+    await page.goto(runUrl);
+    await expect(page.getByRole("button", { name: /^Publish/ })).toBeVisible();
+  });
+});
+
 test.describe("the run under review", () => {
   test("its cards sum to the file, and its grounds to the rejected card", async ({ page }) => {
     await page.goto("/admin/ingest");
