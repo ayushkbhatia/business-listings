@@ -19,6 +19,7 @@
     "db:push": "tsx scripts/db-guard.mts \"push the schema, dropping any column the schema no longer has\" && prisma db push",
     "db:studio": "prisma studio",
     "db:seed": "prisma db seed",
+    "db:seed:scale": "tsx prisma/seed-at-scale.mts",
     "check:tokens": "./scripts/check-tokens.sh",
     "check:schema": "./scripts/check-schema-invariants.sh",
     "check:migrations": "tsx scripts/check-migrations-declared.mts",
