@@ -83,7 +83,15 @@ test.describe("board 6f — the page matrix", () => {
     await expect(field).toBeVisible();
 
     await field.fill("Three words only");
-    await expect(page.getByText("3 words")).toBeVisible();
+    /*
+       `exact`, because `getByText` matches substrings: the same screen prints
+       "65 listings, 313 words" for a published page, and "313 words" contains
+       "3 words". Whether this test passed therefore depended on the word counts
+       in the database — it passes on the seeded one and fails the moment a page
+       is long enough to end in three. The assertion is about the live counter
+       on the field, so it should match that and nothing else.
+    */
+    await expect(page.getByText("3 words", { exact: true })).toBeVisible();
   });
 
   test("will not write anything without a reason", async ({ page }) => {
@@ -197,7 +205,12 @@ test.describe("board 12g — notification templates", () => {
     await expect(page.getByText("WhatsApp goes through Meta")).toBeVisible();
     await expect(page.getByRole("button", { name: /^Send v\d+ to Meta$/ })).toBeVisible();
     await expect(page.getByRole("button", { name: /^Save as v\d+$/ })).toHaveCount(0);
-    await expect(page.getByText(/Email, SMS and in-app take effect on save/).first()).toBeVisible();
+    /*
+       T6.8: the panel said "Email, SMS and in-app take effect on save" and now
+       says "Email and in-app" — SMS is retired (N10) and a sentence naming it
+       would describe a channel the save cannot reach.
+    */
+    await expect(page.getByText(/Email and in-app take effect on save/).first()).toBeVisible();
   });
 
   test("offers the services version where a goods body has none", async ({ page }) => {
