@@ -6708,12 +6708,17 @@ export const en = {
   "alerts.event.weekly_digest": "The weekly summary",
 
   "alerts.quiet_heading": "Quiet hours",
-  "alerts.quiet_body": "WhatsApp and SMS are held until your counter opens again. In app is never held — nothing buzzes, and the list is the same list in the morning.",
-  "alerts.quiet_enabled": "Hold WhatsApp and SMS outside your working hours",
+  /*
+     T6.8. "WhatsApp and SMS" in four places, for a channel that is retired and
+     had no carrier behind it when it was not. A sentence naming a channel the
+     seller cannot choose is a sentence about a control that is not there.
+  */
+  "alerts.quiet_body": "WhatsApp is held until your counter opens again. In app is never held — nothing buzzes, and the list is the same list in the morning.",
+  "alerts.quiet_enabled": "Hold WhatsApp outside your working hours",
   "alerts.quiet_source": "Your working hours come from the Hours page, Ramadan included. There is no second copy of the week on this screen.",
   "alerts.quiet_hours_link": "See your hours",
   "alerts.quiet_open_now": "Your counter is open now, so nothing is being held.",
-  "alerts.quiet_shut_now": "Your counter is shut now. WhatsApp and SMS are held until it opens again.",
+  "alerts.quiet_shut_now": "Your counter is shut now. WhatsApp is held until it opens again.",
   "alerts.quiet_no_hours": "You have not published any hours, so the window below applies until you do.",
   "alerts.quiet_from": "From",
   "alerts.quiet_to": "Until",
@@ -6780,7 +6785,9 @@ export const en = {
   "channels.code_not_sent": "The code could not be sent to {address}. Ask for another in a minute, or use a different channel.",
   "channels.verified_now": "{channel} is verified. Routing can reach this seat on it now.",
   "channels.removed": "{channel} removed from this seat.",
-  "channels.sms_unavailable": "SMS has no carrier yet, so a number cannot be proven for it. WhatsApp reaches the same handset and costs less.",
+  // T6.8. Not "yet": SMS is retired (N10), and "yet" promised a channel that
+  // is not coming.
+  "channels.sms_unavailable": "SMS is not a channel we send on. WhatsApp reaches the same handset and costs less.",
   "channels.code_subject": "Your Business Listings verification code",
   "channels.code_body": "{code} is your Business Listings verification code. It works for {minutes} minutes. If you did not ask for it, ignore this message.",
 
@@ -11967,7 +11974,7 @@ export const en = {
   "notifications.save.whatsapp": "Send v{version} to Meta",
   "notifications.save.live": "Save as v{version}",
   "notifications.save.hint_whatsapp": "Saving creates a version in Meta review. The live version keeps sending until Meta's approval is recorded here.",
-  "notifications.save.hint_live": "Email, SMS and in-app take effect on save. The version it replaces is retired, and past deliveries still point at it.",
+  "notifications.save.hint_live": "Email and in-app take effect on save. The version it replaces is retired, and past deliveries still point at it.",
   "notifications.saved.pending": "Version {version} is with Meta. The live version keeps sending until the approval is recorded.",
   "notifications.saved.live": "Version {version} is live. The version it replaced is retired.",
   "notifications.test.label": "Send test of v{version} to me",
@@ -11982,7 +11989,7 @@ export const en = {
   "notifications.meta_panel.pending_none": "v{pending} went to Meta {submitted}. Nothing sends on WhatsApp for this event until it is approved.",
   "notifications.meta_panel.pending_live_undated": "Saving created a version in review rather than changing the live copy. v{live} keeps sending until v{pending} is approved. When it was submitted was not recorded.",
   "notifications.meta_panel.pending_none_undated": "v{pending} is with Meta, and when it was submitted was not recorded. Nothing sends on WhatsApp for this event until it is approved.",
-  "notifications.meta_panel.others": "Email, SMS and in-app take effect on save.",
+  "notifications.meta_panel.others": "Email and in-app take effect on save.",
   "notifications.meta_panel.idle": "Nothing is with Meta. A save here submits the new wording for review, and the live version keeps sending until it is approved.",
   "notifications.meta_panel.record_hint": "There is no Meta integration. When Meta answers, record the decision here; an approval puts this version live.",
   "notifications.meta_panel.note": "Meta's reason",
@@ -12015,7 +12022,7 @@ export const en = {
   "notifications.opt_out.floor_this": "This one ignores that choice on {channels}: it is a consequence, not an update, and sends whatever the seller has switched off.",
   "notifications.opt_out.floor_list": { one: "One message ignores the choice: {events}.", other: "{count} messages ignore the choice: {events}." },
   "notifications.opt_out.no_report": "A reported problem has no message yet, so there is nothing for it to override.",
-  "notifications.opt_out.buyer": "Buyers have no notification settings yet. Buyer messages follow the platform default — here, {channels} — and hold WhatsApp and SMS between {from}:00 and {to}:00.",
+  "notifications.opt_out.buyer": "Buyers have no notification settings yet. Buyer messages follow the platform default — here, {channels} — and hold WhatsApp between {from}:00 and {to}:00.",
   "notifications.opt_out.buyer_none": "no channel for this event",
   "notifications.floor_event.document_expiring": "licence expiry",
   "notifications.floor_event.ramadan_dates_moved": "Ramadan date changes",
@@ -12142,10 +12149,10 @@ export const en = {
 
   "notifications.quiet.meta": "{held} held now",
   "notifications.quiet.sellers_title": "Sellers",
-  "notifications.quiet.sellers_body": "Each seller sets their own window on their alert settings. Where they publish opening hours, WhatsApp and SMS wait for the counter to open instead. In-app is never held.",
+  "notifications.quiet.sellers_body": "Each seller sets their own window on their alert settings. Where they publish opening hours, WhatsApp waits for the counter to open instead. In-app is never held.",
   "notifications.quiet.preferences": "Businesses with alert settings",
   "notifications.quiet.enabled": "Quiet hours on",
-  "notifications.quiet.enabled_note": "WhatsApp and SMS are held outside the window",
+  "notifications.quiet.enabled_note": "WhatsApp is held outside the window",
   "notifications.quiet.follow_hours": "Following published opening hours",
   "notifications.quiet.follow_hours_note": "Quiet hours on, with a published branch that has a week filled in",
   "notifications.quiet.standard": "Using 21:00 to 07:00",
@@ -12154,8 +12161,8 @@ export const en = {
   "notifications.quiet.override_never": "Never woken for a large enquiry",
   "notifications.quiet.override_note": "No value set above which an enquiry overrides quiet hours",
   "notifications.quiet.buyers_title": "Buyers",
-  "notifications.quiet.buyers_body": "Buyers have no settings. WhatsApp and SMS to a buyer are held between {from} and {to}, and in-app is never held.",
-  "notifications.quiet.buyers_body_sunday": "Buyers have no settings. WhatsApp and SMS to a buyer are held between {from} and {to} and all Sunday, and in-app is never held.",
+  "notifications.quiet.buyers_body": "Buyers have no settings. WhatsApp to a buyer is held between {from} and {to}, and in-app is never held.",
+  "notifications.quiet.buyers_body_sunday": "Buyers have no settings. WhatsApp to a buyer is held between {from} and {to} and all Sunday, and in-app is never held.",
   "notifications.quiet.buyers_caption": "Where each buyer message goes by default",
   "notifications.quiet.col.event": "Event",
   "notifications.quiet.col.channels": "Channels",

@@ -80,14 +80,24 @@ describe("inQuietHours", () => {
 });
 
 describe("criterion 10 — what quiet hours suppress", () => {
-  it("holds WhatsApp and SMS, and lets in-app and email through", () => {
+  it("holds WhatsApp, lets in-app and email through, and skips the retired channel", () => {
+    /*
+       SMS deferred here until T6.8 retired it (N10). The fixture still names it
+       because a stored matrix can — T6.5 stopped the alerts screen deleting
+       what it does not render, and
+       `20261121094000_retire_sms_routing_n10` is what takes it out of the data.
+       What the routing promises about it is `skip`, with a reason, rather than
+       a quiet disappearance.
+    */
     const decisions = route(PREFERENCE, { event: "enquiry_received", now: MONDAY_2200 });
     expect(actions(decisions)).toEqual({
       whatsapp: "defer",
-      sms: "defer",
+      sms: "skip",
       email: "send",
       in_app: "send",
     });
+    const sms = decisions.find((decision) => decision.channel === "sms");
+    expect(sms?.action === "skip" && sms.reason).toBe("channel_retired");
   });
 
   it("says when a deferred message will go", () => {
@@ -100,9 +110,12 @@ describe("criterion 10 — what quiet hours suppress", () => {
     expect(held.reason).toBe("quiet_hours");
   });
 
-  it("sends everything during the working day", () => {
+  it("sends everything during the working day, bar the retired channel", () => {
     const decisions = route(PREFERENCE, { event: "enquiry_received", now: MONDAY_1000 });
-    expect(decisions.every((d) => d.action === "send")).toBe(true);
+    expect(decisions.filter((d) => d.channel !== "sms").every((d) => d.action === "send")).toBe(true);
+    // A retired channel is skipped whatever the hour: it is not a question
+    // about quiet hours, it is a channel the product does not send on.
+    expect(decisions.find((d) => d.channel === "sms")?.action).toBe("skip");
   });
 });
 
@@ -115,7 +128,8 @@ describe("criterion 10 — the high-value override", () => {
     });
     expect(actions(decisions)).toEqual({
       whatsapp: "send",
-      sms: "send",
+      // The override is about quiet hours. It cannot un-retire a channel.
+      sms: "skip",
       email: "send",
       in_app: "send",
     });

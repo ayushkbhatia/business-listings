@@ -200,6 +200,25 @@ export function withInheritedChoices<M extends Partial<Record<string, readonly s
 /** The channels quiet hours actually silence. */
 export const INTERRUPTING_CHANNELS: readonly NotificationChannel[] = ["whatsapp", "sms"];
 
+/**
+ * Channels the product no longer sends on — decision N10, task T6.8.
+ *
+ * SMS. It had no carrier: `senders/index.ts` bound it to the console sender, so
+ * a seller who chose it was promised a text message and sent a line in a server
+ * log. WhatsApp reaches the same handset for a fraction of the cost.
+ *
+ * Filtered in `route()` rather than removed from the enum, because
+ * `NotificationDelivery.channel` has history in it and a retired channel is
+ * still a thing that happened. A matrix that still names it — and some do,
+ * since T6.5 stopped the alerts screen deleting what it does not render — is
+ * answered with a `skip` the log can count rather than silence: the count is
+ * how ops know when the last stored choice has gone.
+ *
+ * `20261121094000_retire_sms_routing_n10` strips it from the stored matrices in
+ * one pass, so that count should reach zero and stay there.
+ */
+export const RETIRED_CHANNELS: readonly NotificationChannel[] = ["sms"];
+
 export interface QuietHours {
   enabled: boolean;
   /** Local hour the quiet window opens, e.g. 21. The fallback, see below. */
@@ -335,6 +354,15 @@ export function route(
   const override = quiet && overridesQuietHours(preference, context.valueAed);
 
   return channels.map((channel): ChannelDecision => {
+    /*
+       T6.8. A channel the product has retired is skipped with a reason, not
+       dropped: a stored matrix that still names SMS is a fact worth counting,
+       and a silent drop would make the log agree with a preference the product
+       no longer honours.
+    */
+    if (RETIRED_CHANNELS.includes(channel)) {
+      return { channel, action: "skip", reason: "channel_retired" };
+    }
     if (!quiet) return { channel, action: "send" };
 
     // In-app is never suppressed: nothing buzzes, and a list is a list.

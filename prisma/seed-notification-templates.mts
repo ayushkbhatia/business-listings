@@ -328,16 +328,27 @@ export const TEMPLATES: TemplateSeed[] = [
     actionPath: "/dashboard/leads/{enquiryId}",
     status: "live",
   },
+  /*
+     The two SMS bodies, **retired** — decision N10, task T6.8.
+
+     They were `live`, which is what a channel with a carrier behind it looks
+     like, and SMS has none: `senders/index.ts` bound it to the console sender,
+     so a seller who chose SMS was told their enquiry had been "sent" to a
+     server log. WhatsApp reaches the same handset, costs a fraction and is
+     already the channel the copy promises.
+
+     `retired` rather than deleted. `NotificationDelivery.templateId` points at
+     these rows and the log is a record of what happened: 96 `enquiry_received`
+     and 21 `quote_accepted` SMS deliveries in the seeded history, each of which
+     would lose the body it was sent with. That is what the status is for.
+  */
   {
-    // SMS is the fallback when WhatsApp does not deliver. Deliberately terse:
-    // it is one segment, and a two-segment SMS to eight sellers a day is a
-    // cost line nobody budgeted for.
     event: "enquiry_received",
     channel: "sms",
     kind: "goods",
     body: "New enquiry {ref}, {lineCount} lines for {area}. Closes {closesAt}. Quote: {shortLink}",
     actionPath: "/dashboard/leads/{enquiryId}",
-    status: "live",
+    status: "retired",
   },
   {
     event: "quote_accepted",
@@ -345,7 +356,7 @@ export const TEMPLATES: TemplateSeed[] = [
     kind: "goods",
     body: "Quote {quoteRef} accepted, {amount}. Contact details are on the enquiry: {shortLink}",
     actionPath: "/dashboard/leads/{enquiryId}",
-    status: "live",
+    status: "retired",
   },
   {
     event: "quote_received",

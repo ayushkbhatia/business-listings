@@ -46,7 +46,21 @@ export const EVENTS = [
   "enquiry_nudged",
 ] as const;
 
-export const CHANNELS = ["whatsapp", "sms", "email", "in_app"] as const;
+/**
+ * The channels a seller may choose between — decision N10, task T6.8.
+ *
+ * SMS has left. It had no carrier — `senders/index.ts` bound it to the console
+ * sender — so a seller who ticked it was promised a text message and sent a
+ * line in a server log, and its two bodies are `retired`. WhatsApp reaches the
+ * same handset for a fraction of the cost and is the channel the product's copy
+ * already promises.
+ *
+ * The **enum** keeps `sms`, because `NotificationDelivery.channel` has history
+ * in it: 96 `enquiry_received` and 21 `quote_accepted` SMS deliveries are in the
+ * seeded log and a retired channel is still a thing that happened. What goes is
+ * every surface that offers it as a choice.
+ */
+export const CHANNELS = ["whatsapp", "email", "in_app"] as const;
 
 export const ESCALATION_CHOICES = [30, 60, 120, 240, 480] as const;
 export const NUDGE_CHOICES = [12, 24, 48, 72] as const;
