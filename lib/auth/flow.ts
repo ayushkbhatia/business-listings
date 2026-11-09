@@ -820,24 +820,43 @@ export async function createProvisionalIdentity(input: {
 }
 
 /**
- * The Supabase auth user for a number, when one exists.
+ * The Supabase auth user for a number, when one exists — T3.7.
  *
- * The admin API has no lookup by phone, so this pages the list. It only runs on
- * drift paths — a createUser that failed on a duplicate, a sign-up whose SMS
- * attempt created a user and then could not deliver — so the cost lands on a
- * case that should be rare and would otherwise be unrecoverable.
+ * ## What this was, and why it had a ceiling
+ *
+ * The admin API has no lookup by phone, so this **paged the whole list**: up to
+ * twenty pages of two hundred. Four thousand users, and then it gave up and
+ * answered `undefined`.
+ *
+ * `undefined` is not "no user" to the callers. It is the answer on the drift
+ * paths — a `createUser` that failed on a duplicate, a sign-up whose SMS
+ * created a user and then could not deliver — and it means *there is nothing
+ * to recover*, so the number is treated as new and the create fails again on
+ * the same duplicate. Above four thousand auth users that stops being a rare
+ * recovery and becomes a number that cannot sign in or send an enquiry, with
+ * the cause four thousand rows deep in an HTTP list. The directory is about to
+ * take 41,000 listings; four thousand buyers is not a long way off.
+ *
+ * ## What it is now
+ *
+ * One query. `auth.users` is a table in the same Postgres database this app
+ * already holds a service-role connection to, and `phone` is a column on it —
+ * so the question the admin API cannot answer, the database answers exactly,
+ * in one round trip, at any size.
+ *
+ * Raw SQL because `auth` is Supabase's schema and not in `schema.prisma`:
+ * generating a model for it would put the auth tables under `prisma migrate`,
+ * which is the one thing that must not happen to them.
+ *
+ * Both spellings are matched, as the paging version did. Supabase stores the
+ * number without the `+`, and has not always.
  */
 async function findAuthUserByPhone(e164: string): Promise<string | undefined> {
   const bare = e164.replace(/^\+/, "");
-  const admin = createAdminClient();
-  for (let page = 1; page <= 20; page += 1) {
-    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 200 });
-    if (error || !data?.users?.length) return undefined;
-    const found = data.users.find((u) => u.phone === bare || u.phone === e164);
-    if (found) return found.id;
-    if (data.users.length < 200) return undefined;
-  }
-  return undefined;
+  const rows = await prisma.$queryRaw<{ id: string }[]>(
+    Prisma.sql`SELECT id::text AS id FROM auth.users WHERE phone IN (${bare}, ${e164}) LIMIT 1`,
+  );
+  return rows[0]?.id;
 }
 
 /**
