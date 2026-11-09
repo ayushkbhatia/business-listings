@@ -30,6 +30,7 @@ import { MEDIA_BUCKET, publicUrl } from "@/lib/storage";
 import { absoluteUrl } from "@/lib/site";
 import { SpecTable } from "@/components/domain";
 import Link from "next/link";
+import { crawlRel } from "@/lib/seo/crawl-policy";
 import { EMIRATES } from "@/lib/uae";
 import { getActor } from "@/lib/auth/session";
 import { publiclyClaimed } from "@/lib/claims/status";
@@ -141,6 +142,8 @@ export default async function CataloguePage({ params, searchParams }: Params) {
   if (view.catalogueTotal === 0) notFound();
 
   const basePath = `/b/${business.slug}/products`;
+
+  const nextPageHref = `${basePath}?${toCatalogueParams(query, { page: query.page + 1 })}`;
   const shown = (query.page - 1) * CATALOGUE_PAGE_SIZE + view.products.length;
   const remaining = Math.max(0, view.total - shown);
   /** The seller's template fields that this product actually filled in. */
@@ -475,7 +478,18 @@ export default async function CataloguePage({ params, searchParams }: Params) {
                   {remaining > 0 && (
                     <div className="mt-5">
                       <Link
-                        href={`${basePath}?${toCatalogueParams(query, { page: query.page + 1 })}`}
+                        href={nextPageHref}
+                        /*
+                           Followable on a clean catalogue and `nofollow` once
+                           anything is filtering, which is `crawlRel`'s whole
+                           job: `?page=2` is the only internal path to the rest
+                           of a seller's catalogue, while
+                           `?availability=in_stock&page=2` is page two of a view
+                           the tab has asked not to be indexed. Rail and sort
+                           anchors got this in the same pass; the pager was the
+                           one control still carrying a facet onward.
+                        */
+                        rel={crawlRel(nextPageHref)}
                         className="block rounded-ctl border border-line bg-card px-4 py-2.5 text-center text-body-sm font-medium text-ink hover:bg-paper focus-visible:outline-none focus-visible:shadow-focus"
                       >
                         {t("catalogue.show_more", {

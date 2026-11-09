@@ -189,6 +189,32 @@ export default async function SearchPage({ searchParams }: Props) {
         </p>
       )}
 
+      {/*
+         T3.9 — what this composition cannot show, said rather than left to be
+         noticed.
+
+         `compositionFor` routes two shapes here: a map viewport, because *who
+         is here* is a question in coordinates that coverage cannot answer; and
+         a query with no words, because a browse is what the map is for. Both
+         are deliberate. Both also mean a firm that sells work is **absent from
+         the result set entirely** — it has coverage rather than a pin — and
+         neither said so, which is the interface-honesty rule applied to an
+         omission rather than to a number.
+
+         The link is the same search with the viewport dropped and the services
+         kind set, which forces the blended composition (rule 2). Nothing the
+         buyer typed or filtered is lost.
+      */}
+      <p className="border-b border-line bg-paper-sunk px-4 py-2.5 text-body-sm text-body">
+        {t("search.services_not_on_map")}{" "}
+        <Link
+          href={`/search?${toSearchParams(query, { page: 1, bounds: undefined, kind: "services" })}`}
+          className="rounded-tag font-medium text-moss underline-offset-2 hover:underline focus-visible:outline-none focus-visible:shadow-focus"
+        >
+          {t("search.services_not_on_map_link")}
+        </Link>
+      </p>
+
       {total === 0 && elsewhere > 0 ? (
         /*
            The box is empty and the query is not. The action clears `bounds`

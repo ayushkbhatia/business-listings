@@ -6,6 +6,15 @@ import { cn } from "@/lib/cn";
 import type { PairedCopies } from "@/lib/i18n/paired";
 import { formatCount, formatDate, formatDuration } from "@/lib/format";
 import { t } from "@/lib/i18n";
+/*
+   T3.3. Every href in this file that carries a query string carries the `rel`
+   it earns. This is board `1c-s`'s row set — the blended screen draws 48
+   `/rfq/new?to=…&products=…` anchors on one page of results, and each is one
+   `force-dynamic` composer per supplier with nothing on it to index. The cards
+   in `components/domain` have done this since they were written; these rows
+   are the newer set and had none of it.
+*/
+import { crawlRel } from "@/lib/seo/crawl-policy";
 import type {
   BlendedResultView,
   CoverageFirmView,
@@ -210,6 +219,7 @@ export function ServiceResultRow({ row }: { row: ServiceResultView }) {
           <p className="text-body-sm font-medium text-ink">{t("storefront_services.fee_on_enquiry")}</p>
           <Link
             href={`/b/${row.businessSlug}?service=${encodeURIComponent(row.slug)}#enquire`}
+            rel={crawlRel(`/b/${row.businessSlug}?service=${encodeURIComponent(row.slug)}`)}
             aria-label={t("search_blended.enquire_named", { name: row.name })}
             className={buttonClassName({ block: true })}
           >
@@ -312,6 +322,7 @@ export function SupplierResultRow({ row, copy }: { row: SupplierResultView; copy
             )}
             <Link
               href={`/rfq/new?to=${encodeURIComponent(row.businessSlug)}`}
+              rel="nofollow"
               aria-label={t("search_blended.enquire_named", { name: row.businessName })}
               className={buttonClassName({ block: true })}
             >
@@ -388,6 +399,7 @@ export function ProductResultRow({ row, compare }: { row: ProductResultView; com
           <p className="text-body-sm font-medium text-ink">{t("product.no_price")}</p>
           <Link
             href={`/rfq/new?to=${encodeURIComponent(row.businessSlug)}&products=${encodeURIComponent(row.id)}`}
+            rel="nofollow"
             aria-label={t("search_blended.enquire_named", { name: row.name })}
             className={buttonClassName({ block: true })}
           >
@@ -524,6 +536,7 @@ export function CoverageFirmRow({
                   )}
                   <Link
                     href={row.coverageHref}
+                    rel={crawlRel(row.coverageHref)}
                     aria-label={t("landing_services.covers_named", { name: row.businessName, place: placeName })}
                     className="rounded-tag text-moss underline-offset-4 hover:underline focus-visible:shadow-focus focus-visible:outline-none"
                   >
@@ -550,6 +563,7 @@ export function CoverageFirmRow({
                     )}
                     <Link
                       href={service.href}
+                      rel={crawlRel(service.href)}
                       className="rounded-tag text-moss underline-offset-4 hover:underline focus-visible:shadow-focus focus-visible:outline-none"
                     >
                       {service.name}
@@ -572,6 +586,7 @@ export function CoverageFirmRow({
             )}
             <Link
               href={row.enquireHref}
+              rel={crawlRel(row.enquireHref)}
               aria-label={t("search_blended.enquire_named", { name: row.businessName })}
               className={buttonClassName({ block: true })}
             >

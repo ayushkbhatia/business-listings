@@ -1,4 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
+import { sitemapXml } from "./_sitemap";
 import { expect, test } from "@playwright/test";
 
 /**
@@ -47,7 +48,12 @@ test.describe("criterion 1 — every guide is linked, in the HTML", () => {
 
     // And the sitemap agrees, so nothing is asked to be indexed that the page
     // does not link and nothing is linked that the sitemap forgets.
-    const sitemap = await (await request.get("/sitemap.xml")).text();
+    /*
+       T3.1: the sitemap is an index of chunks now, so a test that read one
+       document would be reading one slice of the directory. `sitemapXml`
+       follows the index and concatenates, which is what a crawler does.
+    */
+    const sitemap = await sitemapXml(request);
     for (const slug of listed) {
       expect(sitemap, `sitemap carries /guides/${slug}`).toContain(`/guides/${slug}<`);
     }
@@ -177,7 +183,12 @@ test.describe("an empty subject is not a page", () => {
        nothing here — the thin page the publish gate exists to keep out,
        arriving through a different door.
     */
-    const sitemap = await (await request.get("/sitemap.xml")).text();
+    /*
+       T3.1: the sitemap is an index of chunks now, so a test that read one
+       document would be reading one slice of the directory. `sitemapXml`
+       follows the index and concatenates, which is what a crawler does.
+    */
+    const sitemap = await sitemapXml(request);
     const shelves = [...sitemap.matchAll(/\/guides\/([a-z0-9-]+)</g)].map((m) => m[1] as string);
     // Whatever is in the sitemap resolves; that is the invariant worth holding.
     for (const slug of shelves) {

@@ -260,6 +260,7 @@ export function ServicesLandingGallery() {
               asks: ASKS.map(({ question, why }) => ({ question, why })),
               openedAt: "2026-09-04T08:00:00.000Z",
               publishedPages: 3,
+              addressablePages: 181,
             }}
           />
         </div>
@@ -278,6 +279,7 @@ export function ServicesLandingGallery() {
               asks: [],
               openedAt: null,
               publishedPages: 0,
+              addressablePages: 181,
             }}
           />
         </div>

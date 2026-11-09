@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { FilterRail } from "@/components/structure";
 import { ChipLink } from "@/components/display";
+import { crawlRel } from "@/lib/seo/crawl-policy";
 import { cn } from "@/lib/cn";
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
@@ -36,6 +37,26 @@ export function CatalogueRail({
     return params ? `${basePath}?${params}` : basePath;
   };
 
+  /*
+     Every control's href, with the `rel` that href earns.
+
+     The services rail one tab along has done this since it shipped and this one
+     never did, which is the sibling-screen defect in its most expensive form: a
+     spec block is multi-select, so these anchors address the product of
+     `2^options` over every filterable field — per seller, across 38,687
+     storefronts. `lib/seo/crawl-policy.ts` was written about exactly this
+     shape after a crawler walked 797 of them on one shelf, and robots.txt
+     disallows `/b/*?` — but a disallow only asks, and `nofollow` is the half
+     that works on a crawler which does not read it.
+
+     Derived from the href rather than hardcoded, so toggling the last active
+     filter off yields a clean URL and stays followable.
+  */
+  const link = (over: Partial<CatalogueQuery>) => {
+    const to = href(over);
+    return { href: to, rel: crawlRel(to) };
+  };
+
   const applied =
     (query.subcategory ? 1 : 0) +
     query.availability.length +
@@ -51,7 +72,7 @@ export function CatalogueRail({
         <ul className="flex flex-col gap-1">
           <li>
             <ChipLink
-              href={href({ subcategory: undefined })}
+              {...link({ subcategory: undefined })}
               size="sm"
               selected={!query.subcategory}
             >
@@ -61,7 +82,7 @@ export function CatalogueRail({
           {view.subcategories.map((subcategory) => (
             <li key={subcategory.id}>
               <ChipLink
-                href={href({ subcategory: subcategory.slug })}
+                {...link({ subcategory: subcategory.slug })}
                 size="sm"
                 selected={query.subcategory === subcategory.slug}
                 count={formatCount(subcategory.count)}
@@ -87,7 +108,7 @@ export function CatalogueRail({
             return (
               <li key={facet.value}>
                 <ChipLink
-                  href={href({ availability: next })}
+                  {...link({ availability: next })}
                   size="sm"
                   selected={facet.selected}
                   count={formatCount(facet.count)}
@@ -121,7 +142,7 @@ export function CatalogueRail({
             return (
               <li key={option.value}>
                 <ChipLink
-                  href={href({ spec: { ...query.spec, [filter.fieldId]: next } })}
+                  {...link({ spec: { ...query.spec, [filter.fieldId]: next } })}
                   size="sm"
                   selected={option.selected}
                   count={formatCount(option.count)}
@@ -182,10 +203,14 @@ export function CatalogueToolbar({
         {SORTS.map((sort) => {
           const params = toCatalogueParams(query, { sort, page: 1 });
           const active = query.sort === sort;
+          // A sort is a re-ordering of the same set, so every one of these is a
+          // `noindex` view of the page the tab already is. Same rule as the rail.
+          const to = params ? `${basePath}?${params}` : basePath;
           return (
             <Link
               key={sort}
-              href={params ? `${basePath}?${params}` : basePath}
+              href={to}
+              rel={crawlRel(to)}
               {...(active ? { "aria-current": "true" as const } : {})}
               className={cn(
                 "rounded-ctl px-2.5 py-1.5 text-caption font-medium",

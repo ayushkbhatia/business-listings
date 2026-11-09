@@ -12,6 +12,8 @@ import {
   type Criterion,
   type CuratedListView,
 } from "@/lib/seo/curated";
+import { categoryPath } from "@/lib/seo/category-path";
+import { MIN_MEMBERS } from "@/lib/seo/curated/criteria";
 import { absoluteUrl } from "@/lib/site";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { JsonLd } from "@/app/(public)/_json-ld";
@@ -86,17 +88,26 @@ export default async function CuratedListPage({ params }: Props) {
   if (!list) notFound();
 
   /*
-     §3 states: below the floor a list does not publish. `liveLists` keeps such
-     a list out of the sitemap, and this keeps it off the web — a "best of" page
-     naming three companies says the trade has almost nobody worth naming, which
-     is never what we mean.
+     §Selection, and the floor the comment has always argued for — T3.5.
+
+     *"If fewer than a floor — recommend 5 — the list does not publish."* This
+     said so and then checked `length === 0`, so a list of three published: a
+     "best of" page naming three companies says the trade has almost nobody
+     worth naming, which is never what we mean, and it is the padding rule
+     inverted — not padding a list to look full, but publishing one that is not.
+
+     `liveLists` has applied `MIN_MEMBERS` since it was written, so the page and
+     the sitemap disagreed: the list was off the sitemap and on the web, which
+     is the worst of the two states. One constant, both readers.
   */
-  if (list.members.length === 0) notFound();
+  if (list.members.length < MIN_MEMBERS) notFound();
 
   const rfq = await rfqRecipients(list.members);
   const crumbs = [
     { label: t("chrome.directory"), href: "/" },
-    { label: list.categoryName, href: `/c/${list.categorySlug}` },
+    // T3.4: a subcategory's address carries its trade, and a curated list's
+    // category is often one.
+    { label: list.categoryName, href: categoryPath({ slug: list.categorySlug, parentSlug: list.categoryParentSlug }) },
     { label: list.title },
   ];
 

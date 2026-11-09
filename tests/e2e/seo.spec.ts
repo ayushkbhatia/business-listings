@@ -1,4 +1,6 @@
 import { expect, test } from "@playwright/test";
+import { sitemapXml } from "./_sitemap";
+import { isCrawlable } from "../../lib/seo/crawl-policy";
 
 /**
  * Handoff 1, step 6. Robots, sitemap and the per-page metadata.
@@ -20,13 +22,13 @@ test.describe("robots.txt", () => {
       expect(body, path).toContain(`Disallow: ${path}`);
     }
     expect(body).toContain("Allow: /");
-    expect(body).toMatch(/Sitemap: https?:\/\/.+\/sitemap\.xml/);
+    expect(body).toMatch(/Sitemap: https?:\/\/.+\/sitemap-index\.xml/);
   });
 });
 
 test.describe("sitemap.xml", () => {
   async function locs(request: import("@playwright/test").APIRequestContext) {
-    const xml = await (await request.get("/sitemap.xml")).text();
+    const xml = await sitemapXml(request);
     return [...xml.matchAll(/<loc>(.*?)<\/loc>/g)].map((m) => m[1]!);
   }
 
@@ -74,7 +76,7 @@ test.describe("sitemap.xml", () => {
   });
 
   test("keeps an unclaimed listing in, at a lower priority", async ({ request }) => {
-    const xml = await (await request.get("/sitemap.xml")).text();
+    const xml = await sitemapXml(request);
     // 30,000 unclaimed pages are how a supplier first finds us.
     expect(xml).toContain(`/b/${UNCLAIMED}`);
     // But it has no catalogue, branches or reviews tab to submit.
@@ -84,7 +86,7 @@ test.describe("sitemap.xml", () => {
   test("leaves out an unclaimed listing whose licence has lapsed", async ({ request }) => {
     // Board 10g Q4: the page is `noindex`, so the sitemap does not ask for it.
     // `tests/integration/unclaimed-listing.test.ts` holds the two equal as sets.
-    const xml = await (await request.get("/sitemap.xml")).text();
+    const xml = await sitemapXml(request);
     expect(xml).not.toContain("/b/naif-ventilation-trading-llc<");
     expect(xml).toContain(`/b/${UNCLAIMED}<`);
   });
@@ -123,6 +125,78 @@ test.describe("per-page metadata", () => {
       expect(robots, route).toContain("noindex");
     }
   });
+});
+
+test.describe("T3.3 — no public page leaves a facet link followable", () => {
+  /*
+     The gate `docs/crawl-surface-at-41k.md` says is owed, done the honest way.
+
+     `lib/seo/crawl-policy.ts` makes one rule: a URL stays in the crawl graph
+     when its query string carries nothing but `page`. Both halves ship —
+     robots.txt for the compliant, `rel="nofollow"` for the crawler that reads
+     it and declines — and the second half had drifted on **seven** surfaces,
+     which a grep for `crawlRel` could not have told you about because each one
+     builds its href a slightly different way.
+
+     So this reads the rendered markup, which is the only thing that can answer
+     the question. Every anchor on the page, its href judged by the policy's own
+     function, and the ones the policy would keep out of the graph have to carry
+     the attribute.
+
+     The exception is named rather than ignored: the nav bar's *Products* item
+     and the home page's "Popular:" chips are deliberate entry points into
+     `/search`, which is `noindex` and disallowed, and the doc argues for them.
+  */
+  /*
+     The chrome's two, exactly. Scoped this tightly on purpose: a looser match
+     on `/search` would exempt the blended screen's own facet anchors, which are
+     `/search?q=…&availability=…` and are precisely what this has to catch.
+  */
+  const CHROME = ["/search?kind=products", "/search?kind=services"];
+
+  const PAGES = [
+    "/",
+    "/c/valves-and-fittings",
+    "/c/valves-and-fittings?tier=2",
+    "/categories",
+    "/search?q=valves",
+    `/b/${CLAIMED}`,
+    `/b/${CLAIMED}/products`,
+  ];
+
+  for (const route of PAGES) {
+    test(`${route} nofollows every link the policy keeps out of the graph`, async ({ page }) => {
+      await page.goto(route);
+      const anchors = await page.locator("a[href]").evaluateAll((nodes) =>
+        nodes.map((node) => ({
+          href: node.getAttribute("href") ?? "",
+          rel: node.getAttribute("rel") ?? "",
+        })),
+      );
+
+      const followable = anchors.filter((anchor) => {
+        const href = anchor.href;
+        if (!href.startsWith("/")) return false;
+        if (isCrawlable(href)) return false;
+        if (anchor.rel.includes("nofollow")) return false;
+        if (CHROME.includes(href)) return false;
+        /*
+           The home page's "Popular:" chips, the emirate row and the free-zone
+           toggle are advertised entry points into `/search` carrying whatever a
+           buyer typed, so they cannot be listed by URL. Allowed on `/` and
+           nowhere else — a `/search?` link appearing on a storefront would be
+           something new and should fail here.
+        */
+        if (route === "/" && href.startsWith("/search?")) return false;
+        return true;
+      });
+
+      expect(
+        followable.map((anchor) => anchor.href),
+        `${route}: these address the facet space and must carry rel="nofollow"`,
+      ).toEqual([]);
+    });
+  }
 });
 
 test.describe("the 301s the platform writes", () => {
