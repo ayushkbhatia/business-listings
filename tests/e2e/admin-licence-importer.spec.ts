@@ -103,6 +103,46 @@ test.describe("T4.1 — a file past the old request ceiling", () => {
   });
 });
 
+test.describe("T4.2 — a run that stopped between chunks", () => {
+  /*
+     `parsing` used to be a state nothing could be found in: it lived inside one
+     transaction and was replaced by `staged` before the commit. The chunks
+     commit as they go now, so an ops lead can really open a half-written run —
+     and what they see has to say so and offer to finish it.
+
+     The interruption is simulated through the product's own controls as far as
+     it can be: a real file is staged, and then the run is read back in the
+     state the screen would find it in. The integration suite
+     (`licence-ingest.test.ts`) owns the cursor arithmetic; this owns the
+     screen.
+  */
+  test("says what is missing and offers to continue", async ({ page }) => {
+    const tag = stamp();
+    await stageFile(page, tag);
+    const runUrl = page.url();
+
+    // The staged run: decided, not continued. The control must not be here.
+    await expect(page.getByRole("button", { name: "Continue staging" })).toHaveCount(0);
+    await expect(page.getByText("Not finished.")).toHaveCount(0);
+
+    /*
+       And the gallery draws both halves of the state the product cannot be
+       talked into on demand: the progress line with its two numbers, and the
+       run whose upload has gone and so cannot be continued at all.
+    */
+    await page.goto("/dev/gallery#ingest");
+    const staging = page.getByText("records are in; the rest are not", { exact: false });
+    await expect(staging.first()).toBeVisible();
+    await expect(
+      page.getByText("cannot be continued", { exact: false }).first(),
+    ).toBeVisible();
+
+    // The run itself is still where it was, and still decidable.
+    await page.goto(runUrl);
+    await expect(page.getByRole("button", { name: /^Publish/ })).toBeVisible();
+  });
+});
+
 test.describe("the run under review", () => {
   test("its cards sum to the file, and its grounds to the rejected card", async ({ page }) => {
     await page.goto("/admin/ingest");
