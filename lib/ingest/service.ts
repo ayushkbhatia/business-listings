@@ -13,7 +13,7 @@ import { buildBusinessSearchText } from "@/lib/search/index-text";
 import { normaliseLicenceNumber } from "@/lib/verification/licence/number";
 import { buildMatchIndex, bestMatch } from "@/lib/dedupe/match";
 import { licenceDigits } from "@/lib/dedupe/similarity";
-import { loadCandidateListings, readBands, recordAsListing } from "@/lib/dedupe/source";
+import { candidateBlockCap, loadCandidateListings, readBands, recordAsListing } from "@/lib/dedupe/source";
 import { runMergePlan, unwindRunTx, withdrawRunPairsTx } from "@/lib/dedupe/resolve";
 import { can } from "@/lib/auth/can";
 import { $Enums, Prisma } from "@/lib/db/generated/client";
@@ -345,7 +345,7 @@ async function prepareStage(
     };
   });
 
-  const [categories, mappings, bands, areas, separations] = await Promise.all([
+  const [categories, mappings, bands, areas, separations, blockCap] = await Promise.all([
     prisma.category.findMany({ select: { id: true, slug: true } }),
     prisma.licenceActivityMapping.findMany({
       where: { activityKey: { in: [...new Set(records.map((r) => r.key).filter(Boolean))] } },
@@ -367,6 +367,13 @@ async function prepareStage(
        file re-sends it.
     */
     separatedLicences(),
+    /*
+       T4.5 — how many listings one word may block, for a directory this size.
+       Counted **once per run** rather than per chunk: it is one `count` on an
+       indexed predicate and the answer cannot meaningfully move while a file is
+       being staged.
+    */
+    candidateBlockCap(),
   ]);
 
   const categoryBySlug = new Map(categories.map((category) => [category.slug, category.id]));
@@ -427,7 +434,18 @@ async function prepareStage(
         }),
     );
 
-    const index = buildMatchIndex(await loadCandidateListings([...asListing.values()]));
+    /*
+       The cap travels with the candidates — T4.5.
+
+       `loadCandidateListings` has already dropped the words that identify
+       nobody *in the directory*, so the index must not apply a second, tighter
+       cap to the two hundred rows it brought back: a word shared by three of
+       three hundred candidates is the signal, not the noise.
+    */
+    const index = buildMatchIndex(
+      await loadCandidateListings([...asListing.values()], prisma, blockCap),
+      blockCap,
+    );
 
     for (const row of slice) {
       let duplicateOfId: string | null = null;
@@ -1089,10 +1107,11 @@ export async function publishRun(
      Separations a person already made are honoured, so a record kept separate
      is not sent straight back.
   */
-  const [bands, areas, separations] = await Promise.all([
+  const [bands, areas, separations, blockCap] = await Promise.all([
     readBands(),
     prisma.area.findMany({ select: { id: true, name: true, emirate: true } }),
     candidates.length > 0 ? separatedLicences() : Promise.resolve(new Map<string, Set<string>>()),
+    candidateBlockCap(),
   ]);
   const areaName = new Map(areas.map((area) => [area.id, area.name]));
 
@@ -1129,7 +1148,10 @@ export async function publishRun(
         ] as const;
       }),
     );
-    const index = buildMatchIndex(await loadCandidateListings([...asListing.values()]));
+    const index = buildMatchIndex(
+      await loadCandidateListings([...asListing.values()], prisma, blockCap),
+      blockCap,
+    );
 
     for (const row of slice) {
       const { match } = bestMatch(

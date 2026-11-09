@@ -1,6 +1,11 @@
 import { performance } from "node:perf_hooks";
 import { prisma } from "../lib/db/client.js";
-import { loadCandidateListings, loadMatchListings, recordAsListing } from "../lib/dedupe/source.js";
+import {
+  candidateBlockCap,
+  loadCandidateListings,
+  loadMatchListings,
+  recordAsListing,
+} from "../lib/dedupe/source.js";
 import { bestMatch, buildMatchIndex } from "../lib/dedupe/match.js";
 import { readBands } from "../lib/dedupe/source.js";
 
@@ -81,6 +86,7 @@ async function main(): Promise<void> {
   // A · the whole directory, which is what the importer used to do twice.
   const wholeTimes: number[] = [];
   let wholeSize = 0;
+  let wholeDropped = 0;
   let wholeFailed: string | null = null;
   for (let run = 0; run < RUNS; run += 1) {
     const at = performance.now();
@@ -88,6 +94,7 @@ async function main(): Promise<void> {
       const all = await loadMatchListings();
       const index = buildMatchIndex(all);
       wholeSize = index.blocks.size;
+      wholeDropped = index.droppedKeys.length;
       wholeTimes.push(ms(at));
     } catch (error) {
       /*
@@ -106,17 +113,19 @@ async function main(): Promise<void> {
     console.log(`A · whole directory   REFUSED — ${wholeFailed}`);
   } else {
     console.log(`A · whole directory   ${wholeTimes.map((t) => `${String(t)} ms`).join("  ")}`);
-    console.log(`    ${wholeSize.toLocaleString("en-GB")} blocking keys built, every run.`);
+    console.log(`    ${wholeSize.toLocaleString("en-GB")} blocking keys built, every run; ${String(wholeDropped)} words dropped as too common.`);
   }
 
   // B · the candidates for this chunk.
+  const cap = await candidateBlockCap();
+  console.log(`\n    The block cap for this directory is ${String(cap)} listings a word (T4.5).`);
   const chunkTimes: number[] = [];
   let candidates = 0;
   let chunkKeys = 0;
   for (let run = 0; run < RUNS; run += 1) {
     const at = performance.now();
-    const found = await loadCandidateListings(records);
-    const index = buildMatchIndex(found);
+    const found = await loadCandidateListings(records, undefined, cap);
+    const index = buildMatchIndex(found, cap);
     candidates = found.length;
     chunkKeys = index.blocks.size;
     chunkTimes.push(ms(at));
@@ -130,8 +139,8 @@ async function main(): Promise<void> {
      pair every one of them — and if the candidate query narrowed too far, this
      is the line that says so.
   */
-  const found = await loadCandidateListings(records);
-  const index = buildMatchIndex(found);
+  const found = await loadCandidateListings(records, undefined, cap);
+  const index = buildMatchIndex(found, cap);
   const bands = await readBands();
   let paired = 0;
   for (const record of records) {

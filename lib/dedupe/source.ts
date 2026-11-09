@@ -2,7 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/db/client";
 import { Prisma } from "@/lib/db/generated/client";
 import type { PrismaClient } from "@/lib/db/generated/client";
-import { keysFor } from "./match";
+import { MIN_BLOCK, blockCapFor, keysFor } from "./match";
 import { activityKey } from "@/lib/ingest/classify";
 import { parseBands } from "./bands";
 import type { Bands, Listing } from "./similarity";
@@ -139,23 +139,29 @@ export async function loadMatchListings(db: Db = prisma): Promise<Listing[]> {
   return out;
 }
 
-/**
- * How many listings one identifying **word** may contribute — T4.4, and the
- * number `MAX_BLOCK` used to be in `lib/dedupe/match.ts`.
- *
- * It is the same argument in a better place. In-process, a block larger than
- * this was skipped *after* every listing in the directory had been read and
- * indexed; here the cap is in the query, so a word that identifies nobody costs
- * two hundred and one index entries instead of nine thousand rows.
- *
- * Dropped whole rather than truncated. An arbitrary two hundred of nine
- * thousand is a different question answered quietly, and a pair that word would
- * have found still shares a licence, a phone, or a rarer word in the same name.
- */
-export const MAX_BLOCK = 200;
-
 /** A ceiling on one chunk's candidate set, for the two exact reads. */
 export const MAX_CANDIDATES = 20_000;
+
+/**
+ * How many listings one identifying **word** may contribute — T4.4/T4.5.
+ *
+ * The same rule `buildMatchIndex` applies in memory, applied in the query
+ * instead: a word matching more than this share of the directory identifies
+ * nobody. In-process the cut happened *after* every listing had been read; here
+ * a useless word costs its cap in index entries rather than nine thousand rows.
+ *
+ * Dropped whole rather than truncated. An arbitrary few hundred of nine
+ * thousand is a different question answered quietly, and a pair that word would
+ * have found still shares a licence, a phone, or a rarer word in the same name.
+ *
+ * `corpus` is the directory's size, counted once per run by the caller rather
+ * than per chunk. Zero — the default — gives the floor, which is right for a
+ * caller that has not counted: the floor is the cap for any directory small
+ * enough that no word identifies nobody.
+ */
+export async function candidateBlockCap(db: Db = prisma): Promise<number> {
+  return blockCapFor(await db.business.count({ where: MATCHABLE_WHERE }));
+}
 
 /**
  * Only the listings a chunk of records could possibly be a duplicate of —
@@ -207,6 +213,8 @@ export const MAX_CANDIDATES = 20_000;
 export async function loadCandidateListings(
   records: readonly Listing[],
   db: Db = prisma,
+  /** `candidateBlockCap()`, counted once per run. Defaults to the floor. */
+  cap: number = MIN_BLOCK,
 ): Promise<Listing[]> {
   if (records.length === 0) return [];
 
@@ -273,7 +281,7 @@ export async function loadCandidateListings(
               SELECT b."id" FROM "business" b
                WHERE ${MATCHABLE}
                  AND b."trade_name" ILIKE '%' || w."word" || '%'
-               LIMIT ${MAX_BLOCK + 1}
+               LIMIT ${cap + 1}
             ) c`),
   ]);
   collect(byLicence);
@@ -286,7 +294,7 @@ export async function loadCandidateListings(
     else perWord.set(row.word, [row.id]);
   }
   for (const block of perWord.values()) {
-    if (block.length > MAX_BLOCK) continue;
+    if (block.length > cap) continue;
     for (const id of block) ids.add(id);
   }
 
