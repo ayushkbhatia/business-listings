@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ChipLink } from "@/components/display";
+import { crawlRel } from "@/lib/seo/crawl-policy";
 import { formatCount } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
@@ -39,6 +40,20 @@ export function ReviewToolbar({
 }) {
   const href = (params: string) => (params ? `${basePath}?${params}` : basePath);
 
+  /*
+     The href, plus the `rel` it earns.
+
+     The tab's own `generateMetadata` already sets `noindex, follow` the moment
+     anything is filtering, so each of these addresses a page we are asking not
+     to be indexed — four filters by four sorts by the pager, on every claimed
+     storefront. `crawlRel` reads the decision off the href, so `All` with
+     nothing else set stays followable because it is the tab's clean URL.
+  */
+  const link = (params: string) => {
+    const to = href(params);
+    return { href: to, rel: crawlRel(to) };
+  };
+
   return (
     <div className="flex flex-col gap-3 border-b border-line pb-3.5 lg:flex-row lg:items-center lg:justify-between">
       {/*
@@ -54,7 +69,7 @@ export function ReviewToolbar({
           {REVIEW_FILTERS.map((filter) => (
             <li key={filter}>
               <ChipLink
-                href={href(toReviewParams(query, { filter, page: 1 }))}
+                {...link(toReviewParams(query, { filter, page: 1 }))}
                 count={formatCount(counts[filter])}
                 selected={query.filter === filter}
                 size="sm"
@@ -81,7 +96,7 @@ export function ReviewToolbar({
             return (
               <li key={sort}>
                 <Link
-                  href={href(toReviewParams(query, { sort, page: 1 }))}
+                  {...link(toReviewParams(query, { sort, page: 1 }))}
                   {...(active ? { "aria-current": "true" as const } : {})}
                   className={cn(
                     "block rounded-ctl px-2.5 py-1.5 text-caption font-medium whitespace-nowrap",

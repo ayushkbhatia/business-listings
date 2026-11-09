@@ -850,13 +850,68 @@ export async function createProvisionalIdentity(input: {
  *
  * Both spellings are matched, as the paging version did. Supabase stores the
  * number without the `+`, and has not always.
+ *
+ * ## The one topology where the schema is not there
+ *
+ * Reading `auth.users` through this connection assumes auth lives in the
+ * database `DATABASE_URL` names, which is true of production and of CI — both
+ * point at the Supabase-managed `postgres`. It is not true of the isolated
+ * local database a worktree gets so that a sibling's unmerged migration cannot
+ * reach it: `prisma migrate deploy` creates the public schema and nothing else,
+ * while the auth service keeps its rows in the stack's own database.
+ *
+ * There the question has no SQL answer at all — the row this is looking for is
+ * in the stack's database and not in ours — so an undefined relation falls back
+ * to the list the admin API does offer. That path keeps the old ceiling, which
+ * is the right place for it: it is reached only where auth is somewhere else,
+ * which is a developer's machine and never production or CI.
+ *
+ * Matched on the driver's `TableDoesNotExist` and nothing else: a connection
+ * failure or a permission error on `auth` is a real fault and still throws.
+ * Prisma reports every raw-query failure as `P2010` and keeps Postgres's own
+ * code in `meta.driverAdapterError.cause`, so the narrow test reads through it.
  */
+function missingRelation(error: unknown): boolean {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return false;
+  const meta = error.meta as
+    | { driverAdapterError?: { cause?: { kind?: string; originalCode?: string } } }
+    | undefined;
+  const cause = meta?.driverAdapterError?.cause;
+  return cause?.kind === "TableDoesNotExist" || cause?.originalCode === "42P01";
+}
+
 async function findAuthUserByPhone(e164: string): Promise<string | undefined> {
   const bare = e164.replace(/^\+/, "");
-  const rows = await prisma.$queryRaw<{ id: string }[]>(
-    Prisma.sql`SELECT id::text AS id FROM auth.users WHERE phone IN (${bare}, ${e164}) LIMIT 1`,
-  );
-  return rows[0]?.id;
+  try {
+    const rows = await prisma.$queryRaw<{ id: string }[]>(
+      Prisma.sql`SELECT id::text AS id FROM auth.users WHERE phone IN (${bare}, ${e164}) LIMIT 1`,
+    );
+    return rows[0]?.id;
+  } catch (error) {
+    if (missingRelation(error)) return pageAuthUsersForPhone(bare, e164);
+    throw error;
+  }
+}
+
+/**
+ * The pre-T3.7 lookup, kept for the one topology that still needs it.
+ *
+ * Twenty pages of two hundred, and `undefined` past four thousand users — the
+ * ceiling T3.7 is about. It is only reached when `auth.users` is not in the
+ * database this app is connected to, so the number it gives up at is the
+ * number of users on a local stack rather than the number of buyers in the
+ * product.
+ */
+async function pageAuthUsersForPhone(bare: string, e164: string): Promise<string | undefined> {
+  const admin = createAdminClient();
+  for (let page = 1; page <= 20; page += 1) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 200 });
+    if (error || !data?.users?.length) return undefined;
+    const found = data.users.find((user) => user.phone === bare || user.phone === e164);
+    if (found) return found.id;
+    if (data.users.length < 200) return undefined;
+  }
+  return undefined;
 }
 
 /**

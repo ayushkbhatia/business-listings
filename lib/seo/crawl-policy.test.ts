@@ -114,6 +114,24 @@ describe("isDisallowedPath", () => {
     expect(isDisallowedPath("/onboarding/claim")).toBe(false);
   });
 
+  it("takes the per-supplier enquiry composer out, and leaves the bare one", () => {
+    /*
+       T3.3, and the same shape as the claim links above: `Ask for a quote` on
+       every listing card and every product card carries `?to=<slug>`, so the
+       set is one `force-dynamic` composer per supplier — 38,687 of them, each
+       running `getActor()` for a page with nothing in it to index. The cards
+       have carried `nofollow` since they were written; this file had not named
+       the route, so a compliant crawler was still welcome to spend the request.
+
+       The bare `/rfq/new` stays allowed: it is linked from the zero-result
+       block and from a campaign page's call to action, and it keeps the
+       `noindex, follow` the route sets for itself.
+    */
+    expect(isDisallowedPath("/rfq/new?to=al-marwan-industrial-supplies-llc")).toBe(true);
+    expect(isDisallowedPath("/rfq/new?category=valves-and-fittings")).toBe(true);
+    expect(isDisallowedPath("/rfq/new")).toBe(false);
+  });
+
   it("leaves the public directory alone", () => {
     expect(isDisallowedPath("/c/valves-and-fittings")).toBe(false);
     expect(isDisallowedPath("/b/al-marwan-industrial-supplies-llc")).toBe(false);

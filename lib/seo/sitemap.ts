@@ -70,7 +70,7 @@ const PUBLIC_BUSINESS = { suspendedAt: null, publishedAt: { not: null } } as con
  * the rest, and the workhorses — the area pages the whole acquisition engine is
  * for — immediately after.
  */
-export const FIXED_CLASSES = ["core", "area", "emirate", "taxonomy", "lists", "guides"] as const;
+export const FIXED_CLASSES = ["core", "area", "emirate", "taxonomy", "lists", "guides", "campaign"] as const;
 
 export type FixedClass = (typeof FIXED_CLASSES)[number];
 
@@ -146,6 +146,7 @@ async function fixedChunk(name: FixedClass): Promise<MetadataRoute.Sitemap> {
   if (name === "emirate") return emirateChunk();
   if (name === "taxonomy") return taxonomyChunk();
   if (name === "lists") return listsChunk();
+  if (name === "campaign") return campaignChunk();
   return guidesChunk();
 }
 
@@ -170,6 +171,15 @@ async function coreChunk(): Promise<MetadataRoute.Sitemap> {
        a year.
     */
     { url: absoluteUrl("/pricing"), changeFrequency: "weekly", priority: 0.7 },
+    /*
+       T3.3. Both are indexable and self-canonical, and both were missing from
+       here — which matters more than it looks: their only internal links are
+       inside the entry and sign-up funnel, so for these two the sitemap is not
+       a hint, it is the path. `/list-your-business` is the page a supplier
+       searching "list my company UAE" is supposed to land on.
+    */
+    { url: absoluteUrl("/for-buyers"), changeFrequency: "monthly", priority: 0.5 },
+    { url: absoluteUrl("/list-your-business"), changeFrequency: "monthly", priority: 0.6 },
   ];
 
   if (guides > 0) {
@@ -256,6 +266,32 @@ async function listsChunk(): Promise<MetadataRoute.Sitemap> {
     lastModified: list.updatedAt,
     changeFrequency: "weekly" as const,
     priority: 0.7,
+  }));
+}
+
+/**
+ * Board 6e's campaign pages — T3.3.
+ *
+ * `/lp/:campaign` is indexable and canonical to itself, deliberately: it is
+ * real copy and hiding it would be admitting it was a doorway. It was in no
+ * sitemap class, and nothing on the public site links to it — a campaign page
+ * is arrived at from an advert, so the sitemap is its only crawl path.
+ *
+ * A fixed class rather than a ranged one. These are hand-written by an ops lead
+ * through the admin console; there are tens of them at most, and if that ever
+ * stops being true the count belongs in `sitemapChunkIds` with the others.
+ */
+async function campaignChunk(): Promise<MetadataRoute.Sitemap> {
+  const campaigns = await prisma.campaign.findMany({
+    where: { publishedAt: { not: null } },
+    orderBy: [{ slug: "asc" }],
+    select: { slug: true, updatedAt: true },
+  });
+  return campaigns.map((campaign) => ({
+    url: absoluteUrl(`/lp/${campaign.slug}`),
+    lastModified: campaign.updatedAt,
+    changeFrequency: "monthly" as const,
+    priority: 0.5,
   }));
 }
 

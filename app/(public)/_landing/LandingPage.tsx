@@ -6,6 +6,7 @@ import { searchBusinesses } from "@/lib/db/queries";
 import { formatCount, formatDate } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { absoluteUrl } from "@/lib/site";
+import { crawlRel } from "@/lib/seo/crawl-policy";
 import { parseSearchQuery } from "@/lib/search/query";
 import { isCrawler } from "@/lib/seo/crawl-policy";
 import { VERIFIED_TIER } from "@/lib/verification";
@@ -410,6 +411,17 @@ export async function LandingPage({ state, searchParams, pageCount }: LandingPag
                       <li key={chip.slug}>
                         <ChipLink
                           href={`${scope.path}?sub=${chip.slug}`}
+                          /*
+                             `landingMetadata` sets `noindex, follow` on a
+                             subcategory view and canonicalises it back to this
+                             page, so the URL behind this chip can never be
+                             indexed — which makes every fetch of one crawl
+                             budget spent on a page that already exists. One
+                             `?sub=` per chip per live landing page; the
+                             services twin has carried `crawlRel` since it
+                             shipped and this row did not.
+                          */
+                          rel={crawlRel(`${scope.path}?sub=${chip.slug}`)}
                           selected={activeChip?.slug === chip.slug}
                           count={formatCount(chip.listings)}
                         >
