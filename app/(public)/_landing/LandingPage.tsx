@@ -1,10 +1,13 @@
 import { Breadcrumb, PublicShell } from "@/components/structure";
 import { ChipLink } from "@/components/display";
+import { headers } from "next/headers";
+import { recordCategoryPositions } from "@/lib/analytics/record";
 import { searchBusinesses } from "@/lib/db/queries";
 import { formatCount, formatDate } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { absoluteUrl } from "@/lib/site";
 import { parseSearchQuery } from "@/lib/search/query";
+import { isCrawler } from "@/lib/seo/crawl-policy";
 import { VERIFIED_TIER } from "@/lib/verification";
 import {
   landingFaqJsonLd,
@@ -145,6 +148,43 @@ export async function LandingPage({ state, searchParams, pageCount }: LandingPag
         primaryCategoryId === scope.category.id ? 1 : 0.5,
     },
   );
+  /*
+     Board `3l`/`11e` — who appeared, and on which scope. T3.6.
+
+     The services twin has counted this since `6a-s` shipped and the goods
+     template counted nothing, so a seller whose listing is browsed on
+     `/dubai/al-quoz/hvac-and-ventilation` — the pages this whole acquisition
+     engine exists to build — saw none of it in *how often you were seen*, and
+     the sponsored-placement price derived from that number was derived from
+     search traffic alone.
+
+     The same counter, the same crawler gate, the same offset, and not awaited:
+     a bot walking pages is not a buyer, and a count that throws must not take
+     a public page with it.
+
+     **No `source` column, and the plan's task asked for one.** The schema
+     already separates these two objects: `SearchImpressionDay` is a phrase
+     somebody typed, `CategoryPositionDay` is a category scope somebody
+     browsed. A landing view is the second thing, so writing it to the second
+     table cannot pollute the first — the discriminator would have been a
+     third name for a distinction two tables already make.
+  */
+  if (results.rows.length > 0 && !isCrawler((await headers()).get("user-agent"))) {
+    void recordCategoryPositions(
+      results.rows.map((row) => row.id),
+      activeChip?.id ?? scope.category.id,
+      /*
+         The emirate either way, as the services twin passes it. An area page
+         *is* inside an emirate, and the question the position card asks of
+         this column is "browsed country-wide, or filtered to Dubai" — which an
+         area page answers the same way an emirate page does.
+      */
+      scope.emirate,
+      new Date(),
+      (page - 1) * RESULTS_PER_PAGE,
+    );
+  }
+
   /*
      The map plots what it can and says how many it cannot. A location with no
      coordinates is never dropped at an area centroid — a wrong pin is worse
