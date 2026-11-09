@@ -5,6 +5,7 @@ import type { CredentialKind } from "@/lib/db/generated/enums";
 import "@/lib/audit/prisma-writer";
 import { staffMutation } from "@/lib/audit/staff-mutation";
 import { assertCan } from "@/lib/auth/can";
+import { EMIRATES } from "@/lib/uae";
 import type { Actor } from "@/lib/auth/roles";
 import { resolveScopeFamily } from "@/lib/services/family";
 import { credentialKindOrigin, type CredentialKindOrigin } from "./credential-kind";
@@ -268,6 +269,23 @@ export interface ServicesLandingEditor {
    * them whatever its floors say, and reopening brings back exactly these.
    */
   publishedPages: number;
+  /**
+   * Every address this trade *can* produce — T3.8, and the number the control
+   * never said.
+   *
+   * One page per published area plus one per emirate, for this trade. It is
+   * not what opening publishes: a page also needs staff intent and its floors.
+   * It is the size of the surface the decision is about, and across the
+   * services taxonomy it comes to roughly 1,267 — which the repo's own doc
+   * described as "roughly double" the goods matrix when it is about fourteen
+   * times.
+   *
+   * Stated because a control whose blast radius is unknown is a control
+   * somebody presses to find out. The *rate* at which trades open is decision
+   * N18 and is not encoded here: this says what one press costs, and the
+   * policy is the owner's.
+   */
+  addressablePages: number;
 }
 
 /**
@@ -276,7 +294,7 @@ export interface ServicesLandingEditor {
  */
 export async function servicesLandingEditor(categoryId: string): Promise<ServicesLandingEditor | null> {
   if ((await tradeKindFor(categoryId)) !== "services") return null;
-  const [row, asks, credential, areaPages, emiratePages] = await Promise.all([
+  const [row, asks, credential, areaPages, emiratePages, publishedAreas] = await Promise.all([
     prisma.category.findUnique({
       where: { id: categoryId },
       select: { id: true, name: true, pluralHuman: true, credentialKind: true, servicesLandingOpenedAt: true },
@@ -285,6 +303,8 @@ export async function servicesLandingEditor(categoryId: string): Promise<Service
     credentialKindFor(categoryId),
     prisma.areaPage.count({ where: { categoryId, publishedAt: { not: null } } }),
     prisma.emiratePage.count({ where: { categoryId, publishedAt: { not: null } } }),
+    // The addressable surface: one per published area, plus one per emirate.
+    prisma.area.count({ where: { publishedAt: { not: null } } }),
   ]);
   if (!row) return null;
 
@@ -307,5 +327,6 @@ export async function servicesLandingEditor(categoryId: string): Promise<Service
     asks,
     openedAt: row.servicesLandingOpenedAt,
     publishedPages: areaPages + emiratePages,
+    addressablePages: publishedAreas + EMIRATES.length,
   };
 }

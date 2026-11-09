@@ -101,9 +101,16 @@ describe("robots.txt", () => {
     }
   });
 
-  it("names a host and a sitemap", () => {
+  it("names a host and the sitemap index", () => {
+    /*
+       The **index** — T3.1. One document cannot hold 162,816 URLs, so the file
+       is `generateSitemaps()` chunks at `/sitemap/<class>.xml` with a
+       `<sitemapindex>` listing them, and `/sitemap.xml` 404s once that function
+       is in place. Naming the index here means a crawler takes no redirect hop
+       to find the nineteen files.
+    */
     const text = render();
     expect(text).toMatch(/^Host: https?:\/\/\S+$/m);
-    expect(text).toMatch(/^Sitemap: https?:\/\/\S+\/sitemap\.xml$/m);
+    expect(text).toMatch(/^Sitemap: https?:\/\/\S+\/sitemap-index\.xml$/m);
   });
 });

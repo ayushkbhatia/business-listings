@@ -155,6 +155,22 @@ export const DISALLOWED_PATHS = [
      `/onboarding/claim` keeps the `noindex, follow` 2a chose for it.
   */
   "/onboarding/claim?",
+  /*
+     T3.3, and it is the same sentence as the two entries above it with a
+     different route in it.
+
+     `Ask for a quote` on every listing card and every product card links to
+     `/rfq/new?to=<slug>` — so the set is one `force-dynamic` URL per supplier,
+     38,687 of them, each of which runs `getActor()` and renders a composer
+     with nothing in it to index. The anchors have carried `nofollow` since the
+     cards were written; this file, which is the half that stops a compliant
+     crawler before it spends the request, did not name the route.
+
+     With the query string only, as for the claim form: the bare `/rfq/new` is
+     linked from the zero-result block and from `/lp/:campaign`'s call to
+     action, and it keeps the `noindex, follow` the page sets for itself.
+  */
+  "/rfq/new?",
 ] as const;
 
 /**

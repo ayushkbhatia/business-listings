@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { sitemapXml } from "./_sitemap";
 
 /**
  * Handoff 5, step 6 — the technical layer, as a crawler sees it.
@@ -102,7 +103,7 @@ test.describe("criterion 6 — filtered views canonicalise", () => {
 
 test.describe("criterion 12 — the sitemap is only published pages", () => {
   async function locs(request: import("@playwright/test").APIRequestContext) {
-    const xml = await (await request.get("/sitemap.xml")).text();
+    const xml = await sitemapXml(request);
     return [...xml.matchAll(/<loc>(.*?)<\/loc>/g)].map((match) => match[1]!);
   }
 
@@ -120,7 +121,15 @@ test.describe("criterion 12 — the sitemap is only published pages", () => {
       "/compare",
       "/admin",
       "/dev",
-      "/lp/",
+      /*
+         `/lp/` left this list in T3.3, and it is a decision rather than a
+         relaxation. A campaign page sets no `robots` meta and is canonical to
+         itself, and the route says why in its own words: "a campaign page is a
+         real page with real copy — it is not a doorway, and hiding it would be
+         admitting it was." So it was never *asked* not to be indexed; it was
+         simply in no sitemap, reachable from an advert and from nothing else.
+         The `campaign` chunk submits it now.
+      */
       // The seeded area page that does not clear the floors.
       "/dubai/ras-al-khor-industrial-2/safety-and-ppe",
     ]) {
@@ -147,7 +156,7 @@ test.describe("criterion 12 — the sitemap is only published pages", () => {
 
   test("names itself in robots.txt", async ({ request }) => {
     const body = await (await request.get("/robots.txt")).text();
-    expect(body).toMatch(/Sitemap: https?:\/\/.+\/sitemap\.xml/);
+    expect(body).toMatch(/Sitemap: https?:\/\/.+\/sitemap-index\.xml/);
   });
 });
 
