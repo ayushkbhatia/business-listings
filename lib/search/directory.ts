@@ -128,14 +128,42 @@ export interface RawSignals {
 }
 
 /**
- * How many listings one run will rank.
+ * How many listings one run will rank. **Two numbers, because there are two
+ * kinds of caller** — T2.4.
  *
- * Not a page size — the whole directory goes through this in memory, once, and
+ * Not a page size: the whole directory goes through this in memory once, and
  * the ranking itself is arithmetic over six numbers. The cap exists so that a
  * bulk import cannot turn a nightly job into an overnight one without anybody
  * noticing, and every caller reports the shortfall rather than swallowing it.
+ *
+ * One cap of 20,000 served both callers, and at 38,687 public listings that
+ * meant the nightly position snapshot **silently stopped ranking 18,687
+ * listings** — every one of those sellers' analytics showing no position, with
+ * the shortfall reported into a job record nobody reads rather than onto the
+ * screen that promises the number. A cap sized for a request path had become
+ * the cap on the only job that produces the data.
+ *
+ * So: the job covers the directory, and the preview stays bounded because it
+ * runs on a page request. The job's figure is a guard against a bulk import
+ * rather than a sample size, which is why it is an order of magnitude above
+ * what production will hold.
  */
 export const MAX_LISTINGS = 20_000;
+
+/** What the nightly snapshot will read. A guard, not a sample. */
+export const MAX_LISTINGS_JOB = 250_000;
+
+/**
+ * What one read asks Postgres for at a time.
+ *
+ * The read is paged on the primary key rather than taken in one statement: at
+ * 41,000 rows the `select` carries every live service and every published
+ * branch, and one statement returning all of that is a single round trip
+ * holding the whole directory's relations in flight. Batches keep the statement
+ * bounded while the accumulation stays linear, which is the part that has to be
+ * linear — the ranking needs a category's listings together.
+ */
+const BATCH = 2_000;
 
 export interface DirectoryLoad {
   rows: DirectoryRow[];
@@ -164,9 +192,55 @@ export interface DirectoryLoad {
  *
  * The `+ 1` is gone with it. The cap is what `take` should say.
  */
-export async function loadDirectory(): Promise<DirectoryLoad> {
-  const found = await prisma.business.findMany({
+export async function loadDirectory(limit: number = MAX_LISTINGS): Promise<DirectoryLoad> {
+  const found: Awaited<ReturnType<typeof readBatch>> = [];
+
+  /*
+     Paged on the id, in batches.
+
+     This was one `findMany` with `take: MAX_LISTINGS` and **no `orderBy`** —
+     the shape T2.3 teaches `check:ordering` to catch, and it mattered here:
+     whichever twenty thousand Postgres returned were the twenty thousand that
+     got a position that night, and a different twenty thousand the next night.
+     A seller's rank history was therefore a history of which rows the planner
+     happened to pick. Ordered on the primary key, a cursor also makes the read
+     resumable, which is what lets the cap be a guard rather than a sample.
+  */
+  let cursor: string | null = null;
+  while (found.length < limit) {
+    const batch = await readBatch(Math.min(BATCH, limit - found.length), cursor);
+    if (batch.length === 0) break;
+    found.push(...batch);
+    cursor = batch[batch.length - 1]!.id;
+  }
+
+  const rows: DirectoryRow[] = found.map(({ serviceCoverage, ...row }) => ({
+    ...row,
+    coverageDefault: serviceCoverage,
+  }));
+
+  /*
+     Only where the read filled the cap. Below it there is nothing beyond the
+     last batch and the count would be a round trip to learn what `rows.length`
+     already said.
+  */
+  const capped = rows.length === limit;
+  const total = capped ? await prisma.business.count({ where: PUBLIC_BUSINESS }) : rows.length;
+
+  return {
+    rows,
+    capped: total > limit,
+    unread: Math.max(0, total - limit),
+  };
+}
+
+/** One batch, from the id after `cursor`. */
+function readBatch(take: number, cursor: string | null) {
+  return prisma.business.findMany({
     where: PUBLIC_BUSINESS,
+    orderBy: [{ id: "asc" }],
+    take,
+    ...(cursor === null ? {} : { cursor: { id: cursor }, skip: 1 }),
     select: {
       id: true,
       primaryCategoryId: true,
@@ -197,27 +271,7 @@ export async function loadDirectory(): Promise<DirectoryLoad> {
       },
       serviceCoverage: { where: { serviceId: null }, select: { emirate: true, areaId: true } },
     },
-    take: MAX_LISTINGS,
   });
-
-  const rows: DirectoryRow[] = found.map(({ serviceCoverage, ...row }) => ({
-    ...row,
-    coverageDefault: serviceCoverage,
-  }));
-
-  /*
-     Only where the read filled the cap. Below it there is nothing beyond the
-     page and the count would be a round trip to learn what `rows.length`
-     already said.
-  */
-  const capped = rows.length === MAX_LISTINGS;
-  const total = capped ? await prisma.business.count({ where: PUBLIC_BUSINESS }) : rows.length;
-
-  return {
-    rows,
-    capped: total > MAX_LISTINGS,
-    unread: Math.max(0, total - MAX_LISTINGS),
-  };
 }
 
 export function candidatesFrom(
