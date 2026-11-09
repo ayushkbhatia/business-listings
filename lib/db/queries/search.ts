@@ -720,6 +720,8 @@ export async function searchBusinesses(
       : await rankedPage({
           query,
           ...(options.categoryIds ? { categoryIds: options.categoryIds } : {}),
+          // Board `6a-s` hands over the set; it is the predicate.
+          ...(options.ids ? { ids: options.ids } : {}),
           vectors,
           kinds,
           boosts,

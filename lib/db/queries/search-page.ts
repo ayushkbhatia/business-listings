@@ -1,7 +1,7 @@
 import "server-only";
 import { Prisma } from "@/lib/db/generated/client";
 import { prisma } from "@/lib/db/client";
-import { businessPredicateSql, tokensOf } from "@/lib/search/predicate-sql";
+import { businessPredicateSql, PUBLIC_BUSINESS_SQL, tokensOf } from "@/lib/search/predicate-sql";
 import { scoreSql, type ScoreColumns } from "@/lib/search/score-sql";
 import {
   mergeByBand,
@@ -100,6 +100,21 @@ export interface RankedPageInput {
   vectors: VectorSet;
   /** Resolved kind per category id, for the vector each listing ranks on. */
   kinds: ReadonlyMap<string, TradeKindRow>;
+  /**
+   * The set, already decided — board `6a-s`.
+   *
+   * A services landing page's members are the firms that *cover* the place,
+   * resolved per service in `lib/seo/landing/services-supply.ts`, so it hands
+   * the ids over rather than being filtered by branch address. When this is
+   * set it **is** the predicate, exactly as it is on the caller's own `where`:
+   * public, and in this set. Nothing else applies.
+   *
+   * Missing it was the defect `area-landing-6as.spec.ts` caught in CI — the
+   * SQL path filtered by `businessWhere` instead, so the page listed the firms
+   * whose *branches* were in the area rather than the firms that cover it,
+   * which is the one thing B1 says that page must not do.
+   */
+  ids?: readonly string[];
   /** Live boosts, added after the weighted sum exactly as `scoreRow` adds them. */
   boosts: ReadonlyMap<string, number>;
   /** The buyer's origin, for the distance factor. Null is unknown, not far. */
@@ -305,7 +320,7 @@ async function windowFor(
     planMultiplier: Prisma.sql`pl.ranking_multiplier`,
   };
 
-  const predicate = businessPredicateSql(input.query, input.categoryIds, input.now);
+  const predicate = predicateFor(input);
   const boosts = boostsJoin(input.boosts);
   const score = Prisma.sql`(${scoreSql(columns, weights, vector)}) + ${
     boosts ? Prisma.sql`COALESCE(boost.points, 0)` : Prisma.sql`0`
@@ -327,6 +342,22 @@ async function windowFor(
     ORDER BY score DESC, b.id ASC
     LIMIT ${limit}
   `);
+}
+
+/**
+ * The filter, which is the id set where the caller decided it.
+ *
+ * The same branch `searchBusinesses` has always had on its own `where`: an
+ * `ids` caller gets public-and-in-this-set and none of the query's filters,
+ * because the set is the answer to the question those filters would ask.
+ */
+function predicateFor(input: RankedPageInput): Prisma.Sql {
+  if (input.ids) {
+    if (input.ids.length === 0) return Prisma.sql`false`;
+    const ids = Prisma.join(input.ids.map((id) => Prisma.sql`${id}`), ", ");
+    return Prisma.sql`${PUBLIC_BUSINESS_SQL} AND b.id IN (${ids})`;
+  }
+  return businessPredicateSql(input.query, input.categoryIds, input.now);
 }
 
 /**
@@ -366,7 +397,7 @@ export async function rankedPage(input: RankedPageInput): Promise<RankedPage | n
   if (!parts) return null;
 
   const from = (input.page - 1) * input.pageSize;
-  const predicate = businessPredicateSql(input.query, input.categoryIds, input.now);
+  const predicate = predicateFor(input);
 
   /*
      A single-signal sort does not touch the score, so it pages properly with
