@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { sitemapXml } from "./_sitemap";
 
 /**
  * Handoff 1, step 6. Robots, sitemap and the per-page metadata.
@@ -20,13 +21,13 @@ test.describe("robots.txt", () => {
       expect(body, path).toContain(`Disallow: ${path}`);
     }
     expect(body).toContain("Allow: /");
-    expect(body).toMatch(/Sitemap: https?:\/\/.+\/sitemap\.xml/);
+    expect(body).toMatch(/Sitemap: https?:\/\/.+\/sitemap-index\.xml/);
   });
 });
 
 test.describe("sitemap.xml", () => {
   async function locs(request: import("@playwright/test").APIRequestContext) {
-    const xml = await (await request.get("/sitemap.xml")).text();
+    const xml = await sitemapXml(request);
     return [...xml.matchAll(/<loc>(.*?)<\/loc>/g)].map((m) => m[1]!);
   }
 
@@ -74,7 +75,7 @@ test.describe("sitemap.xml", () => {
   });
 
   test("keeps an unclaimed listing in, at a lower priority", async ({ request }) => {
-    const xml = await (await request.get("/sitemap.xml")).text();
+    const xml = await sitemapXml(request);
     // 30,000 unclaimed pages are how a supplier first finds us.
     expect(xml).toContain(`/b/${UNCLAIMED}`);
     // But it has no catalogue, branches or reviews tab to submit.
@@ -84,7 +85,7 @@ test.describe("sitemap.xml", () => {
   test("leaves out an unclaimed listing whose licence has lapsed", async ({ request }) => {
     // Board 10g Q4: the page is `noindex`, so the sitemap does not ask for it.
     // `tests/integration/unclaimed-listing.test.ts` holds the two equal as sets.
-    const xml = await (await request.get("/sitemap.xml")).text();
+    const xml = await sitemapXml(request);
     expect(xml).not.toContain("/b/naif-ventilation-trading-llc<");
     expect(xml).toContain(`/b/${UNCLAIMED}<`);
   });

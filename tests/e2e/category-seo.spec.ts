@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
+import { sitemapXml } from "./_sitemap";
 
 /**
  * Handoff 5, step 2 — boards 6c and 10a.
@@ -66,8 +67,7 @@ test.describe("board 6c — the category index", () => {
     );
     expect(linked.length).toBeGreaterThan(0);
 
-    const sitemap = await page.request.get("/sitemap.xml");
-    const xml = await sitemap.text();
+    const xml = await sitemapXml(page.request);
     const inSitemap = linked.filter((href) => xml.includes(`${href}<`));
     // Some may qualify one day; none do at this size, and either way the page
     // may link more than the sitemap lists but never fewer.
@@ -182,7 +182,7 @@ test.describe("board 10a — the subcategory landing page", () => {
     expect(robots).toContain("noindex");
     expect(robots).toContain("follow");
 
-    const xml = await (await request.get("/sitemap.xml")).text();
+    const xml = await sitemapXml(request);
     expect(xml).not.toContain(SUB);
   });
 
@@ -204,7 +204,7 @@ test.describe("board 10a — the subcategory landing page", () => {
 
 test.describe("the sitemap", () => {
   test("carries the category index", async ({ request }) => {
-    const xml = await (await request.get("/sitemap.xml")).text();
+    const xml = await sitemapXml(request);
     expect(xml).toContain("/categories</loc>");
   });
 });

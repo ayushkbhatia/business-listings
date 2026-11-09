@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { sitemapXml } from "./_sitemap";
 
 /**
  * Handoff 5, step 6 — the technical layer, as a crawler sees it.
@@ -102,7 +103,7 @@ test.describe("criterion 6 — filtered views canonicalise", () => {
 
 test.describe("criterion 12 — the sitemap is only published pages", () => {
   async function locs(request: import("@playwright/test").APIRequestContext) {
-    const xml = await (await request.get("/sitemap.xml")).text();
+    const xml = await sitemapXml(request);
     return [...xml.matchAll(/<loc>(.*?)<\/loc>/g)].map((match) => match[1]!);
   }
 
@@ -147,7 +148,7 @@ test.describe("criterion 12 — the sitemap is only published pages", () => {
 
   test("names itself in robots.txt", async ({ request }) => {
     const body = await (await request.get("/robots.txt")).text();
-    expect(body).toMatch(/Sitemap: https?:\/\/.+\/sitemap\.xml/);
+    expect(body).toMatch(/Sitemap: https?:\/\/.+\/sitemap-index\.xml/);
   });
 });
 

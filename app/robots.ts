@@ -120,7 +120,14 @@ export default function robots(): MetadataRoute.Robots {
         crawlDelay: ANALYTICS_CRAWL_DELAY,
       },
     ],
-    sitemap: `${base}/sitemap.xml`,
+    /*
+       The index, not a chunk — T3.1.
+
+       `/sitemap.xml` is redirected here in `next.config.ts` for anybody who
+       types the conventional address, and this names the real one so a
+       crawler takes no hop to find the twelve-odd files it lists.
+    */
+    sitemap: `${base}/sitemap-index.xml`,
     host: base,
   };
 }
