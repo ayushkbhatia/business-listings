@@ -278,6 +278,8 @@ export async function Results({ query, basePath, category }: ResultsProps) {
               // verification filter the buyer set is dropped from the slot
               // entirely, and then there is nothing to explain.
               sponsored={Boolean(businesses?.sponsoredId)}
+              // T2.2: the depth limit, stated rather than discovered.
+              capped={Boolean(businesses?.capped)}
             />
           </div>
         )}

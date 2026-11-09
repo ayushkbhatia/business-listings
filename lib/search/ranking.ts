@@ -614,16 +614,33 @@ export function factorScores(
     */
     verificationTier: trustScore(signals.verificationTier),
     responseTime: scoreResponseTime(signals.responseTimeMedianMs),
-    specCompleteness:
+    /*
+       Clamped, like the other five.
+
+       This slot was the one factor that passed its input through untouched, and
+       the docblock above says "every factor, normalised to 0..1". Both sources
+       are a share of complete rows out of rows, so neither can exceed one from
+       the writer — but a bad backfill or a restored replica can, and 1.4 here
+       is 4.8 points of the goods vector, which is enough for one wrong row to
+       outrank the whole directory. Found by `score-sql-parity.test.ts`, which
+       asked the two implementations the same question with 1.4 in the column.
+    */
+    specCompleteness: unit(
       sources.specCompleteness === "scope"
         ? (signals.scopeCompleteness ?? UNKNOWN)
         : (signals.specCompleteness ?? UNKNOWN),
+    ),
     distance:
       sources.distance === "coverage"
         ? scoreCoverage(signals.coverageMatch ?? null)
         : scoreDistance(signals.distanceKm),
     planTier: scorePlan(signals.planMultiplier),
   };
+}
+
+/** A 0..1 signal, clamped. Shared by the slots that take one straight. */
+function unit(value: number): number {
+  return Math.min(1, Math.max(0, value));
 }
 
 function scoreCoverage(match: boolean | null): number {

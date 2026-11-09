@@ -4057,6 +4057,14 @@ export const en = {
   "browse.view_list": "List",
   "browse.view_grid": "Grid",
   "browse.range": "{from}–{to} of {total}",
+  /*
+     T2.2. The ranking orders two thousand rows deep and says so rather than
+     answering a deeper page with nothing — which is what it did: a page past
+     the old two-hundred-row window was empty beneath a total of 38,687. The
+     doctrine is `lib/search/directory.ts`'s: every caller reports the
+     shortfall.
+  */
+  "browse.capped": "Ranked {limit} deep. Narrow the filters to see further — the whole list is {total}.",
   "browse.sponsored_note": "Pro subscribers appear in the top slot for their subcategory and emirate.",
   "browse.sponsored_rates": "See placement rates →",
   "category.suppliers_in": "{category} suppliers in the UAE",

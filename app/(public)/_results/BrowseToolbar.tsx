@@ -3,6 +3,7 @@ import { StatusBadge } from "@/components/display";
 import { cn } from "@/lib/cn";
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
+import { MAX_PAGE_WINDOW } from "@/lib/db/queries/search-page";
 import { toSearchParams, type SearchQuery, type SearchSort, type SearchView } from "@/lib/search/query";
 import { crawlRel } from "@/lib/seo/crawl-policy";
 
@@ -35,6 +36,14 @@ export interface BrowseToolbarProps {
   showSort: boolean;
   /** Shown only when a sponsored card is actually in the list. */
   sponsored: boolean;
+  /**
+   * True when the requested page is past what the ranking orders — T2.2.
+   *
+   * The range line keeps saying what the whole list is, because it is a real
+   * count and a buyer narrowing their filters needs it. What changes is that
+   * the depth limit is stated instead of discovered as an empty page.
+   */
+  capped?: boolean;
 }
 
 function href(basePath: string, query: SearchQuery, overrides: Partial<SearchQuery>): string {
@@ -52,6 +61,7 @@ export function BrowseToolbar({
   pageSize,
   showSort,
   sponsored,
+  capped = false,
 }: BrowseToolbarProps) {
   const from = total === 0 ? 0 : (query.page - 1) * pageSize + 1;
   const to = Math.min(total, query.page * pageSize);
@@ -149,6 +159,21 @@ export function BrowseToolbar({
             {t("browse.sponsored_rates")}
           </Link>
         </div>
+      )}
+
+      {/*
+         T2.2. The ranking orders `MAX_PAGE_WINDOW` rows deep; past that the
+         honest answer is to say so. It used to answer with an empty page under
+         a total of thirty-eight thousand, which reads as a broken directory
+         rather than as a limit.
+      */}
+      {capped && (
+        <p className="mt-2 text-caption text-muted">
+          {t("browse.capped", {
+            limit: formatCount(MAX_PAGE_WINDOW),
+            total: formatCount(total),
+          })}
+        </p>
       )}
     </div>
   );

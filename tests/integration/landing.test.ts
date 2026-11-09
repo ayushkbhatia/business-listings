@@ -167,6 +167,79 @@ describe("criterion 2 — a new subcategory needs no code change", () => {
   }, 60_000);
 });
 
+describe("landingFacts counts what the list shows", () => {
+  it("counts a borrowed listing, because the list under it does — N14, T2.6", async () => {
+    /*
+       The header read `primaryCategoryId` alone while the list under it reads
+       primary **or** additional, so a supplier whose *second* trade is this
+       page's was in the list and out of the count. "218 suppliers in Al Quoz"
+       over a list of 240 is the first thing `CLAUDE.md` names under interface
+       honesty, and it sat in the one place a buyer cannot check it.
+
+       Decision N14: take the list's predicate.
+    */
+    const trade = await makeSubcategory("Borrowed");
+    const other = await makeSubcategory("Borrowed from");
+    const borrower = await makeListing({
+      categoryId: other.id,
+      tier: 1,
+      areaId: areaDubai,
+      emirate: "dubai",
+    });
+    await prisma.businessCategory.create({
+      data: { businessId: borrower, categoryId: trade.id },
+    });
+
+    const facts = await landingFacts({ categoryIds: [trade.id] });
+    expect(facts.listings).toBe(1);
+
+    // And the list agrees, which is the whole property.
+    const listed = await prisma.business.count({
+      where: {
+        suspendedAt: null,
+        publishedAt: { not: null },
+        OR: [
+          { primaryCategoryId: { in: [trade.id] } },
+          { categories: { some: { categoryId: { in: [trade.id] } } } },
+        ],
+      },
+    });
+    expect(listed).toBe(facts.listings);
+  });
+
+  it("agrees with its own SQL scope, so the two predicates cannot drift", async () => {
+    /*
+       Two of these figures — the emirate shares and the reply median — are
+       aggregates now rather than reads of every matched row, and they carry a
+       second, smaller predicate. This is the control on that pair: the SQL
+       scope has to match the Prisma one it sits beside.
+    */
+    const trade = await makeSubcategory("Scope parity");
+    for (const [tier, reply] of [
+      [2, 30 * 60_000],
+      [1, 90 * 60_000],
+      [0, null],
+    ] as [number, number | null][]) {
+      await makeListing({
+        categoryId: trade.id,
+        tier,
+        areaId: areaDubai,
+        emirate: "dubai",
+        ...(reply === null ? {} : { replyMs: reply }),
+      });
+    }
+
+    const facts = await landingFacts({ categoryIds: [trade.id] });
+    expect(facts.listings).toBe(3);
+    // The emirate share comes from the SQL scope; the listing count from the
+    // Prisma one. One supplier each, one emirate, so they have to agree.
+    expect(facts.emirates).toEqual([{ emirate: "dubai", listings: 3 }]);
+    // Two measurable medians, 30 and 90 minutes: the mean of the two middles.
+    expect(facts.replyMeasurable).toBe(2);
+    expect(facts.replyMedianMs).toBe(60 * 60_000);
+  });
+});
+
 describe("landingFacts", () => {
   it("counts a supplier in every emirate it has premises in", async () => {
     /*

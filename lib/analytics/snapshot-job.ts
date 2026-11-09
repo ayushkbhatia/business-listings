@@ -8,6 +8,7 @@ import {
   candidatesFrom,
   descendantsIndex,
   loadDirectory,
+  MAX_LISTINGS_JOB,
   placeIn,
   scopesOf,
   type Placed,
@@ -116,7 +117,16 @@ export async function runPositionSnapshots(now: Date = new Date()): Promise<Snap
      of "where does this listing sit in this category" is how the preview comes
      to promise a reorder the night then does not perform.
   */
-  const { rows, capped, unread } = await loadDirectory();
+  /*
+     The whole directory, not a request path's sample — T2.4.
+
+     This read `loadDirectory()`'s default of 20,000, which at 38,687 public
+     listings meant 18,687 sellers got no position that night and the shortfall
+     went into this job's own record rather than onto the screen that promises
+     the number. `MAX_LISTINGS_JOB` is a guard against a bulk import, not a
+     sample size.
+  */
+  const { rows, capped, unread } = await loadDirectory(MAX_LISTINGS_JOB);
   const candidates = candidatesFrom(rows, boosts);
   const context = { vectors, kinds };
 
@@ -147,7 +157,7 @@ export async function runPositionSnapshots(now: Date = new Date()): Promise<Snap
     // Only ever non-empty above `MAX_LISTINGS`, and then it names the shortfall
     // rather than the categories — the listings past the cap were never read, so
     // which categories they belonged to is not something this run knows.
-    skipped: capped ? [`${unread}+ listings past MAX_LISTINGS`] : [],
+    skipped: capped ? [`${unread} listings past MAX_LISTINGS_JOB`] : [],
     ranAt: now,
   };
 }
