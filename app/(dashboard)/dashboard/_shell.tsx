@@ -14,6 +14,7 @@ import { setupChrome, type SetupChrome } from "@/lib/setup/service";
 import { tabWhere } from "@/lib/leads/inbox";
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
+import { ViewAsStrip } from "./ViewAsStrip";
 
 /**
  * The seller frame, resolved once and shared by the three screens this handoff
@@ -374,14 +375,15 @@ export function SellerPage({
            * not theirs should never be able to forget it — and the countdown is
            * there because the cap is real: the session ends at thirty minutes
            * whether or not this tab is still open.
+           *
+           * It carries *Stop looking*, which it did not: the only way out was
+           * to find the console again from inside somebody else's dashboard.
            */
-          <p className="border-b border-warn-line bg-warn-surface px-[var(--section-pad)] py-2 text-caption text-warn-ink">
-            {t("dashboard.viewing_as", {
-              business: seat.businessName,
-              ticket: seat.viewingAs.ticketRef,
-              minutes: String(minutesLeft(seat.viewingAs.expiresAt)),
-            })}
-          </p>
+          <ViewAsStrip
+            business={seat.businessName}
+            ticket={seat.viewingAs.ticketRef}
+            minutes={minutesLeft(seat.viewingAs.expiresAt)}
+          />
         ) : seat.isDevSeat ? (
           <p className="border-b border-warn-line bg-warn-surface px-[var(--section-pad)] py-2 text-caption text-warn-ink">
             {t("dev.acting_as", { business: seat.businessName })}

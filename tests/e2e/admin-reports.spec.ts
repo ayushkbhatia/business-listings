@@ -36,12 +36,16 @@ test.describe("the queue", () => {
     const all = await chips.getByRole("link", { name: /^All \d+$/ }).innerText();
     expect(Number(/(\d+)/.exec(all)![1])).toBe(open);
 
+    /*
+       Only "All" is dropped. Escalated, flagged and over-SLA are states that
+       cut across every type, and they now sit outside this nav the way 4b's
+       overdue toggle does — so the nav is a partition and the filter that used
+       to remove them by label is gone. A chip that drifts back inside fails
+       this on the sum rather than being quietly excluded by its name.
+    */
     const perType = await chips.getByRole("link").allInnerTexts();
     const counted = perType
-      // Drop "All", the escalated chip, board 13c's flagged chip and board 4a's
-      // over-SLA chip: one is the total and the other three are states that
-      // cut across every type.
-      .filter((text) => !/^(All|Escalated|Flagged|Over SLA) /.test(text))
+      .filter((text) => !/^All /.test(text))
       .map((text) => Number(/(\d+)$/.exec(text)![1]))
       .reduce((sum, n) => sum + n, 0);
     expect(counted).toBe(open);

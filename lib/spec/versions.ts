@@ -6,6 +6,7 @@ import { staffMutation } from "@/lib/audit/staff-mutation";
 import type { Actor } from "@/lib/auth/roles";
 import { assertCan } from "@/lib/auth/can";
 import { readMappings, readOwnFields, type OwnField } from "@/lib/catalogue/overlay";
+import type { MessageKey } from "@/lib/i18n";
 import {
   applyDraft,
   diffDraft,
@@ -74,7 +75,7 @@ import {
 
 export type SpecResult<T = void> =
   | ({ ok: true } & (T extends void ? Record<never, never> : { value: T }))
-  | { ok: false; error: SpecError; message: string };
+  | { ok: false; error: SpecError; message: MessageKey; values?: Record<string, string> };
 
 export type SpecError =
   | "not_found"
@@ -84,7 +85,22 @@ export type SpecError =
   | "no_category"
   | "already";
 
-const fail = (error: SpecError, message: string) => ({ ok: false as const, error, message });
+/**
+ * A refusal names a key, not a sentence.
+ *
+ * These read back to an ops lead on board 4e, so they are user-visible strings
+ * — CLAUDE.md non-negotiable 5 — and they were thirteen English literals in
+ * this module. The module is `server-only` and renders nothing, so it carries
+ * the key and the screen resolves it; `app/(admin)/admin/spec-library/actions.ts`
+ * is the one caller and turns each into a refusal beside the control, where it
+ * used to `throw new Error(result.message)` and take the whole page down.
+ */
+const fail = (error: SpecError, message: MessageKey, values?: Record<string, string>) => ({
+  ok: false as const,
+  error,
+  message,
+  ...(values ? { values } : {}),
+});
 
 /* ── Staging ─────────────────────────────────────────────────────────────── */
 
@@ -130,7 +146,7 @@ export async function stageChange(
 ): Promise<SpecResult> {
   assertCan(actor, "taxonomy.write");
   const template = await loadDraft(templateId);
-  if (!template) return fail("not_found", "That template is not in the library.");
+  if (!template) return fail("not_found", "admin.spec.error.template_missing");
 
   const next = edit(readDraft(template.draftChanges));
   await prisma.specTemplate.update({
@@ -149,9 +165,9 @@ export async function stageAddField(
 ): Promise<SpecResult> {
   assertCan(actor, "taxonomy.write");
   const template = await loadDraft(templateId);
-  if (!template) return fail("not_found", "That template is not in the library.");
+  if (!template) return fail("not_found", "admin.spec.error.template_missing");
   if (template.fields.some((existing) => existing.key === field.key)) {
-    return fail("duplicate_key", `This template already has a field keyed ${field.key}.`);
+    return fail("duplicate_key", "admin.spec.error.duplicate_key", { key: field.key });
   }
 
   return stageChange(actor, templateId, (draft) => {
@@ -196,14 +212,14 @@ export interface Published {
  */
 export async function publishDraft(input: PublishInput): Promise<SpecResult<Published>> {
   const template = await loadDraft(input.templateId);
-  if (!template) return fail("not_found", "That template is not in the library.");
+  if (!template) return fail("not_found", "admin.spec.error.template_missing");
   if (template.status !== "live") {
-    return fail("not_live", "Only the live version can be added to. Publish that one first.");
+    return fail("not_live", "admin.spec.error.not_live");
   }
 
   const draft = readDraft(template.draftChanges);
   if (isEmptyDraft(draft)) {
-    return fail("empty_draft", "Nothing is staged on this template, so there is nothing to publish.");
+    return fail("empty_draft", "admin.spec.error.empty_draft");
   }
 
   const clones = await prisma.sellerTemplate.findMany({
@@ -435,16 +451,15 @@ export async function setFieldRequired(input: {
     where: { id: input.fieldId },
     select: { id: true, label: true, required: true, template: { select: { status: true } } },
   });
-  if (!field) return fail("not_found", "That field is not in the library.");
+  if (!field) return fail("not_found", "admin.spec.error.field_missing");
   if (field.template.status !== "live") {
-    return fail("not_live", "Only a field in the live version can be required.");
+    return fail("not_live", "admin.spec.error.field_not_live");
   }
   if (field.required === input.required) {
     return fail(
       "already",
-      input.required
-        ? `${field.label} is already required.`
-        : `${field.label} is not required.`,
+      input.required ? "admin.spec.error.already_required" : "admin.spec.error.already_optional",
+      { label: field.label },
     );
   }
 
@@ -480,7 +495,7 @@ export async function setFieldRequired(input: {
 
   return review
     ? { ok: true, value: review }
-    : fail("not_found", "That field is not in the library.");
+    : fail("not_found", "admin.spec.error.field_missing");
 }
 
 /* ── Creating a template ─────────────────────────────────────────────────── */
@@ -504,7 +519,7 @@ export async function createTemplate(input: {
     where: { id: input.categoryId },
     select: { id: true, defaultTemplateId: true },
   });
-  if (!category) return fail("no_category", "That subcategory is not in the taxonomy.");
+  if (!category) return fail("no_category", "admin.spec.error.category_missing");
 
   const id = await prisma.$transaction(async (tx) =>
     staffMutation(
@@ -569,7 +584,7 @@ export async function setTemplateCategories(input: {
     where: { id: input.templateId },
     select: { id: true, categories: { select: { categoryId: true } } },
   });
-  if (!template) return fail("not_found", "That template is not in the library.");
+  if (!template) return fail("not_found", "admin.spec.error.template_missing");
 
   const before = template.categories.map((link) => link.categoryId).sort();
   const after = [...new Set(input.categoryIds)].sort();
@@ -631,15 +646,12 @@ export async function setCategoryDefaultTemplate(input: {
       select: { templateId: true },
     }),
   ]);
-  if (!category) return fail("no_category", "That subcategory is not in the taxonomy.");
+  if (!category) return fail("no_category", "admin.spec.error.category_missing");
   if (!serving) {
-    return fail(
-      "not_found",
-      "That template does not serve this subcategory, so it cannot be the one offered first.",
-    );
+    return fail("not_found", "admin.spec.error.not_serving");
   }
   if (category.defaultTemplateId === input.templateId) {
-    return fail("already", "That template is already the one offered first here.");
+    return fail("already", "admin.spec.error.already_default");
   }
 
   await prisma.$transaction(async (tx) =>

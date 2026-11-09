@@ -212,6 +212,12 @@ export const CAPABILITIES = {
     source: "stated",
     why: "§07 staff table, \"Export finance data\": finance only. Was inferred as finance + ops lead. Reading does not change state, so it is not audited — but it is not everybody's to read either. The row read \"Export VAT / finance data\" until board 12e cut the VAT return; what it still covers is the revenue export and every commercial screen.",
   },
+  "account.export": {
+    roles: ["staff_ops_lead", "staff_finance"],
+    audited: false,
+    source: "inferred",
+    why: "Board 4f `B9` — the 22-column accounts CSV at `/admin/businesses/export`. It ran on `getStaffSeat()` alone, so every staff seat could take the whole account book: plan, paying, reply rate, quoted value and the upgrade signal for 41,000 listings, filtered or not. `/admin/leads` holds its list behind `contact_lead.platform.read` and this held nothing, which is the asymmetry. Not a moderator, for `contact_lead.platform.read`'s reason: moderation acts on what was published, and a commercial list is the asset most likely to walk out. Finance holds it because plan, paying and quoted value are the finance view of the same rows. Reading changes nothing, so it is not audited.\n\nThe *list* and the account detail stay on `requireStaff()` deliberately: `/admin/reports/:id`, `/admin/crm`, `/admin/subscriptions`, `/admin/dunning` and board 6h's curation screen all link a moderator into `/admin/businesses/:id`, and gating the page would break five paths to fix one file. The file is the asset. Not a row in §07; flag it if §07 gains one.",
+  },
   "placement.boost": {
     roles: OPS_LEAD_ONLY,
     audited: true,

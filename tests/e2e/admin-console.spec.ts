@@ -364,20 +364,53 @@ test.describe("boards 4b, 4d and 4e", () => {
 });
 
 test.describe("what taxonomy.write gates", () => {
-  test("a moderator cannot reach the spec library, and reads the taxonomy without writing it", async ({ browser }) => {
-    // §07 gives "edit taxonomy & spec templates" to ops lead alone.
+  test("a moderator reads the taxonomy and the spec library without writing either", async ({ browser }) => {
+    /*
+       §07 gives "edit taxonomy & spec templates" to ops lead alone, and board
+       4d split reading the tree from writing it (`taxonomy.read`): the moderator
+       deciding a category change needs the tree it is deciding against.
+
+       The spec library used to ask for `taxonomy.write` to open at all, so the
+       same seat that may read the tree got a 404 on the templates that tree's
+       subcategories carry — one capability pair answering two different ways on
+       two screens. It now opens for `taxonomy.read`, with every write panel
+       behind `taxonomy.write` and every action re-checking it for itself.
+    */
     const context = await browser.newContext({
       storageState: "tests/e2e/.auth/staff-moderator.json",
     });
     const page = await context.newPage();
-    expect((await page.goto("/admin/spec-library"))?.status()).toBe(404);
-    /*
-       Board 4d split reading the tree from writing it (`taxonomy.read`): the
-       moderator deciding a category change needs the tree it is deciding
-       against. What they are not offered is asserted in admin-moderator.spec.ts.
-    */
+
     expect((await page.goto("/admin/categories"))?.status()).toBe(200);
     await expect(page.getByRole("button", { name: "Add category" })).toHaveCount(0);
+
+    expect((await page.goto("/admin/spec-library"))?.status()).toBe(200);
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Spec library");
+    // The rows are there to read — and nothing on the page creates a template.
+    await expect(page.getByRole("cell", { name: /^v\d+\b/ }).first()).toBeVisible();
+    await expect(page.getByRole("link", { name: "New template" })).toHaveCount(0);
+
+    // Nor on the coverage view, where the create form lives.
+    await page.goto("/admin/spec-library?view=coverage");
+    await expect(page.getByRole("button", { name: "Create template" })).toHaveCount(0);
+
+    // Nor on the scope tab, whose five writes all take a reason.
+    await page.goto("/admin/spec-library?view=scope");
+    await expect(page.getByRole("button", { name: "Add a fee basis" })).toHaveCount(0);
+
+    // One template's own page reads, and offers no publish and no new field —
+    // the whole right-hand rail is a write surface.
+    await page.goto("/admin/spec-library");
+    // The row is the anchor — its name is the template's, not "Open …".
+    await page
+      .getByRole("table", { name: /Platform spec templates/i })
+      .getByRole("link")
+      .first()
+      .click();
+    await expect(page.getByRole("table", { name: /Fields in this platform template/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Publish v\d+/ })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Stage this field" })).toHaveCount(0);
+
     await context.close();
   });
 });

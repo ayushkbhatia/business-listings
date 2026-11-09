@@ -96,6 +96,14 @@ jobs:
       - name: Schema invariants
         run: pnpm check:schema
 
+      # Every staff state change writes an audit row with a written reason, and
+      # the exemptions are a list with a reason each. This is in `verify:fast`
+      # and was the one `check:*` the workflow never ran, so a PR that added an
+      # unaudited staff writer went green here and failed on somebody's laptop.
+      # See scripts/check-audit-coverage.mts.
+      - name: Audit coverage
+        run: pnpm check:audit
+
       # An ordered read that takes, skips, pages or picks a first row has to end
       # on a unique key, or Postgres chooses the rows. No database — it reads
       # schema.prisma and the source. See scripts/check-ordering.mts.

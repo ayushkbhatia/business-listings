@@ -255,6 +255,29 @@ export async function refetchRegister(
   if (asked === null) return { ok: false, error: "not_pending" };
 
   const read = await fetchTaxAgent(asked, now);
+  /*
+     Writes outside the audit fence, on purpose, and this is the written reason
+     — the shape `lib/verification/expiry-job.ts` uses for the other write in
+     this product that has none.
+
+     `staffMutation` records a *decision* and `AuditEvent.reason` is NOT NULL
+     because of it. This is not one: it asks the FTA register the same question
+     again and stores what came back. Nothing about the credential's state
+     moves, the row stays open, and `decide` — which does take the decision —
+     is audited with the reviewer's own sentence. Putting this through the fence
+     would need a reason the reviewer has not got: the button says *Fetch the
+     register again*, and "because I pressed fetch" is the synthetic reason
+     CLAUDE.md non-negotiable 3 exists to keep out of the log.
+
+     `check:audit` is per module, not per call site, and its own docblock says
+     so; this module audits through `decide`, so the scan passes it either way.
+     That is exactly why the reason is here rather than in a list.
+
+     What it does overwrite is the previous read, which leaves no trail of what
+     the register said before. If that matters — a reviewer refetching until
+     the answer suits — the answer is a `credential_register_read` row per
+     fetch, not an `AuditEvent`, and it is a schema change rather than a fence.
+  */
   const { count } = await prisma.credential.updateMany({
     where: { id: row.id, review: row.review, registerFetchedAt: row.registerFetchedAt },
     data: { registerFetch: read as unknown as Prisma.InputJsonValue, registerFetchedAt: now },

@@ -226,11 +226,13 @@ export default async function TemplatePage({ params }: { params: Promise<{ slug:
                     {t("template.platform_export", { count: fill.total })}
                   </Link>
                   {/*
-                    §6: until board 11d exists the export is a one-way
-                    convenience, and the copy must not promise the return leg.
+                    §6 said the export was one-way until board 11d existed. It
+                    shipped (board `11d`), so the return leg is real and named
+                    — without a link, because the importer is a plan
+                    entitlement and `404`s for a seller who has not got it.
                   */}
                   <span className="text-caption text-muted">
-                    {t("template.platform_no_return")}
+                    {t("template.platform_return")}
                   </span>
                 </div>
               </div>

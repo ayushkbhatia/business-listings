@@ -346,7 +346,8 @@ export default async function ServiceDetailPage({ params }: Params) {
                   href={`/b/${business.slug}?service=${encodeURIComponent(service.slug)}#enquire`}
                   className={buttonClassName()}
                 >
-                  {t("service_public.enquire")}
+                  {/* One string on every surface — CLAUDE.md, 16 Sep 2026. */}
+                  {t("listing.enquire")}
                 </Link>
               )}
             </div>

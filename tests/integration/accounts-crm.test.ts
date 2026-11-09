@@ -235,6 +235,49 @@ describe("thirty minutes is a fact the server checks", () => {
     expect(minutesLeft(new Date("2026-08-26T09:59:00Z"), now)).toBe(0);
   });
 
+  it("closes a session that ran out, at the minute it ran out, when the next one starts", async () => {
+    /*
+       The gap `currentSession` left. Expiry is applied on read, so a session
+       nobody pressed Stop on kept `endedAt = null` for ever: the cap held, and
+       `sessionsFor` — the record of who looked at this seller — drew it as
+       still open. `startViewAs` now closes it in the same transaction, stamped
+       with its own `expiresAt` rather than with the minute the tidying ran.
+
+       Started forty minutes ago, so it expires without anything sweeping it.
+    */
+    const first = await listing("Ran Out");
+    const second = await listing("Next One");
+    const fortyAgo = new Date(Date.now() - 40 * 60_000);
+
+    const stale = await startViewAs(
+      {
+        actor: actor(moderatorId, "staff_moderator"),
+        businessId: first.id,
+        ticketRef: TICKET,
+        reason: REASON,
+      },
+      fortyAgo,
+    );
+    if (!stale.ok) throw new Error("start failed");
+
+    const next = await startViewAs({
+      actor: actor(moderatorId, "staff_moderator"),
+      businessId: second.id,
+      ticketRef: "SUP-9100",
+      reason: REASON,
+    });
+    expect(next.ok, "an expired session must not block the next one").toBe(true);
+
+    const closed = await prisma.viewAsSession.findUniqueOrThrow({
+      where: { id: stale.sessionId },
+      select: { endedAt: true, expiresAt: true },
+    });
+    expect(closed.endedAt).not.toBeNull();
+    expect(closed.endedAt?.getTime()).toBe(closed.expiresAt.getTime());
+
+    await endViewAs(moderatorId);
+  });
+
   it("ends when somebody ends it", async () => {
     const business = await listing("Ended");
     await startViewAs({

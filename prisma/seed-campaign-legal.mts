@@ -142,25 +142,44 @@ never sold.
     effectiveFrom: new Date(Date.UTC(2026, 2, 1)),
     body: `
 A review system that anybody can post to is a review system nobody can use. This says who can
-write one, what happens to it, and when we remove one.
+write one, how long they have, what happens to it, and when we take one down.
 
 **Who can write a review.** Only a buyer who sent an enquiry through this platform, and only
-about a supplier who received it. One review per enquiry. There is no way to post a review
-without an enquiry behind it, which is why there is no way to buy one.
+about a supplier who engaged with it — one who replied, or one whose quote was accepted. One
+review per supplier per enquiry: an enquiry accepted across two suppliers carries a review for
+each of them, because they did two different pieces of work. Nobody can review their own
+business. There is no way to post a review without an enquiry behind it, which is why there is
+no way to buy one.
+
+**How long the window stays open.** Ninety days. It runs from the day a quote was accepted, or
+from the day this supplier first replied where no quote was accepted. For an ongoing engagement
+it runs from the last day of the term, so a year-long contract is reviewed at the end of it
+rather than in its first week; an engagement with no end date has no window and stays open. A
+supplier may ask for a review about a deal inside that same ninety days and no older — one
+number, not two.
 
 **Editing.** A buyer can edit their review for fourteen days. After that it stands.
 
-**Supplier replies.** A supplier may reply once, publicly, and cannot edit or delete the reply
-afterwards. They cannot delete the review, and they cannot ask us to.
+**Supplier replies.** A supplier may reply once, publicly, within twenty-eight days of the
+review, and cannot edit or delete the reply afterwards. They cannot delete the review, and they
+cannot ask us to. We will remove a reply that is abusive or that publishes somebody's private
+details, with a written reason, and the review it answered stays where it is.
 
-**Removal.** We remove a review only where it identifies a person, contains contact details,
-is about something other than the transaction, or is demonstrably not from the buyer it claims
-to be. Every removal is recorded with a written reason, and a removed review is gone from every
-public surface rather than shown struck through — it is not counted in any average or any
-total.
+**Removal.** We remove a review on four grounds, and no others: there was no trade behind the
+enquiry it claims; it is abusive; it publishes private information about a person; or it is
+demonstrably false. A fifth removal is ours rather than anybody's complaint — a review somebody
+was paid, discounted or rewarded for. Every removal is recorded with a written reason, and a
+removed review is gone from every public surface rather than shown struck through: not counted
+in any average, any total or any ranking.
 
-**What a paid subscription does not buy.** It does not remove a review, hide one, reorder them,
-or exclude a supplier from a list. Nobody at this company can be paid to take a review down.
+**Holds.** Where a review is disputed and the answer is not yet clear, we can hold it. A held
+review comes off every public surface and out of every average while the hold lasts, with a
+written reason, and goes back exactly as it was if the dispute is not upheld. A hold is not a
+removal and is not a judgement.
+
+**What a paid subscription does not buy.** It does not remove a review, hide one, hold one,
+reorder them, or exclude a supplier from a list. Nobody at this company can be paid to take a
+review down.
 `.trim(),
   },
 ];

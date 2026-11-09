@@ -225,27 +225,37 @@ export default async function ReportsPage({
                   })}
                 </ChipLink>
               ))}
-              <ChipLink
-                href={search({ escalated: !escalated })}
-                selected={escalated}
-                tone={view.all.some((entry) => entry.escalatedAt) ? "bad" : "default"}
-              >
-                {t("admin.reports.chip.escalated", {
-                  n: formatCount(view.all.filter((entry) => entry.escalatedAt !== null).length),
-                })}
-              </ChipLink>
-              <ChipLink href={search({ flagged: !flagged })} selected={flagged}>
-                {t("admin.reports.chip.flagged", { n: formatCount(view.flagged) })}
-              </ChipLink>
-              {/* Counted off the whole queue, the same figure as the header's badge. */}
-              <ChipLink
-                href={search({ late: !late })}
-                selected={late}
-                tone={view.overSla > 0 ? "bad" : "default"}
-              >
-                {t("admin.reports.chip.late", { n: formatCount(view.overSla) })}
-              </ChipLink>
             </nav>
+            {/*
+               Three toggles beside the types, and outside their nav — the shape
+               4b already has. The types partition the queue and add up to All;
+               escalated, flagged and late each cut across all of them and
+               combine with whichever type is selected, so a chip for one inside
+               that nav is read as a fourth type by anybody counting the links
+               and by the spec that counts them.
+
+               Late is counted off the whole queue, the same figure as the
+               header's badge.
+            */}
+            <ChipLink
+              href={search({ escalated: !escalated })}
+              selected={escalated}
+              tone={view.all.some((entry) => entry.escalatedAt) ? "bad" : "default"}
+            >
+              {t("admin.reports.chip.escalated", {
+                n: formatCount(view.all.filter((entry) => entry.escalatedAt !== null).length),
+              })}
+            </ChipLink>
+            <ChipLink href={search({ flagged: !flagged })} selected={flagged}>
+              {t("admin.reports.chip.flagged", { n: formatCount(view.flagged) })}
+            </ChipLink>
+            <ChipLink
+              href={search({ late: !late })}
+              selected={late}
+              tone={view.overSla > 0 ? "bad" : "default"}
+            >
+              {t("admin.reports.chip.late", { n: formatCount(view.overSla) })}
+            </ChipLink>
             <span className="text-body-sm text-muted">{t("admin.reports.sort")}</span>
           </div>
 

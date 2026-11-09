@@ -1070,7 +1070,9 @@ test.describe("board 1d-s — the storefront with the catalogue taken out of it"
     const buyer = await browser.newContext({ storageState: { cookies: [], origins: [] } });
     const page = await buyer.newPage();
     await page.goto(`${storefront}/s/vat-and-corporate-tax-filing`);
-    await page.getByRole("link", { name: "Enquire about this" }).click();
+    // One string on every surface since 16 Sep 2026 — `listing.enquire`. This
+    // read "Enquire about this", a second spelling of the compact form.
+    await page.getByRole("link", { name: "Ask for a quote" }).click();
     await page.waitForURL(/\?service=vat-and-corporate-tax-filing#enquire$/);
     await expect(page.getByRole("combobox", { name: "Which service" })).toHaveValue(
       "vat-and-corporate-tax-filing",
@@ -1122,7 +1124,7 @@ test.describe("board 1d-s — the storefront with the catalogue taken out of it"
     ).toHaveCount(0);
 
     await page.goto(`${storefront}/s/vat-and-corporate-tax-filing`);
-    await expect(page.getByRole("link", { name: "Enquire about this" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Ask for a quote" })).toHaveCount(0);
     await expect(page.getByText("This is your listing")).toBeVisible();
   });
 

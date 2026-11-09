@@ -132,6 +132,21 @@ describe("staff roles match board 4i", () => {
     expect(can(actor("staff_ops_lead"), "revenue.read")).toBe(false);
   });
 
+  it("holds the accounts export away from a moderator, and gives it to finance", () => {
+    /*
+       Not a §07 row. `/admin/businesses/export` is the 22-column account book
+       for every listing — plan, paying, reply rate, quoted value, upgrade
+       signal — and it ran on a staff seat alone while `/admin/leads` held its
+       list behind `contact_lead.platform.read`. Held for that row's reason:
+       moderation acts on what was published, and a commercial list is the
+       asset most likely to walk out. The list page stays open to every seat.
+    */
+    expect(can(actor("staff_moderator"), "account.export")).toBe(false);
+    expect(can(actor("staff_ops_lead"), "account.export")).toBe(true);
+    expect(can(actor("staff_finance"), "account.export")).toBe(true);
+    expect(CAPABILITIES["account.export"].audited).toBe(false);
+  });
+
   it("audits every staff row that changes state, ops lead included", () => {
     // §07: "Every ✓ in this table that changes state writes an AuditEvent with
     // a non-null reason. Ops lead has no exemption."
@@ -338,6 +353,7 @@ describe("every row cites the document", () => {
       (c) => CAPABILITIES[c].source === "inferred",
     );
     expect(inferred.sort()).toEqual([
+      "account.export",
       "business.close",
       "business.merge",
       "business.verification_tier.write",

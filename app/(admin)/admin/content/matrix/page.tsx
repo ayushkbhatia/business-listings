@@ -424,18 +424,22 @@ export default async function MatrixPage({ searchParams }: Props) {
               {t("matrix.opportunity_metric")}
             </p>
             {/*
-               The hand-off point, and it does not pretend to be wired. Board
-               6f puts the supply-gap campaign in 12d's scope and 12d is not
-               built, so the control names its owner instead of posting into
-               nothing and reporting success.
+               The hand-off point. It read "Send {count} to ops CRM — board 12d
+               is not built", and both halves are now false: 12d shipped
+               and `lib/crm/derive.ts` already reads this matrix's `recruit`
+               rows itself on the nightly run. So this states what happens
+               rather than offering a send — and offering one would be worse
+               than wrong, because derivation is the only writer of a CRM task
+               (`tests/unit/crm-writers.test.ts` holds that tree).
+
+               Text, not a link: this screen is content ops' and `/admin/crm`
+               is not necessarily theirs to open.
             */}
             <p className="mt-2.5 text-caption text-muted">
-              {t("matrix.send_crm", {
-                count: formatCount(
-                  areas.rows.filter((row) => row.status === "recruit").length,
-                ),
+              {t("matrix.crm_derived", {
+                count: areas.rows.filter((row) => row.status === "recruit").length,
               })}{" "}
-              — {t("matrix.send_crm_note")}
+              {t("matrix.crm_derived_note")}
             </p>
           </div>
         </div>

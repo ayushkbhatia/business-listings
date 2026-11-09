@@ -268,6 +268,10 @@ export async function setupHubState(
     photos: facts.photos,
     products: facts.products,
     seats: facts.teamSeats,
+    // The team task asks for two colleagues or the plan's whole allowance,
+    // whichever is smaller. Free carries one seat and `inviteSeat` refuses at
+    // the cap, so the flat two was unreachable by anything the seller could do.
+    seatCap: plan?.teamSeats ?? null,
     credentials: facts.credentials,
     servicesCounting: facts.servicesCounting,
     invitesSent,
@@ -395,7 +399,7 @@ export async function setupChrome(businessId: string): Promise<SetupChrome | nul
   });
   if (!business) return null;
 
-  const [services, media, products, invitesSent] = await Promise.all([
+  const [services, media, products, invitesSent, plan] = await Promise.all([
     // Board `8c-s` B4 — see `setupHubState` above.
     prisma.service.findMany({ where: { businessId }, select: COUNTABLE_SELECT }),
     prisma.media.findMany({
@@ -409,6 +413,13 @@ export async function setupChrome(businessId: string): Promise<SetupChrome | nul
        held open by somebody else's inaction is one they learn to ignore.
     */
     prisma.teamInvite.count({ where: { businessId, acceptedAt: null, revokedAt: null } }),
+    /*
+       The caps, through the snapshot, for one reason: the team task's target is
+       the smaller of two and the plan's seat allowance, and this read answers
+       the same question `setupHubState` does. One open count on two screens is
+       the rule this file already keeps for targets and estimates.
+    */
+    effectiveFor(businessId),
   ]);
 
   const facts: ProfileFacts = {
@@ -439,6 +450,7 @@ export async function setupChrome(businessId: string): Promise<SetupChrome | nul
     photos: facts.photos,
     products: facts.products,
     seats: facts.teamSeats,
+    seatCap: plan?.teamSeats ?? null,
     credentials: facts.credentials,
     servicesCounting: facts.servicesCounting,
     invitesSent,

@@ -67,7 +67,15 @@ export default async function SpecLibraryPage({
   searchParams: Promise<{ view?: string }>;
 }) {
   const seat = await requireStaff();
-  if (!can(seat.actor, "taxonomy.write")) notFound();
+  /*
+     Read by ops lead and moderator, written by ops lead — the split
+     `/admin/categories` has had since board 4d. This screen asked for
+     `taxonomy.write` to open at all, so the same seat that may read the
+     category tree got a 404 on the templates that tree's subcategories carry.
+     One capability pair, two screens, one answer.
+  */
+  if (!can(seat.actor, "taxonomy.read")) notFound();
+  const canWrite = can(seat.actor, "taxonomy.write");
 
   const [header, rows, gaps, proposals, scope, badges] = await Promise.all([
     libraryHeader(),
@@ -99,21 +107,25 @@ export default async function SpecLibraryPage({
           })}
         </span>
       }
-      actions={
-        /*
-           `+ New template` on the board. It goes to the coverage view rather
-           than opening a form here, because a template needs a subcategory and
-           coverage is where the ones that need a template are already named and
-           ranked. The board put its `Create` in a template table's `VERSION`
-           column instead.
-        */
-        <Link
-          href="/admin/spec-library?view=coverage"
-          className={buttonClassName({ variant: "secondary", size: "sm" })}
-        >
-          {t("admin.spec.new.title")}
-        </Link>
-      }
+      {...(canWrite
+        ? {
+            actions: (
+              /*
+                 `+ New template` on the board. It goes to the coverage view
+                 rather than opening a form here, because a template needs a
+                 subcategory and coverage is where the ones that need a template
+                 are already named and ranked. The board put its `Create` in a
+                 template table's `VERSION` column instead.
+              */
+              <Link
+                href="/admin/spec-library?view=coverage"
+                className={buttonClassName({ variant: "secondary", size: "sm" })}
+              >
+                {t("admin.spec.new.title")}
+              </Link>
+            ),
+          }
+        : {})}
     >
       {/*
         Tabs as links rather than buttons. Four different entities, and the
@@ -170,14 +182,16 @@ export default async function SpecLibraryPage({
       <div className="mt-[var(--gutter)] flex flex-col gap-[var(--gutter)] xl:flex-row">
         <div className="min-w-0 flex-1">
           {view === "templates" && <TemplateTable rows={rows} />}
-          {view === "scope" && <ScopeTab library={scope} specs={header.templates} />}
+          {view === "scope" && (
+            <ScopeTab library={scope} specs={header.templates} canWrite={canWrite} />
+          )}
           {view === "drafts" && <TemplateTable rows={drafts} />}
           {view === "coverage" && <CoverageTable gaps={gaps.gaps} />}
           {view === "proposed" && <ProposedTable rows={proposals} />}
         </div>
 
         <div className="flex w-full shrink-0 flex-col gap-[var(--gutter)] xl:w-[352px]">
-          {view === "coverage" ? (
+          {view === "coverage" && canWrite ? (
             <NewTemplatePanel
               subcategories={gaps.gaps
                 .filter((gap) => !gap.held)

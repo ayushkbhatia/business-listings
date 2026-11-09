@@ -65,7 +65,7 @@ export const MATRIX_GROUPS = [
   },
   {
     key: "commercial",
-    capabilities: ["subscription.credit", "plan.entitlements.write", "revenue.read"],
+    capabilities: ["subscription.credit", "plan.entitlements.write", "revenue.read", "account.export"],
   },
   {
     key: "staff",

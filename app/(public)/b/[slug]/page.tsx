@@ -77,6 +77,30 @@ interface Params {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }
 
+/**
+ * The meta description, per kind — the sentence a search result prints under
+ * the name.
+ *
+ * One pair promised *"branches and catalogue"* on every storefront, which a
+ * services firm has neither of, and called it a *supplier*. `sellsKind` already
+ * decides what the page renders; it decides this too. A switch rather than a
+ * built key, so every branch is a literal `t()` can check.
+ *
+ * `head` is whether there is a published branch to name: without one the area
+ * and emirate are empty and the sentence read "in , ." on every row the
+ * importer could not place.
+ */
+function descriptionKey(kind: string, head: boolean) {
+  if (kind === "services") {
+    return head ? "seo.business_description_services" : "seo.business_description_services_no_place";
+  }
+  if (kind === "both") {
+    return head ? "seo.business_description_both" : "seo.business_description_both_no_place";
+  }
+  // `unset` reads as goods, as it does everywhere else the fork is asked.
+  return head ? "seo.business_description" : "seo.business_description_no_place";
+}
+
 export async function generateMetadata({ params, searchParams }: Params): Promise<Metadata> {
   const { slug } = await params;
   /*
@@ -127,19 +151,13 @@ export async function generateMetadata({ params, searchParams }: Params): Promis
           ? t("seo.unclaimed_state_checked")
           : t("seo.unclaimed_state"),
       ].join(" ")
-    : head
-      ? t("seo.business_description", {
-          name: business.displayName,
-          category: business.primaryCategory.name,
-          area,
-          emirate,
-          verification: t(tierSpec(business.verificationTier).checkedKey as never) + ".",
-        })
-      : t("seo.business_description_no_place", {
-          name: business.displayName,
-          category: business.primaryCategory.name,
-          verification: t(tierSpec(business.verificationTier).checkedKey as never) + ".",
-        });
+    : t(descriptionKey(business.sellsKind, head !== undefined), {
+        name: business.displayName,
+        category: business.primaryCategory.name,
+        area,
+        emirate,
+        verification: t(tierSpec(business.verificationTier).checkedKey as never) + ".",
+      });
 
   return {
     title: `${business.displayName} — ${business.primaryCategory.name}`,

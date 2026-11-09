@@ -69,8 +69,17 @@ test.describe("board 2a — find or add your business", () => {
     // An unclaimed record has no display name — nobody has set one. The legal
     // name with its authority prefix is how a claimant confirms they have found
     // the right record among near-identical trade names.
+    //
+    // Scoped to an unclaimed row on purpose. A *claimed* row now prints its
+    // display name, because the dispute action beside it leads to a storefront
+    // that prints the same one, and a row naming one and landing on the other
+    // is the defect this project keeps finding.
     await page.goto("/onboarding/claim?q=Al+Wadi");
-    const row = results(page).getByRole("listitem").first();
+    const row = results(page)
+      .getByRole("listitem")
+      // A word boundary, so the `Unclaimed` and `Claim pending` badges stay in.
+      .filter({ hasNotText: /\bClaimed\b/ })
+      .first();
     await expect(row).toContainText(/LLC|FZE/);
     await expect(row).toContainText(/[A-Z]{3,6}-\d+/);
   });

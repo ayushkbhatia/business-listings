@@ -1,8 +1,10 @@
 import "server-only";
+import { Prisma } from "@/lib/db/generated/client";
 import { prisma } from "@/lib/db/client";
 import "@/lib/audit/prisma-writer";
 import { staffMutation } from "@/lib/audit/staff-mutation";
 import type { Actor } from "@/lib/auth/roles";
+import type { MessageKey } from "@/lib/i18n";
 
 /**
  * Board 12f — looking through a seller's eyes.
@@ -37,12 +39,29 @@ import type { Actor } from "@/lib/auth/roles";
 
 export const VIEW_AS_MINUTES = 30;
 
+/**
+ * The window the desk's count is taken over.
+ *
+ * The meta line read *"{count} sessions in the last while"* over the twenty
+ * rows the panel had fetched — a page cap wearing a total. A count needs a
+ * window, and thirty days is the one a support desk is asked about.
+ */
+export const VIEW_AS_RECENT_DAYS = 30;
+
 export type StartResult =
   | { ok: true; sessionId: string; expiresAt: Date }
   | {
       ok: false;
       error: "not_found" | "already_viewing" | "needs_a_ticket";
-      message: string;
+      /*
+         A key, not a sentence. These three reach the screen, so they are
+         user-visible strings — CLAUDE.md non-negotiable 5 — and they were
+         English literals in a `server-only` module that renders nothing. The
+         fix line travels with them, because `Alert` with a `bad` tone owes the
+         reader a way out.
+      */
+      message: MessageKey;
+      fix: MessageKey;
     };
 
 export interface StartInput {
@@ -59,7 +78,8 @@ export async function startViewAs(input: StartInput, now = new Date()): Promise<
     return {
       ok: false,
       error: "needs_a_ticket",
-      message: "Name the ticket this is for. It goes on the audit row, and it is the reason.",
+      message: "admin.support.error.needs_ticket",
+      fix: "admin.support.error.needs_ticket_fix",
     };
   }
 
@@ -68,7 +88,12 @@ export async function startViewAs(input: StartInput, now = new Date()): Promise<
     select: { id: true, displayName: true },
   });
   if (!business) {
-    return { ok: false, error: "not_found", message: "That business is not in the directory." };
+    return {
+      ok: false,
+      error: "not_found",
+      message: "admin.support.error.business_missing",
+      fix: "admin.support.not_found_fix",
+    };
   }
 
   const live = await currentSession(input.actor.id, now);
@@ -76,15 +101,43 @@ export async function startViewAs(input: StartInput, now = new Date()): Promise<
     return {
       ok: false,
       error: "already_viewing",
-      message:
-        "You are already viewing another account. End that session first — two at once means nobody can say whose account is on screen.",
+      message: "admin.support.error.already_viewing",
+      fix: "admin.support.error.already_viewing_fix",
     };
   }
 
   const expiresAt = new Date(now.getTime() + VIEW_AS_MINUTES * 60_000);
 
-  const sessionId = await prisma.$transaction(async (tx) =>
-    staffMutation(
+  const sessionId = await prisma.$transaction(async (tx) => {
+    /*
+       Close whatever has run out before opening the next one.
+
+       `currentSession` applies expiry on read, so a session nobody pressed
+       *Stop* on stays `ended_at IS NULL` for ever: the thirty-minute cap holds,
+       but `sessionsFor` — the account-health screen's list, which is the record
+       of who looked at this seller — draws it as still open, and `endViewAs`
+       would later stamp it with the hour somebody happened to press Stop on a
+       different session rather than the minute it actually ended.
+
+       `ended_at = expires_at`, so the row says when it ended rather than when
+       it was tidied. Raw SQL because that is a column-to-column assignment and
+       Prisma's `data` takes values, not field references. In the same
+       transaction as the create, so a start either closes the old one or does
+       not happen.
+
+       No audit row: the end was decided when the session started — the length
+       is on the start row's `after` — and `AuditEvent.actorId` is NOT NULL
+       because the log holds decisions. This is the clock, not a decision.
+    */
+    await tx.$executeRaw(Prisma.sql`
+      UPDATE view_as_session
+         SET ended_at = expires_at
+       WHERE staff_id = ${input.actor.id}::uuid
+         AND ended_at IS NULL
+         AND expires_at <= ${now}
+    `);
+
+    return staffMutation(
       {
         actor: input.actor,
         capability: "support.view_as",
@@ -112,8 +165,8 @@ export async function startViewAs(input: StartInput, now = new Date()): Promise<
           after: { ticketRef, expiresAt: expiresAt.toISOString(), minutes: VIEW_AS_MINUTES },
         };
       },
-    ),
-  );
+    );
+  });
 
   return { ok: true, sessionId, expiresAt };
 }

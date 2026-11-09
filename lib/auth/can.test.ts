@@ -149,7 +149,17 @@ describe("the matrix", () => {
        `crm_contact_reveal`). `scripts/check-audit-coverage.mts` exempts the
        service with the same reason.
     */
-    const NOT_DIRECTORY_STATE = new Set<string>(["crm.work"]);
+    const NOT_DIRECTORY_STATE = new Set<string>([
+      "crm.work",
+      /*
+         `account.export` takes a copy of the accounts list. It reads — the
+         name is a verb about the file rather than about the directory, so the
+         `.read` suffix test above cannot see it, and it changes nothing to
+         audit. It is held behind a capability for who may take the whole book,
+         not because taking it is a decision.
+      */
+      "account.export",
+    ]);
     for (const capability of CAPABILITY_LIST) {
       const spec = CAPABILITIES[capability];
       const isRead = capability.endsWith(".read");

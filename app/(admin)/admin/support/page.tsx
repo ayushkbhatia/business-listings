@@ -3,7 +3,12 @@ import { Panel } from "@/components/structure";
 import { requireStaff } from "@/lib/auth/staff";
 import { can } from "@/lib/auth/can";
 import { prisma } from "@/lib/db/client";
-import { currentSession, minutesLeft, VIEW_AS_MINUTES } from "@/lib/support/view-as";
+import {
+  currentSession,
+  minutesLeft,
+  VIEW_AS_MINUTES,
+  VIEW_AS_RECENT_DAYS,
+} from "@/lib/support/view-as";
 import { formatCount, formatDate } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { AdminPage, getAdminNavBadges } from "../../_shell";
@@ -24,7 +29,10 @@ export default async function SupportPage() {
   const seat = await requireStaff();
   if (!can(seat.actor, "support.view_as")) notFound();
 
-  const [session, recent, badges] = await Promise.all([
+  const now = new Date();
+  const since = new Date(now.getTime() - VIEW_AS_RECENT_DAYS * 86_400_000);
+
+  const [session, recent, inWindow, badges] = await Promise.all([
     currentSession(seat.actor.id),
     prisma.viewAsSession.findMany({
       orderBy: [{ startedAt: "desc" }, { id: "desc" }],
@@ -38,6 +46,13 @@ export default async function SupportPage() {
         business: { select: { displayName: true } },
       },
     }),
+    /*
+       A count, over a window it states. The meta line read "{count} sessions in
+       the last while" off `recent.length` — the panel's page cap of twenty
+       wearing a total, which is the pattern this project calls a padded number.
+       One more count, and the sentence is true.
+    */
+    prisma.viewAsSession.count({ where: { startedAt: { gte: since } } }),
     getAdminNavBadges(seat),
   ]);
 
@@ -50,7 +65,11 @@ export default async function SupportPage() {
       eyebrow={t("admin.support.eyebrow")}
       meta={
         <span className="text-caption text-muted">
-          {t("admin.support.meta", { count: formatCount(recent.length) })}
+          {t("admin.support.meta", {
+            count: inWindow,
+            n: formatCount(inWindow),
+            days: String(VIEW_AS_RECENT_DAYS),
+          })}
         </span>
       }
     >

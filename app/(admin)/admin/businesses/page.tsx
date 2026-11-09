@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Button, Input, Select, buttonClassName } from "@/components/primitives";
 import { TableToolbar } from "@/components/structure";
+import { can } from "@/lib/auth/can";
 import { requireStaff } from "@/lib/auth/staff";
 import { prisma } from "@/lib/db/client";
 import { formatCount, formatPercent } from "@/lib/format";
@@ -82,6 +83,13 @@ export default async function BusinessesPage({ searchParams }: { searchParams: P
     atRiskActive ? { ...filter, health: undefined } : { ...filter, health: "churn_risk", sort: "reply_rate" },
   )}`;
   const exportHref = `/admin/businesses/export${currentQuery ? `?${currentQuery}` : ""}`;
+  /*
+     The route answers 404 to a seat without `account.export`, so this only
+     keeps the console from offering a control that cannot work. The list stays
+     open to every staff seat — five screens link a moderator into an account
+     — and the 22-column file is the part held back.
+  */
+  const canExport = can(seat.actor, "account.export");
   const threshold = formatPercent(CHURN_RISK_BELOW);
 
   return (
@@ -109,9 +117,11 @@ export default async function BusinessesPage({ searchParams }: { searchParams: P
             save={saveSegmentAction}
             remove={deleteSegmentAction}
           />
-          <a href={exportHref} download className={buttonClassName({ variant: "secondary" })}>
-            {filtered ? t("admin.businesses.export_filtered") : t("admin.businesses.export")}
-          </a>
+          {canExport && (
+            <a href={exportHref} download className={buttonClassName({ variant: "secondary" })}>
+              {filtered ? t("admin.businesses.export_filtered") : t("admin.businesses.export")}
+            </a>
+          )}
         </span>
       }
     >
