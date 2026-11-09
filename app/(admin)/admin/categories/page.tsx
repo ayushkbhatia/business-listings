@@ -93,6 +93,7 @@ export default async function TaxonomyPage({
         asks: landing.asks.map((ask) => ({ question: ask.question, why: ask.why })),
         openedAt: landing.openedAt ? landing.openedAt.toISOString() : null,
         publishedPages: landing.publishedPages,
+        addressablePages: landing.addressablePages,
       }
     : null;
 

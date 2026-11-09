@@ -5,7 +5,7 @@ import { useId, useState } from "react";
 import { Alert } from "@/components/display";
 import { Button, FieldError, Input, Label, Select, Textarea, Toggle } from "@/components/primitives";
 import { CREDENTIAL_KINDS } from "@/lib/credentials/kinds";
-import { formatDate } from "@/lib/format";
+import { formatCount, formatDate } from "@/lib/format";
 import { t, type MessageKey } from "@/lib/i18n";
 import {
   ASK_QUESTION_MAX,
@@ -48,6 +48,8 @@ export interface ServicesLandingPanelView {
   asks: CategoryAskInput[];
   openedAt: string | null;
   publishedPages: number;
+  /** Every address this trade can produce — T3.8, stated before the press. */
+  addressablePages: number;
 }
 
 const INHERIT = "";
@@ -341,7 +343,20 @@ export function ServicesLandingPanel({
           )}
           description={
             switching
-              ? t("taxonomy.services_landing.open.body")
+              ? /*
+                   T3.8 — what one press costs, stated. The surface this trade
+                   can address, and how much of it staff have written; a page
+                   still has to clear its floors, which the string says so that
+                   the first number is not read as a promise.
+                */
+                view.publishedPages === 0
+                ? t("taxonomy.services_landing.open.body_none", {
+                    addressable: formatCount(view.addressablePages),
+                  })
+                : t("taxonomy.services_landing.open.body", {
+                    addressable: formatCount(view.addressablePages),
+                    published: formatCount(view.publishedPages),
+                  })
               : view.publishedPages === 0
                 ? t("taxonomy.services_landing.close.body_none")
                 : t("taxonomy.services_landing.close.body", { count: view.publishedPages })

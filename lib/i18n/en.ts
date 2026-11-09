@@ -13254,7 +13254,19 @@ export const en = {
   "taxonomy.services_landing.template_closed": "Closed — no landing page in this trade can be live",
   "taxonomy.services_landing.template_note": "Rolled out one trade at a time: open one, check it in Search Console, then open the next.",
   "taxonomy.services_landing.open.title": "Open the services template for {name}?",
-  "taxonomy.services_landing.open.body": "Published pages in this trade that clear their floors go live on the next request, and enter the sitemap.",
+  /*
+     T3.8. It said what opening does and never what it costs. The services
+     landing class is roughly 1,267 addressable URLs across the taxonomy with
+     zero live, and this column is the only brake — so a control whose blast
+     radius is unknown is a control somebody presses to find out.
+
+     Two numbers, and they are different questions: what this trade *can*
+     address, and what staff have published in it. Neither is what goes live,
+     because a page also has to clear its floors — which the second sentence
+     says rather than leaving the first to be read as a promise.
+  */
+  "taxonomy.services_landing.open.body": "This trade can address {addressable} pages — one per area and one per emirate. {published} of them are published, and those that also clear their floors go live on the next request and enter the sitemap.",
+  "taxonomy.services_landing.open.body_none": "This trade can address {addressable} pages — one per area and one per emirate. None is published yet, so opening the template puts nothing on the site until a page is written.",
   "taxonomy.services_landing.open.confirm": "Open the template",
   "taxonomy.services_landing.close.title": "Close the services template for {name}?",
   "taxonomy.services_landing.close.body": {
