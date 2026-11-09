@@ -7,6 +7,7 @@ import { getDirectoryStats } from "@/lib/db/queries";
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { Prose } from "@/app/(public)/_landing/Blocks";
+import { categoryPath } from "@/lib/seo/category-path";
 
 /**
  * Board 10i — a campaign landing page.
@@ -42,7 +43,8 @@ async function find(slug: string) {
       body: true,
       metaTitle: true,
       metaDescription: true,
-      ctaCategory: { select: { slug: true, name: true } },
+      // The parent, because a subcategory's address carries it — T3.4.
+      ctaCategory: { select: { slug: true, name: true, parent: { select: { slug: true } } } },
     },
   });
 }
@@ -74,7 +76,17 @@ export default async function CampaignPage({ params }: Props) {
      `proxy.ts` captures it for all of them.
   */
   const stats = await getDirectoryStats();
-  const ctaHref = campaign.ctaCategory ? `/c/${campaign.ctaCategory.slug}` : "/search";
+  /*
+     T3.4. This built `/c/${slug}` for any category, which is a 404 for every
+     subcategory — on the single conversion path of a page bought traffic
+     lands on.
+  */
+  const ctaHref = campaign.ctaCategory
+    ? categoryPath({
+        slug: campaign.ctaCategory.slug,
+        parentSlug: campaign.ctaCategory.parent?.slug ?? null,
+      })
+    : "/search";
   const ctaLabel = campaign.ctaCategory
     ? t("campaign.cta_category", { category: campaign.ctaCategory.name })
     : t("campaign.cta_search");
