@@ -202,7 +202,7 @@ defects is invisible at 430 rows and unavoidable at 41,000.
 | # | Task | Gap | Anchor | Size |
 |---|---|---|---|---|
 | T3.1 | Split the sitemap with `generateSitemaps()` into an index, chunked by class and id range | G28 | `app/sitemap.ts` | M |
-| T3.2 | Separate the cacheable shell from the `searchParams`-dependent body on `/b/[slug]`, `/c/*` and `/[emirate]/[area]*`, so `revalidate` stops being inert on the three highest-traffic template classes | G30 | those route files | L |
+| T3.2 | ~~Separate the cacheable shell from the `searchParams`-dependent body~~ — **measured and reframed, see `docs/render-cost-at-41k.md`.** `revalidate` is inert for two different reasons: `/c/*` and the landing pages are dynamic because their body *is* the query string, and `/b/[slug]` is dynamic because `getActor()` makes it per-viewer and must stay so. Neither is a shell/body split; both want `cacheComponents`, which is its own migration | G30 | those route files | L → own sprint |
 | T3.3 | Audit the crawl surface at 41,000: `robots.txt`, `noindex` on filtered views, canonical targets, and the publish floor. Confirm the facet-combination trap is closed on the real taxonomy, not the seed's | — | `app/robots.ts`, `lib/seo/` | M |
 | T3.4 | Fix 10a's zero-state Browse link, which builds `/c/{sub}` and 404s; the same defect exists in `/lp/:campaign`'s call to action | G— | `lib/seo/`, `lp/[campaign]/page.tsx` | S |
 | T3.5 | Enforce 6b's five-member curated-list floor where the comment already argues for it | G— | `best/[slug]/page.tsx:94`, `criteria.ts:34` | S |
