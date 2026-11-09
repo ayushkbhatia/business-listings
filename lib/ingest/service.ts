@@ -13,7 +13,7 @@ import { buildBusinessSearchText } from "@/lib/search/index-text";
 import { normaliseLicenceNumber } from "@/lib/verification/licence/number";
 import { buildMatchIndex, bestMatch } from "@/lib/dedupe/match";
 import { licenceDigits } from "@/lib/dedupe/similarity";
-import { loadMatchListings, readBands, recordAsListing } from "@/lib/dedupe/source";
+import { loadCandidateListings, readBands, recordAsListing } from "@/lib/dedupe/source";
 import { runMergePlan, unwindRunTx, withdrawRunPairsTx } from "@/lib/dedupe/resolve";
 import { can } from "@/lib/auth/can";
 import { $Enums, Prisma } from "@/lib/db/generated/client";
@@ -66,6 +66,17 @@ export { KEPT_BECAUSE, type KeptBecause, type RollbackManifest };
 
 /** B4. Every run is reversible for this long after its first publish. */
 export const REVERSIBLE_DAYS = 30;
+
+/**
+ * Records matched against one candidate read — T4.4.
+ *
+ * Smaller than the write chunk's five hundred, and for a different reason: the
+ * candidate query's cost is in the number of **distinct words** this many
+ * records carry, each of which is a trigram lookup. Two hundred records is a
+ * few hundred words, which is one indexed read of a sensible size; five hundred
+ * was measurably worse for no fewer candidates.
+ */
+const MATCH_CHUNK = 200;
 
 const DAY_MS = 86_400_000;
 
@@ -334,7 +345,7 @@ async function prepareStage(
     };
   });
 
-  const [categories, mappings, listings, bands, areas, separations] = await Promise.all([
+  const [categories, mappings, bands, areas, separations] = await Promise.all([
     prisma.category.findMany({ select: { id: true, slug: true } }),
     prisma.licenceActivityMapping.findMany({
       where: { activityKey: { in: [...new Set(records.map((r) => r.key).filter(Boolean))] } },
@@ -348,7 +359,6 @@ async function prepareStage(
        matched licence numbers exactly and nothing else, so `DED-441908-01`
        staged as a new company beside `DED-441908`.
     */
-    loadMatchListings(),
     readBands(),
     prisma.area.findMany({ select: { id: true, name: true, emirate: true } }),
     /*
@@ -361,68 +371,108 @@ async function prepareStage(
 
   const categoryBySlug = new Map(categories.map((category) => [category.slug, category.id]));
   const mappedCategory = new Map(mappings.map((m) => [m.activityKey, m.categoryId]));
-  const index = buildMatchIndex(listings);
   const areaById = new Map(areas.map((area) => [area.id, area]));
 
   // The first row of the file carrying a licence keeps it; a later one repeats it.
   const firstRowFor = new Map<string, number>();
   let belowFloor = 0;
+  const staged: StagedRow[] = [];
 
-  const staged = records.map((row) => {
-    let duplicateOfId: string | null = null;
-    let duplicateOfRow: number | null = null;
-    let pair: { score: number; band: "certain" | "probable"; signals: unknown } | null = null;
+  /*
+     T4.4 — matched a chunk at a time, against the candidates for that chunk.
 
-    if (row.verdict.disposition !== "rejected") {
-      const earlier = row.licence ? firstRowFor.get(row.licence) : undefined;
-      if (row.licence && earlier !== undefined) {
-        // An exact repeat inside one file is the file repeating itself, not a
-        // company to argue about. It does not reach the dedupe queue.
-        duplicateOfRow = earlier;
-      } else {
-        if (row.licence) firstRowFor.set(row.licence, row.rowNumber);
-        const emirate = normaliseEmirate(row.record.emirate);
-        const areaId = resolveEnquiryArea(row.record.areaName, emirate, areas);
-        const authority = effectiveAuthority(row.record.licenceAuthority, source, KNOWN_AUTHORITIES);
-        const result = bestMatch(
-          recordAsListing({
-            id: String(row.rowNumber),
-            tradeName: row.record.tradeName ?? null,
-            licenceNumber: row.record.licenceNumber ?? null,
-            authority: authority.code ?? authority.stated ?? source,
-            emirate,
-            areaId,
-            areaName: areaId ? (areaById.get(areaId)?.name ?? null) : (row.record.areaName ?? null),
-            phone: row.record.phone ?? null,
-            activityKey: row.key,
-          }),
-          index,
-          bands,
-          separations.get(licenceDigits(row.record.licenceNumber ?? "")) ?? new Set(),
-        );
-        if (result.match) {
-          duplicateOfId = result.match.listing.id;
-          pair = {
-            score: result.match.similarity.score,
-            band: result.match.similarity.band as "certain" | "probable",
-            signals: result.match.similarity.signals,
-          };
-        } else if (result.nearMiss) {
-          belowFloor += 1;
+     This used to call `loadMatchListings()`: every listing in the directory,
+     with all of its locations and each location's area, and an in-process
+     blocking index over all of it — built here and again at publish. At 41,000
+     listings that is tens of megabytes held in a serverless function and
+     150,000 keys indexed to answer questions about a few hundred records, with
+     a cost that grows with the directory rather than with the file.
+
+     `loadCandidateListings` asks the database the same question the blocking
+     index answered — which listings share a licence, a phone or an identifying
+     word with these records — over three indexed reads. The matcher is
+     untouched: the index is still built with `buildMatchIndex` and the pair is
+     still found by `bestMatch`, from a smaller set.
+  */
+  for (let i = 0; i < records.length; i += MATCH_CHUNK) {
+    const slice = records.slice(i, i + MATCH_CHUNK);
+
+    /*
+       Each record in the matcher's shape, built once: the candidate query reads
+       their blocking keys and `bestMatch` then compares against them. A record
+       the classifier rejected outright is left out — it will never be paired,
+       so its words should not widen the query either.
+    */
+    const asListing = new Map(
+      slice
+        .filter((row) => row.verdict.disposition !== "rejected")
+        .map((row) => {
+          const emirate = normaliseEmirate(row.record.emirate);
+          const areaId = resolveEnquiryArea(row.record.areaName, emirate, areas);
+          const authority = effectiveAuthority(row.record.licenceAuthority, source, KNOWN_AUTHORITIES);
+          return [
+            row.rowNumber,
+            recordAsListing({
+              id: String(row.rowNumber),
+              tradeName: row.record.tradeName ?? null,
+              licenceNumber: row.record.licenceNumber ?? null,
+              authority: authority.code ?? authority.stated ?? source,
+              emirate,
+              areaId,
+              areaName: areaId ? (areaById.get(areaId)?.name ?? null) : (row.record.areaName ?? null),
+              phone: row.record.phone ?? null,
+              activityKey: row.key,
+            }),
+          ] as const;
+        }),
+    );
+
+    const index = buildMatchIndex(await loadCandidateListings([...asListing.values()]));
+
+    for (const row of slice) {
+      let duplicateOfId: string | null = null;
+      let duplicateOfRow: number | null = null;
+      let pair: { score: number; band: "certain" | "probable"; signals: unknown } | null = null;
+
+      const self = asListing.get(row.rowNumber);
+      if (self) {
+        const earlier = row.licence ? firstRowFor.get(row.licence) : undefined;
+        if (row.licence && earlier !== undefined) {
+          // An exact repeat inside one file is the file repeating itself, not a
+          // company to argue about. It does not reach the dedupe queue.
+          duplicateOfRow = earlier;
+        } else {
+          if (row.licence) firstRowFor.set(row.licence, row.rowNumber);
+          const result = bestMatch(
+            self,
+            index,
+            bands,
+            separations.get(licenceDigits(row.record.licenceNumber ?? "")) ?? new Set(),
+          );
+          if (result.match) {
+            duplicateOfId = result.match.listing.id;
+            pair = {
+              score: result.match.similarity.score,
+              band: result.match.similarity.band as "certain" | "probable",
+              signals: result.match.similarity.signals,
+            };
+          } else if (result.nearMiss) {
+            belowFloor += 1;
+          }
         }
       }
+
+      const signalSlug = row.verdict.categorySlug;
+      const outcome = stagedOutcome({
+        verdict: row.verdict,
+        duplicate: duplicateOfId !== null || duplicateOfRow !== null,
+        mappedCategoryId: row.key ? (mappedCategory.get(row.key) ?? null) : null,
+        signalCategoryId: signalSlug ? (categoryBySlug.get(signalSlug) ?? null) : null,
+      });
+
+      staged.push({ ...row, outcome, duplicateOfId, duplicateOfRow, pair });
     }
-
-    const signalSlug = row.verdict.categorySlug;
-    const outcome = stagedOutcome({
-      verdict: row.verdict,
-      duplicate: duplicateOfId !== null || duplicateOfRow !== null,
-      mappedCategoryId: row.key ? (mappedCategory.get(row.key) ?? null) : null,
-      signalCategoryId: signalSlug ? (categoryBySlug.get(signalSlug) ?? null) : null,
-    });
-
-    return { ...row, outcome, duplicateOfId, duplicateOfRow, pair };
-  });
+  }
   const totals = tally(staged.map((row) => row.outcome));
   return { ok: true, prepared: { headers, truncated, belowFloor, staged, totals } };
 }
@@ -1039,47 +1089,68 @@ export async function publishRun(
      Separations a person already made are honoured, so a record kept separate
      is not sent straight back.
   */
-  const [listings, bands, areas, separations] = await Promise.all([
-    candidates.length > 0 ? loadMatchListings() : Promise.resolve([]),
+  const [bands, areas, separations] = await Promise.all([
     readBands(),
     prisma.area.findMany({ select: { id: true, name: true, emirate: true } }),
     candidates.length > 0 ? separatedLicences() : Promise.resolve(new Map<string, Set<string>>()),
   ]);
-  const index = buildMatchIndex(listings);
   const areaName = new Map(areas.map((area) => [area.id, area.name]));
 
   const collided: { id: string; businessId: string; score: number; band: string; signals: unknown }[] = [];
-  const ready = candidates.filter((row) => {
-    const authority = effectiveAuthority(row.licenceAuthority, run.source, KNOWN_AUTHORITIES).code!;
-    const areaId = resolveEnquiryArea(row.areaName, row.emirate, areas);
-    const { match } = bestMatch(
-      recordAsListing({
-        id: row.id,
-        tradeName: row.tradeName,
-        licenceNumber: row.licenceNumber,
-        authority,
-        emirate: row.emirate,
-        areaId,
-        areaName: areaId ? (areaName.get(areaId) ?? null) : row.areaName,
-        phone: row.phone,
-        activityKey: row.activityKey,
+  const ready: typeof candidates = [];
+
+  /*
+     T4.4 — a chunk at a time here too, against that chunk's candidates.
+
+     `loadMatchListings()` read the whole directory into memory for the second
+     time in one run, after staging had already done it once. Same three indexed
+     reads as the staging side, and the same untouched matcher over what comes
+     back.
+  */
+  for (let i = 0; i < candidates.length; i += MATCH_CHUNK) {
+    const slice = candidates.slice(i, i + MATCH_CHUNK);
+    const asListing = new Map(
+      slice.map((row) => {
+        const authority = effectiveAuthority(row.licenceAuthority, run.source, KNOWN_AUTHORITIES).code!;
+        const areaId = resolveEnquiryArea(row.areaName, row.emirate, areas);
+        return [
+          row.id,
+          recordAsListing({
+            id: row.id,
+            tradeName: row.tradeName,
+            licenceNumber: row.licenceNumber,
+            authority,
+            emirate: row.emirate,
+            areaId,
+            areaName: areaId ? (areaName.get(areaId) ?? null) : row.areaName,
+            phone: row.phone,
+            activityKey: row.activityKey,
+          }),
+        ] as const;
       }),
-      index,
-      bands,
-      separations.get(licenceDigits(row.licenceNumber ?? "")) ?? new Set(),
     );
-    if (match) {
-      collided.push({
-        id: row.id,
-        businessId: match.listing.id,
-        score: match.similarity.score,
-        band: match.similarity.band,
-        signals: match.similarity.signals,
-      });
-      return false;
+    const index = buildMatchIndex(await loadCandidateListings([...asListing.values()]));
+
+    for (const row of slice) {
+      const { match } = bestMatch(
+        asListing.get(row.id)!,
+        index,
+        bands,
+        separations.get(licenceDigits(row.licenceNumber ?? "")) ?? new Set(),
+      );
+      if (match) {
+        collided.push({
+          id: row.id,
+          businessId: match.listing.id,
+          score: match.similarity.score,
+          band: match.similarity.band,
+          signals: match.similarity.signals,
+        });
+        continue;
+      }
+      ready.push(row);
     }
-    return true;
-  });
+  }
 
   const firstDecision = run.status === "staged";
 

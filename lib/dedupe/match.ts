@@ -33,7 +33,16 @@ export interface MatchIndex {
   blocks: ReadonlyMap<string, readonly string[]>;
 }
 
-function keysFor(listing: Listing): string[] {
+/**
+ * The blocking keys of one listing or record.
+ *
+ * Exported since T4.4, because the candidate query is built from exactly these:
+ * the database is asked for the listings that share a key with this chunk of
+ * records, and then the in-process index is built from what comes back. One
+ * definition of "could these two be the same company at all", read by the
+ * matcher and by the query that feeds it.
+ */
+export function keysFor(listing: Listing): string[] {
   const keys: string[] = [];
   const digits = licenceDigits(listing.licenceNumber);
   if (digits.length >= 4) keys.push(`licence:${digits}`);
