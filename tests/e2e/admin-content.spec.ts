@@ -213,9 +213,26 @@ test.describe("board 12g — notification templates", () => {
      * is gone once a twin exists, so a second local run would find no link to
      * click. A unique body means that run writes v2 rather than being refused
      * as unchanged.
+     *
+     * ## The suffix is letters, and it has to be
+     *
+     * It was `Date.now()` — thirteen digits on the end of a **live** template
+     * body. `render()`'s leak guard reads a long run of digits as a phone
+     * number and refuses to send, so this test was writing a body the product
+     * itself would never deliver; and `tests/integration/notifications.test.ts`
+     * reads every live template in the database and failed on it, which is a
+     * cross-suite collision only a shared database shows. CI gives each job its
+     * own, so nothing caught it there.
+     *
+     * Base 36 of the same clock: still unique per run, still a different body
+     * from the last one, and not a number anybody can mistake for a telephone.
      */
     await page.goto("/admin/notifications?t=quote_expiring.in_app&line=services");
-    await page.getByRole("textbox", { name: /^Body/ }).fill(`Proposal {quoteRef} runs out {expiresAt}. Extend the terms or let it lapse. ${Date.now()}`);
+    await page
+      .getByRole("textbox", { name: /^Body/ })
+      .fill(
+        `Proposal {quoteRef} runs out {expiresAt}. Extend the terms or let it lapse. Run ${Date.now().toString(36)}`,
+      );
     await page.getByRole("textbox", { name: /^Why/ }).fill("Service firms send proposals, not quotes.");
     await page.getByRole("button", { name: /^Save as v\d+$/ }).click();
     await expect(page.getByText(/Version \d+ is live/)).toBeVisible();
