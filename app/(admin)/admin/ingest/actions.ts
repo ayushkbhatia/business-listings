@@ -10,6 +10,7 @@ import {
   discardRun,
   publishRun,
   rollbackRun,
+  resumeStageRun,
   stageRun,
 } from "@/lib/ingest/service";
 import { categoriseRecords, forgetActivityMapping } from "@/lib/ingest/queue";
@@ -123,6 +124,35 @@ export async function stage(formData: FormData): Promise<ActionResult> {
               dropped: formatCount(result.truncated),
             })
           : t("admin.ingest.staged", n(result.totals.staged)),
+    };
+  });
+}
+
+/**
+ * Continue a run the chunk loop left half written — T4.2.
+ *
+ * Audited with its own reason. The uploader's reason belongs to the upload, and
+ * an ops lead continuing somebody else's interrupted run an hour later is a
+ * second decision by a second person — which is the question the log exists to
+ * answer.
+ */
+export async function resumeStaging(formData: FormData): Promise<ActionResult> {
+  const seat = await requireStaff();
+  const runId = field(formData, "runId");
+  return guarded(async () => {
+    const result = await resumeStageRun({
+      actor: seat.actor,
+      runId,
+      reason: field(formData, "reason"),
+    });
+    if (!result.ok) return { ok: false, error: result.message };
+    refresh(runId);
+    return {
+      ok: true,
+      message:
+        result.written === 0
+          ? t("admin.run.resume_nothing")
+          : t("admin.run.resumed", n(result.written)),
     };
   });
 }

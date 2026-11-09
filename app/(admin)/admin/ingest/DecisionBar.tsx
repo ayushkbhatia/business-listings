@@ -42,6 +42,11 @@ export interface DecisionBarProps {
   heldBecause: Record<HeldReason, number>;
   rejected: number;
   live: number;
+  /** T4.2 — how long the file was, and how much of it is stored. */
+  rowCount: number;
+  stored: number;
+  /** T4.2 — a run left `parsing` whose file is still in storage. */
+  resumable: boolean;
   decidedLabel: string | null;
   decidedBy: string | null;
   decisionReason: string | null;
@@ -69,6 +74,8 @@ export interface DecisionBarProps {
   publish: (formData: FormData) => Promise<ActionResult>;
   discard: (formData: FormData) => Promise<ActionResult>;
   rollbackAction: (formData: FormData) => Promise<ActionResult>;
+  /** T4.2 — continues a run the chunk loop did not finish. */
+  resume: (formData: FormData) => Promise<ActionResult>;
   /**
    * Where a decision lands. On the runs index the run under review leaves the
    * page the moment it is decided, taking its confirmation with it, so the
@@ -78,7 +85,7 @@ export interface DecisionBarProps {
   openRunAfter?: boolean;
 }
 
-type Dialog = "publish" | "discard" | "rollback" | null;
+type Dialog = "publish" | "discard" | "rollback" | "resume" | null;
 
 const n = (count: number) => ({ count, n: formatCount(count) });
 
@@ -106,11 +113,18 @@ export function DecisionBar(props: DecisionBarProps) {
 
   const staged = props.status === "staged";
   const approved = props.status === "approved";
+  /*
+     T4.2. Staging commits a chunk at a time, so `parsing` is a state a run can
+     really be found in rather than one that only existed inside a transaction.
+     It is not an error and it is not a decision — it is unfinished work, and
+     the bar says how much and offers to finish it.
+  */
+  const parsing = props.status === "parsing";
   const nothingNew = staged && props.newListings === 0;
   const allWaiting = props.publishable === 0 && props.held > 0;
   const canPublish = (staged || approved) && props.publishable > 0;
 
-  const tone: keyof typeof SURFACE = staged
+  const tone: keyof typeof SURFACE = staged || parsing
     ? "warn"
     : props.status === "rolled_back"
       ? "bad"
@@ -136,6 +150,20 @@ export function DecisionBar(props: DecisionBarProps) {
               <span className="font-medium text-warn-ink">{t("admin.run.decision.staged_lead")}</span>{" "}
               {t("admin.run.decision.staged", n(props.publishable))}
             </p>
+          )}
+          {parsing && (
+            <p>
+              <span className="font-medium text-warn-ink">
+                {t("admin.run.decision.staging_lead")}
+              </span>{" "}
+              {t("admin.run.decision.staging", {
+                stored: formatCount(props.stored),
+                rows: formatCount(props.rowCount),
+              })}
+            </p>
+          )}
+          {parsing && !props.resumable && (
+            <p className="text-caption text-body">{t("admin.run.decision.staging_no_file")}</p>
           )}
           {nothingNew && <p>{t("admin.run.decision.nothing_new")}</p>}
           {allWaiting && staged && <p>{t("admin.run.decision.all_waiting", n(props.held))}</p>}
@@ -220,10 +248,13 @@ export function DecisionBar(props: DecisionBarProps) {
               {t("admin.run.export_rejects")}
             </a>
           )}
-          {staged && (
+          {(staged || parsing) && (
             <Button variant="ghost" onClick={() => setDialog("discard")}>
               {t("admin.run.discard")}
             </Button>
+          )}
+          {parsing && props.resumable && (
+            <Button onClick={() => setDialog("resume")}>{t("admin.run.resume")}</Button>
           )}
           {approved && props.reversible && props.preview && (
             <Button variant="secondary" onClick={() => setDialog("rollback")}>
@@ -273,6 +304,17 @@ export function DecisionBar(props: DecisionBarProps) {
           <p className="text-body-sm text-body">{t("admin.run.decision.held", n(props.held))}</p>
         )}
       </ReasonModal>
+
+      <ReasonModal
+        open={dialog === "resume"}
+        onClose={() => setDialog(null)}
+        title={t("admin.run.resume_title", { number: props.number })}
+        description={t("admin.run.resume_description")}
+        confirmLabel={t("admin.run.resume_confirm")}
+        fields={fields}
+        action={props.resume}
+        onDone={done}
+      />
 
       <ReasonModal
         open={dialog === "discard"}

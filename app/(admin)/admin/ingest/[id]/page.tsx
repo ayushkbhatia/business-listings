@@ -6,7 +6,7 @@ import { REVERSIBLE_DAYS, isRecordFilter, runOverview, runRecords } from "@/lib/
 import { queuedRecordCount } from "@/lib/ingest/queue";
 import { t } from "@/lib/i18n";
 import { AdminPage, getAdminNavBadges } from "../../../_shell";
-import { discard, publish, rollback } from "../actions";
+import { discard, publish, resumeStaging, rollback } from "../actions";
 import { IngestTabs } from "../IngestTabs";
 import { RunReview } from "../RunReview";
 import { RecordsTable } from "./RecordsTable";
@@ -71,6 +71,7 @@ export default async function RunPage({
           publish={publish}
           discard={discard}
           rollback={rollback}
+          resume={resumeStaging}
           reversibleDays={REVERSIBLE_DAYS}
         />
       </div>

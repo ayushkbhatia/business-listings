@@ -45,6 +45,23 @@ export interface RunOverview {
   uploadedBy: string | null;
   rowCount: number;
   truncatedCount: number;
+  /**
+   * Records actually in the table — T4.2.
+   *
+   * The same as `rowCount` on a run that finished staging, and lower on one
+   * still `parsing`: the chunks commit as they go, so "how long was the file"
+   * and "how much of it is stored" are two questions now. The run screen prints
+   * both while a run is parsing, which is the only honest thing it can say.
+   */
+  stored: number;
+  /**
+   * Whether a run left `parsing` can be continued — T4.2.
+   *
+   * It needs the file, and `uploadPath` is null on a run staged from text by
+   * the seed or a test. False then, and the screen says to stage it again
+   * rather than offering a control that cannot work.
+   */
+  resumable: boolean;
   /** Bucket counts. `newListings + duplicates + rejected === rowCount`. */
   newListings: number;
   duplicates: number;
@@ -95,6 +112,7 @@ export async function runOverview(runId: string, now = new Date()): Promise<RunO
       rowCount: true,
       truncatedCount: true,
       belowFloorCount: true,
+      uploadPath: true,
       decisionReason: true,
       decidedAt: true,
       reversibleUntil: true,
@@ -182,6 +200,9 @@ export async function runOverview(runId: string, now = new Date()): Promise<RunO
     uploadedBy: run.actor.fullName,
     rowCount: run.rowCount,
     truncatedCount: run.truncatedCount,
+    // Every disposition, summed: the rows that exist, whatever they say.
+    stored: dispositions.reduce((total, row) => total + row._count._all, 0),
+    resumable: run.status === "parsing" && run.uploadPath !== null,
     newListings: of("ready") + of("needs_category") + of("published"),
     // A duplicate stays in this bucket once board 12b resolves it — merged as a
     // branch or discarded — so the three buckets still sum to the file.

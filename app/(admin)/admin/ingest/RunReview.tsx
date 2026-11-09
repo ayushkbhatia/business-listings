@@ -38,6 +38,8 @@ export interface RunReviewProps {
   publish: (formData: FormData) => Promise<ActionResult>;
   discard: (formData: FormData) => Promise<ActionResult>;
   rollback: (formData: FormData) => Promise<ActionResult>;
+  /** T4.2 — continues a run the chunk loop did not finish. */
+  resume: (formData: FormData) => Promise<ActionResult>;
   reversibleDays: number;
   /** Links the run's number to its own page, where the index shows it. */
   linkToRun?: boolean;
@@ -91,6 +93,7 @@ export function RunReview({
   publish,
   discard,
   rollback,
+  resume,
   reversibleDays,
   linkToRun = false,
 }: RunReviewProps) {
@@ -253,6 +256,9 @@ export function RunReview({
         held={run.held}
         heldBecause={run.heldBecause}
         rejected={run.rejected}
+        rowCount={run.rowCount}
+        stored={run.stored}
+        resumable={run.resumable}
         live={run.live}
         decidedLabel={run.decision ? formatDate(run.decision.at) : null}
         decidedBy={run.decision?.by ?? null}
@@ -277,6 +283,7 @@ export function RunReview({
         publish={publish}
         discard={discard}
         rollbackAction={rollback}
+        resume={resume}
         openRunAfter={linkToRun}
       />
     </div>

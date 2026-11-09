@@ -78,6 +78,14 @@ jobs:
           pnpm exec prisma migrate deploy
           pnpm db:seed
 
+      # T4.1 and T4.2. The integration suite stages a licence export through
+      # `ingest-uploads` and resumes it from the object, which is the only way
+      # to prove the resume reads the same file. `storage.*` belongs to Supabase
+      # and is deliberately not a migration, so the buckets are created against
+      # the stack this job started.
+      - name: Create the storage buckets
+        run: pnpm storage:setup
+
       - name: Typecheck
         run: pnpm typecheck
 

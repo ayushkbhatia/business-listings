@@ -14,7 +14,7 @@ import { queuedRecordCount } from "@/lib/ingest/queue";
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { AdminPage, getAdminNavBadges } from "../../_shell";
-import { discard, publish, rollback, signIngestUpload, stage } from "./actions";
+import { discard, publish, resumeStaging, rollback, signIngestUpload, stage } from "./actions";
 import { IngestTabs } from "./IngestTabs";
 import { RunHistory, SourcesPanel } from "./IngestRail";
 import { NewImport } from "./NewImport";
@@ -81,6 +81,7 @@ export default async function IngestPage() {
                 publish={publish}
                 discard={discard}
                 rollback={rollback}
+                resume={resumeStaging}
                 reversibleDays={REVERSIBLE_DAYS}
                 linkToRun
               />
