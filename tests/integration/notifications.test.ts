@@ -552,3 +552,85 @@ describe("T6.1 — a business with no stored preference", () => {
     }
   });
 });
+
+describe("T6.3 and T6.4 — a delivery row carries what it said, and whether it was read", () => {
+  const MONDAY_1000 = new Date("2026-08-24T06:00:00Z");
+
+  it("stores the rendered message on a sent row, not only on a held one", async () => {
+    /*
+       The defect, as a test.
+
+       `payload` was written for a **deferred** delivery only, because that was
+       the one case the service read back — a held message has to be sendable
+       when the window lifts. So a *sent* in-app notice stored the event, the
+       channel and the recipient and not a word of what it said, and in-app is
+       the channel where this row **is** the notification. Board 7g's bell had
+       nothing to render, and "what did you tell me three days ago" could only
+       be answered with the template as it reads today, which is a different
+       sentence whenever somebody has edited it since.
+    */
+    const outcomes = await notify({
+      event: "enquiry_received",
+      businessId,
+      recipientUserId,
+      now: MONDAY_1000,
+      params: {
+        ref: "ENQ-6300",
+        summary: "gate valves",
+        neededBy: "14 Sep 2026",
+        closesAt: "28 Aug 2026",
+        area: "Al Quoz Industrial 1",
+        lineCount: 3,
+        enquiryId: "cmt73h5cr007yddit0mrgfx39",
+        shortLink: "https://businesslistings.ae/l/6300",
+      },
+    });
+    for (const outcome of outcomes) if (outcome.deliveryId) createdDeliveryIds.push(outcome.deliveryId);
+
+    const inApp = outcomes.find((outcome) => outcome.channel === "in_app");
+    expect(inApp?.status, "in-app needs no address and no carrier").toBe("sent");
+
+    const row = await prisma.notificationDelivery.findUniqueOrThrow({
+      where: { id: inApp!.deliveryId },
+      select: { payload: true, readAt: true, status: true },
+    });
+    const payload = row.payload as { body?: unknown; actionLabel?: unknown; actionUrl?: unknown } | null;
+    expect(payload, "a sent row used to carry no message at all").not.toBeNull();
+    expect(typeof payload?.body).toBe("string");
+    // Rendered, not the template: the reference the buyer will quote is in it.
+    expect(String(payload?.body)).toContain("ENQ-6300");
+    // The action is stored as an absolute URL, because by the time a bell or a
+    // carrier reads this row there is no request to resolve a path against.
+    if (payload?.actionUrl !== null && payload?.actionUrl !== undefined) {
+      expect(String(payload.actionUrl)).toMatch(/^https?:\/\//);
+    }
+  });
+
+  it("stores no message on a row that never had one", async () => {
+    /*
+       The honest other half. A row skipped for want of a template, a carrier,
+       an address or a channel has no rendered message, and inventing one — the
+       template with its placeholders still in it — would be worse than null:
+       board 7g would render `{ref}` to a seller.
+    */
+    const rows = await prisma.notificationDelivery.findMany({
+      where: { id: { in: createdDeliveryIds }, status: "skipped" },
+      select: { payload: true, reason: true },
+    });
+    for (const row of rows) expect(row.payload, JSON.stringify(row.reason)).toBeNull();
+  });
+
+  it("starts unread, which is what a bell counts", async () => {
+    /*
+       T6.4. Null is unread. The writer arrives with board 7g — this sprint adds
+       the column and the partial index the unread count needs, and nothing sets
+       it yet, so every row is unread and nothing reads that fact. A column with
+       a writer and no reader would be the dishonest half of this pair.
+    */
+    const row = await prisma.notificationDelivery.findFirst({
+      where: { id: { in: createdDeliveryIds } },
+      select: { readAt: true },
+    });
+    expect(row?.readAt ?? null).toBeNull();
+  });
+});

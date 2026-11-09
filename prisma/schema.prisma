@@ -9622,13 +9622,21 @@ model NotificationDelivery {
 
   /// Why it was skipped or deferred, for the seller's own audit of their alerts.
   reason       String?
-  /// The rendered message, for a delivery that is going to be sent later.
-  ///
-  /// Written only when quiet hours defer one. Everything needed to hand it to a
-  /// carrier except the address: subject, body, action label and URL, and the
-  /// Meta template name. **Never contact details** — the number or address is
-  /// read from the user at send time, which is the rule the `recipientUserId`
+  /// The rendered message: subject, body, action label and URL, and the Meta
+  /// template name. **Never contact details** — the number or address is read
+  /// from the user at send time, which is the rule the `recipientUserId`
   /// comment above states and this column has to keep.
+  ///
+  /// Written on **every** delivery that had a template — task T6.3. It used to
+  /// be written only when quiet hours deferred one, because that was the only
+  /// case the service read back. So a *sent* in-app notice stored the event,
+  /// the channel and the recipient and not a word of what it said — and in-app
+  /// is the channel where this row **is** the notification. Board 7g's bell had
+  /// nothing to render, and "what did you tell me three days ago" could only be
+  /// answered with the template as it reads today.
+  ///
+  /// Null on a row with no rendered message: no live template, no carrier, no
+  /// address, or no channel at all. Those rows never had one to store.
   ///
   /// Rendered when the event happened rather than when the message goes out, so
   /// a notification held overnight says what was true at the time. Re-rendering
@@ -9636,6 +9644,20 @@ model NotificationDelivery {
   payload      Json?
   scheduledFor DateTime? @map("scheduled_for")
   sentAt       DateTime? @map("sent_at")
+  /// When the recipient read it — task T6.4.
+  ///
+  /// Null is unread, which is what a bell counts. On the in-app channel this
+  /// row **is** the notification, so without this column board 7g could draw a
+  /// list and never a count: every notice would be unread forever, and a bell
+  /// that always says nine is a bell nobody looks at.
+  ///
+  /// Written by the reader, never by the sender, and only ever from null to a
+  /// timestamp — a notice that has been seen cannot become unseen, and "mark as
+  /// unread" is a different feature with a different column if it is ever
+  /// wanted. Meaningless on a channel that leaves the building: an email we
+  /// handed to Resend is not a message we know was opened, and this column must
+  /// not be made to imply we do.
+  readAt       DateTime? @map("read_at")
   createdAt    DateTime  @default(now()) @map("created_at")
 
   /// The trade the message was about — a services brief or a goods enquiry —

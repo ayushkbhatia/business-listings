@@ -289,6 +289,22 @@ export async function notify(input: NotifyInput): Promise<NotifyOutcome[]> {
       enquiryId: input.enquiryId ?? null,
     });
 
+    /*
+       T6.3 — the row carries what was actually sent.
+
+       `payload` was written for a **deferred** delivery only, because that was
+       the one case the service needed to read back: a held message has to be
+       sendable when the window lifts. So a sent in-app notice stored the event,
+       the channel and the recipient and not a word of what it said — and in-app
+       is the channel where the delivery row **is** the notification. Board 7g's
+       bell has nothing to render from, and a seller asking what we told them
+       three days ago could be answered with the template as it reads today,
+       which is a different sentence whenever somebody has edited it since.
+
+       Rendered once, not twice: this is the same `rendered` the carrier was
+       handed, so the log and the message cannot disagree. Stored on `failed`
+       too — what we tried to say is part of why it matters that it did not go.
+    */
     outcomes.push(
       await record(
         input,
@@ -297,6 +313,8 @@ export async function notify(input: NotifyInput): Promise<NotifyOutcome[]> {
         result.delivered ? "sent" : "failed",
         result.detail,
         now,
+        undefined,
+        heldPayload(rendered, template.metaTemplateName),
       ),
     );
   }
@@ -515,11 +533,16 @@ async function record(
 }
 
 /**
- * What a held delivery needs to be sent later, and nothing more.
+ * The rendered message a delivery row carries — every row with a template,
+ * since T6.3, and held ones before that.
+ *
+ * Two readers now. `deliverQueued` sends a held message from it, which is what
+ * it was built for; and board 7g's bell renders a sent in-app notice from it,
+ * which is what it could not do while only deferred rows had one.
  *
  * Deliberately no address. The number or the email is read from the user when
  * the message actually goes out — the delivery log is a record of what
- * happened, not a copy of the address book, and a held row is still a log row.
+ * happened, not a copy of the address book, and a sent row is still a log row.
  */
 export interface HeldPayload {
   subject: string | null;
