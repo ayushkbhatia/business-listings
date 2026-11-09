@@ -7,6 +7,7 @@ import {
   type NotificationChannel,
   type NotificationEvent,
   type RoutingPreference,
+  DEFAULT_ROUTING,
 } from "./routing";
 import { resolveNotificationSenders } from "./senders";
 import { openNow } from "@/lib/trade/open-now";
@@ -65,6 +66,16 @@ const NO_TEMPLATE = "no_live_template";
 const NO_SENDER = "no_carrier_configured";
 const NO_ADDRESS = "recipient_has_no_address_for_this_channel";
 /**
+ * The event reached no channel at all — T6.1.
+ *
+ * With `DEFAULT_ROUTING` in place this is no longer "the business has no
+ * preference row"; it is a seller who has switched every channel off for an
+ * event that is not on the platform floor, or an event with no seller audience
+ * routed through the seller path. Both are real and both should be visible,
+ * which is the whole point of the row.
+ */
+const NO_CHANNEL = "no_channel_for_event";
+/**
  * Board 7e §3, the half the board left out.
  *
  * "An unverified number is hidden from buyers **and receives nothing**. Both
@@ -100,32 +111,81 @@ export async function notify(input: NotifyInput): Promise<NotifyOutcome[]> {
     }),
     quietFromHours(input.businessId, now),
   ]);
-  if (!preference || !recipient) return [];
+  /*
+     A recipient who is not there is a caller's bug, and it is the one case that
+     cannot be recorded: `NotificationDelivery.recipientUserId` references
+     `User`, so a row naming a missing id would be refused by the foreign key.
+     Logged loudly instead of returned quietly.
+  */
+  if (!recipient) {
+    console.error("[notify] no such recipient", {
+      event: input.event,
+      recipientUserId: input.recipientUserId,
+      businessId: input.businessId,
+    });
+    return [];
+  }
 
-  const routing: RoutingPreference = {
-    matrix: (preference.routing ?? {}) as RoutingPreference["matrix"],
-    quiet: {
-      enabled: preference.quietHoursEnabled,
-      fromHour: preference.quietFromHour,
-      toHour: preference.quietToHour,
-      onSunday: preference.quietOnSunday,
-      /*
-         7e §5: "Source — the Hours page. Same source as the auto-reply and as
-         7d's routing skip. One copy." Null where the supplier has published no
-         hours at all, and then the stored window applies — which is the only
-         thing it can mean for a business with no week to be outside of.
-      */
-      hours,
-    },
-    highValueOverrideAed: preference.highValueOverrideAed,
-  };
+  /*
+     T6.1 — a business with no stored preference receives on the default, not
+     nothing.
+
+     This read `if (!preference || !recipient) return []`, which returned
+     **before** `route()` and so before `PLATFORM_FLOOR` — the two channels the
+     platform promises are not switchable included. Every imported listing is in
+     that state, which is the build plan's T5.5 ("without one of the two, every
+     imported business is deaf on every channel").
+
+     `DEFAULT_ROUTING` says what a business that has never opened the alerts
+     screen receives: email and in-app, nothing that interrupts. The quiet
+     window comes with it, and the Hours page still decides where it has an
+     answer — a default preference does not mean a default working week.
+  */
+  const routing: RoutingPreference = preference
+    ? {
+        matrix: (preference.routing ?? {}) as RoutingPreference["matrix"],
+        quiet: {
+          enabled: preference.quietHoursEnabled,
+          fromHour: preference.quietFromHour,
+          toHour: preference.quietToHour,
+          onSunday: preference.quietOnSunday,
+          /*
+             7e §5: "Source — the Hours page. Same source as the auto-reply and
+             as 7d's routing skip. One copy." Null where the supplier has
+             published no hours at all, and then the stored window applies —
+             which is the only thing it can mean for a business with no week to
+             be outside of.
+          */
+          hours,
+        },
+        highValueOverrideAed: preference.highValueOverrideAed,
+      }
+    : { ...DEFAULT_ROUTING, quiet: { ...DEFAULT_ROUTING.quiet, hours } };
 
   const decisions = route(routing, {
     event: input.event,
     now,
     ...(input.valueAed === undefined ? {} : { valueAed: input.valueAed }),
   });
-  if (decisions.length === 0) return [];
+
+  /*
+     T6.1, the other half: a silence is recorded.
+
+     `return []` here left no row, so an event that reached no channel for a
+     business was invisible — not in the delivery log, not in board 12g, not in
+     the seller's own audit of their alerts. "Why did I not hear about that
+     enquiry" had no answer, and the absence of an answer read as the absence of
+     an enquiry.
+
+     One row, on `in_app`, and the channel is the honest choice rather than an
+     arbitrary one: in-app needs no address and no carrier, so it is the channel
+     on which nothing arriving can only be a **decision** — every other channel
+     has a prerequisite that could explain it instead. A `skipped` row writes no
+     notice; the in-app sender is what does that.
+  */
+  if (decisions.length === 0) {
+    return [await record(input, "in_app", null, "skipped", NO_CHANNEL, now)];
+  }
 
   const senders = resolveNotificationSenders();
   // One query for every channel, not one per channel. A fan-out to eight

@@ -20,19 +20,51 @@ import { buyerActionUrl } from "@/lib/notify/events";
 
 let businessId: string;
 let recipientUserId: string;
+/** T6.1 — a business that has never opened the alerts screen. */
+let bareBusinessId: string | null = null;
+let bareSeatUserId: string | null = null;
 
 const createdDeliveryIds: string[] = [];
 
 beforeAll(async () => {
+  // Ordered, so which business this suite is about does not depend on physical
+  // row order — the fragility `enquiry-fanout` was carrying.
   const preference = await prisma.notificationPreference.findFirstOrThrow({
+    orderBy: { businessId: "asc" },
     select: { businessId: true },
   });
   businessId = preference.businessId;
   const seat = await prisma.user.findFirstOrThrow({
     where: { businessId, roles: { has: "seller_owner" } },
+    orderBy: { id: "asc" },
     select: { id: true },
   });
   recipientUserId = seat.id;
+
+  /*
+     T6.1's subject: a business with **no** preference row and a seat to reach.
+     That is the state every imported listing is in, and 288 of the seed's 308
+     businesses are in it too — so it is the common case rather than an edge
+     one, which is the thing that makes the old `return []` expensive.
+  */
+  const bare = await prisma.business.findFirst({
+    where: {
+      notificationPreference: { is: null },
+      team: { some: { roles: { has: "seller_owner" } } },
+    },
+    orderBy: { id: "asc" },
+    select: {
+      id: true,
+      team: {
+        where: { roles: { has: "seller_owner" } },
+        orderBy: { id: "asc" },
+        take: 1,
+        select: { id: true },
+      },
+    },
+  });
+  bareBusinessId = bare?.id ?? null;
+  bareSeatUserId = bare?.team[0]?.id ?? null;
 });
 
 afterEach(async () => {
@@ -325,15 +357,26 @@ describe("criterion 10 — quiet hours, through the service", () => {
     }
   });
 
-  it("sends nothing for a business with no preference row", async () => {
-    const orphan = await prisma.business.findFirstOrThrow({
-      where: { notificationPreference: null },
-      select: { id: true },
-    });
+  it("sends nothing to a recipient who does not exist", async () => {
+    /*
+       This test used to read *"sends nothing for a business with no preference
+       row"* and assert `toEqual([])` — which is the defect T6.1 removed,
+       asserted as the rule. A green suite was pinning it: a business that had
+       never opened the alerts screen received nothing on any channel for any
+       event, the two the platform promises are not switchable included, and
+       288 of this seed's 308 businesses are in that state.
+       `describe("T6.1 …")` below is what the behaviour is now.
+
+       What survives of the original is the case that genuinely cannot send: a
+       recipient id with no `User` behind it. It is a caller's bug, and the one
+       outcome that cannot even be recorded —
+       `NotificationDelivery.recipientUserId` references `User`, so a row naming
+       a missing id is refused by the foreign key.
+    */
     const outcomes = await notify({
       event: "enquiry_received",
-      businessId: orphan.id,
-      recipientUserId,
+      businessId,
+      recipientUserId: "00000000-0000-4000-8000-000000000000",
       params: { ref: "ENQ-1" },
     });
     expect(outcomes).toEqual([]);
@@ -399,6 +442,113 @@ describe("a buyer notification carries the token the buyer surface needs", () =>
     expect(rows.length).toBeGreaterThan(0);
     for (const row of rows) {
       expect(buyerActionUrl(row.actionPath!, provisional), row.event).toContain("t=tok_abc123");
+    }
+  });
+});
+
+describe("T6.1 — a business with no stored preference", () => {
+  const MONDAY_1000 = new Date("2026-08-24T06:00:00Z");
+
+  const PARAMS = {
+    ref: "ENQ-6100",
+    summary: "gate valves",
+    neededBy: "14 Sep 2026",
+    closesAt: "28 Aug 2026",
+    area: "Al Quoz Industrial 1",
+    lineCount: 3,
+    enquiryId: "cmt73h5cr007yddit0mrgfx39",
+    shortLink: "https://businesslistings.ae/l/6100",
+  } as const;
+
+  it("receives on the default instead of nothing at all", async () => {
+    /*
+       The defect, as a test. `notify()` read `NotificationPreference`, found
+       none and returned `[]` — before `route()` and therefore before
+       `PLATFORM_FLOOR`. No channels, and **no delivery row**, so the silence
+       was invisible in the log and in board 12g.
+    */
+    expect(bareBusinessId, "the seed needs a business with no preference row").not.toBeNull();
+    if (!bareBusinessId || !bareSeatUserId) return;
+
+    const outcomes = await notify({
+      event: "enquiry_received",
+      businessId: bareBusinessId,
+      recipientUserId: bareSeatUserId,
+      now: MONDAY_1000,
+      params: PARAMS,
+    });
+    for (const outcome of outcomes) if (outcome.deliveryId) createdDeliveryIds.push(outcome.deliveryId);
+
+    expect(outcomes.length, "an unconfigured business used to get nothing").toBeGreaterThan(0);
+    const channels = outcomes.map((outcome) => outcome.channel).sort();
+    expect(channels).toEqual(["email", "in_app"]);
+    // In-app needs no address and no carrier, so it is the one that must land.
+    expect(outcomes.find((outcome) => outcome.channel === "in_app")?.status).toBe("sent");
+
+    // And every one of them is in the log, which is the half that makes it
+    // answerable when a seller asks why they did not hear.
+    const rows = await prisma.notificationDelivery.findMany({
+      where: { id: { in: outcomes.map((outcome) => outcome.deliveryId).filter(Boolean) } },
+      select: { channel: true, businessId: true },
+    });
+    expect(rows).toHaveLength(outcomes.length);
+    for (const row of rows) expect(row.businessId).toBe(bareBusinessId);
+  });
+
+  it("writes it no preference row, because a default is not a choice", async () => {
+    /*
+       `DEFAULT_ROUTING` is what the code does in the absence of a choice, not a
+       choice made on the seller's behalf. Writing a row here would turn the
+       platform's default into the seller's stored preference, and the next time
+       the default changed their business would keep the old one — which is the
+       whole argument for not seeding forty thousand rows (T5.5).
+    */
+    if (!bareBusinessId) return;
+    const row = await prisma.notificationPreference.findUnique({
+      where: { businessId: bareBusinessId },
+      select: { businessId: true },
+    });
+    expect(row).toBeNull();
+  });
+
+  it("records the silence when an event reaches no channel", async () => {
+    /*
+       The residual case, which is now the only one: a seller who has switched
+       every channel off for an event that is not on the platform floor. It used
+       to be `return []` — no row, no reason, nothing to read in 12g, and no
+       answer to "why did I not hear about that".
+
+       The row this needs is created here and removed again, rather than a
+       seeded preference being emptied: `weekly_digest` is in the seed's matrix
+       on every business, and a test that edited one would take the digest away
+       from every other test in the suite.
+    */
+    if (!bareBusinessId || !bareSeatUserId) return;
+    await prisma.notificationPreference.create({
+      data: { businessId: bareBusinessId, routing: {}, quietHoursEnabled: false },
+    });
+
+    try {
+      const outcomes = await notify({
+        event: "weekly_digest",
+        businessId: bareBusinessId,
+        recipientUserId: bareSeatUserId,
+        now: MONDAY_1000,
+        params: {},
+      });
+      for (const outcome of outcomes) {
+        if (outcome.deliveryId) createdDeliveryIds.push(outcome.deliveryId);
+      }
+
+      expect(outcomes).toHaveLength(1);
+      expect(outcomes[0]?.status).toBe("skipped");
+      expect(outcomes[0]?.reason).toBe("no_channel_for_event");
+      expect(
+        outcomes[0]?.channel,
+        "in-app is the channel a silence can only be a decision on",
+      ).toBe("in_app");
+    } finally {
+      await prisma.notificationPreference.delete({ where: { businessId: bareBusinessId } });
     }
   });
 });

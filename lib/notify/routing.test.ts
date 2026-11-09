@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { EVENT_AUDIENCE } from "./params";
 import {
+  DEFAULT_ROUTING,
   PLATFORM_FLOOR,
   inQuietHours,
   localParts,
@@ -7,6 +9,7 @@ import {
   quietLiftsAt,
   route,
   withInheritedChoices,
+  type NotificationEvent,
   type RoutingPreference,
 } from "./routing";
 
@@ -240,5 +243,70 @@ describe("board 1o — part of a quote accepted routes as an acceptance", () => 
       quote_accepted: ["whatsapp"],
       quote_partly_accepted: [],
     });
+  });
+});
+
+describe("T6.1 — DEFAULT_ROUTING, for a business with no stored preference", () => {
+  /*
+     The defect, as a test.
+
+     `notify()` found no `NotificationPreference` and returned `[]` *before*
+     `route()` ran, so `PLATFORM_FLOOR` was never reached: a business with no
+     row received nothing on any channel for any event, the two the platform
+     promises are not switchable included. Every imported listing is in that
+     state.
+  */
+  it("covers every seller event, and only seller events", () => {
+    const events = Object.keys(DEFAULT_ROUTING.matrix) as NotificationEvent[];
+    expect(events.length).toBeGreaterThan(10);
+    for (const event of events) {
+      expect(EVENT_AUDIENCE[event], event).toBe("seller");
+    }
+    // Derived from `EVENT_AUDIENCE`, so a new seller event joins it without a
+    // second list being edited. The three that matter most, named:
+    for (const event of ["enquiry_received", "quote_accepted", "document_expiring"] as const) {
+      expect(events, event).toContain(event);
+    }
+    // A buyer's events are not a seller's to receive.
+    expect(events).not.toContain("quote_received");
+    expect(events).not.toContain("approval_requested");
+  });
+
+  it("defaults to the two channels that do not interrupt, and nothing else", () => {
+    for (const [event, channels] of Object.entries(DEFAULT_ROUTING.matrix)) {
+      expect([...(channels ?? [])].sort(), event).toEqual(["email", "in_app"]);
+    }
+  });
+
+  it("reaches the platform floor, which is what the early return skipped", () => {
+    // `document_expiring` is on the floor *and* in the default matrix, so this
+    // asserts the thing that was actually broken: that `route()` runs at all.
+    const decisions = route(DEFAULT_ROUTING, { event: "document_expiring", now: MONDAY_1000 });
+    expect(actions(decisions)).toEqual({ email: "send", in_app: "send" });
+  });
+
+  it("carries the platform's quiet promise, inert on both default channels", () => {
+    /*
+       Neither email nor in-app interrupts, so a default-routed business is
+       never deferred — the window is set so that a seller who later turns
+       WhatsApp on inherits the promise rather than a blank.
+    */
+    expect(DEFAULT_ROUTING.quiet.enabled).toBe(true);
+    const decisions = route(DEFAULT_ROUTING, { event: "enquiry_received", now: TUESDAY_0300 });
+    expect(actions(decisions)).toEqual({ email: "send", in_app: "send" });
+
+    const chatty: RoutingPreference = {
+      ...DEFAULT_ROUTING,
+      matrix: { ...DEFAULT_ROUTING.matrix, enquiry_received: ["whatsapp", "email", "in_app"] },
+    };
+    expect(actions(route(chatty, { event: "enquiry_received", now: TUESDAY_0300 }))).toEqual({
+      whatsapp: "defer",
+      email: "send",
+      in_app: "send",
+    });
+  });
+
+  it("asks for no high-value override, because nobody set one", () => {
+    expect(DEFAULT_ROUTING.highValueOverrideAed).toBeNull();
   });
 });
