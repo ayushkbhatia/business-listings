@@ -4,6 +4,7 @@ import { cache } from "react";
 import type { Prisma } from "@/lib/db/generated/client";
 import type { Emirate } from "@/lib/db/generated/enums";
 import { prisma } from "@/lib/db/client";
+import { rankedPage } from "./search-page";
 import { isCode, matchNeedle } from "@/lib/search/index-text";
 import { nearestKm } from "@/lib/geo/distance";
 import { measurable } from "@/lib/locations/branch";
@@ -643,17 +644,102 @@ export async function searchBusinesses(
     ? { AND: [PUBLIC_BUSINESS, { id: { in: [...options.ids] } }] }
     : businessWhere(query, categoryIds);
 
-  const [candidates, total] = await Promise.all([
-    prisma.business.findMany({
-      where,
+  const pageSize = options.pageSize ?? PAGE_SIZE;
+
+  /*
+     Task T2.2 — ordered and paged in Postgres where it can be.
+
+     This read was `take: 200` with no `orderBy`: whichever two hundred rows
+     Postgres returned, ranked in the process, with the requested page sliced
+     out of them. At 41,000 listings the first page was the best of an accident
+     and every page past the tenth was empty beneath a total claiming 1,935.
+
+     `rankedPage` does the predicate, the score, the order and the window in one
+     statement per vector — see `lib/db/queries/search-page.ts`. It answers null
+     for the two shapes SQL cannot answer faithfully, and the guard below names
+     the third, so the in-process path stays exactly as it was for those:
+
+      · a category scope spanning both trade kinds, where which category
+        decides the vector depends on a relation read with no `orderBy`;
+      · a landing page under the `category_depth` browse mode, where relevance
+        is the page's own rule about its own scope and is handed in as a
+        callback — there is nothing to port;
+      · a landing page with two live vectors, where the band the merge reads
+        comes from that same callback.
+
+     None of the three is reachable from a public surface today: search passes
+     no scope, a landing page passes one subtree, and no services vector has
+     ever been published. They are guarded rather than assumed away because
+     T5.9 publishes the first services vector.
+  */
+  const browseNeedsCallback =
+    browse && (vectors.goods.relevance !== 0 || (vectors.services?.relevance ?? 0) !== 0);
+  const twoVectorBrowse = browse && vectors.services !== null;
+  /*
+     The fourth shape: a live services vector and a place in the query.
+
+     The services vector's fifth slot is `coverageMatch`, and it is not a column
+     — it is whether the *matched* service's effective coverage reaches the
+     place the buyer named, where "effective" is the service's own rows when it
+     has narrowed itself and the firm's default when it has not, and "matched"
+     is the service the query found. `lib/search/service-signals.ts` owns that
+     reading and two boards (`12c-s` B4, `1h-s` B5) depend on it being per
+     service rather than per firm.
+
+     Porting it is its own piece of work and it is not needed yet: no services
+     vector has been published, so this guard is unreachable on every public
+     surface today. `ranking-services.test.ts` publishes one and named the gap
+     — it is why this condition exists rather than a comment promising to think
+     about it. T5.9 seeds the first real vector; the port goes with it.
+  */
+  const servicesCoverage = vectors.services !== null && (query.emirate !== undefined || query.area !== undefined);
+
+  const sqlPage =
+    browseNeedsCallback || twoVectorBrowse || servicesCoverage
+      ? null
+      : await rankedPage({
+          query,
+          ...(options.categoryIds ? { categoryIds: options.categoryIds } : {}),
+          vectors,
+          kinds,
+          boosts,
+          origin: origin ? { lat: origin.lat, lng: origin.lng } : null,
+          page: query.page,
+          pageSize,
+          sponsoredId,
+        });
+
+  const total = await prisma.business.count({ where });
+
+  if (sqlPage) {
+    /*
+       The page's rows, in the order Postgres ranked them. `findMany` with an
+       `in` returns them in its own order, so the ids are the order and this
+       puts the rows back into it — a page that re-sorted itself by id here
+       would throw away the whole point.
+    */
+    const rows = await prisma.business.findMany({
+      where: { id: { in: sqlPage.ids } },
       include: BUSINESS_INCLUDE,
-      // Ranking runs in the process over a bounded candidate set. At 41,000
-      // listings this becomes a Postgres-side score; the weights object is the
-      // part that has to be right now, and it moves unchanged.
-      take: 200,
-    }),
-    prisma.business.count({ where }),
-  ]);
+    });
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    return {
+      rows: sqlPage.ids.map((id) => byId.get(id)).filter((row) => row !== undefined),
+      total,
+      sponsoredId: sqlPage.sponsoredId,
+      /** True when the requested page is past what the ranking orders. */
+      capped: sqlPage.capped,
+      origin,
+      shape,
+    };
+  }
+
+  const candidates = await prisma.business.findMany({
+    where,
+    include: BUSINESS_INCLUDE,
+    // The fallback path, for the three shapes above. Bounded as it always was.
+    take: 200,
+  });
 
   const kindOf = listingKind(kinds, categoryIds);
   const services = await serviceSignals(
@@ -732,12 +818,12 @@ export async function searchBusinesses(
     Boolean(query.tier),
   );
 
-  const pageSize = options.pageSize ?? PAGE_SIZE;
   const from = (query.page - 1) * pageSize;
   return {
     rows: placed.rows.slice(from, from + pageSize),
     total,
     sponsoredId: placed.sponsoredId,
+    capped: false,
     /*
        Returned rather than recomputed by the page. Board 1c's sort strip names
        the origin it sorted by, and a strip that worked it out separately could

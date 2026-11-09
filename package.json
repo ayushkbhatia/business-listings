@@ -34,6 +34,7 @@
     "postinstall": "prisma generate",
     "matrix": "tsx scripts/print-matrix.mts",
     "measure": "NODE_OPTIONS=--conditions=react-server tsx scripts/measure-response-times.mts",
+    "measure:search": "NODE_OPTIONS=--conditions=react-server tsx scripts/measure-search.mts",
     "check:contrast": "tsx scripts/contrast-audit.mts",
     "report:contrast": "tsx scripts/contrast-report.mts",
     "check:formatters": "tsx scripts/check-formatter-coverage.mts",
