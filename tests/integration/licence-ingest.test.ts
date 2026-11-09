@@ -1040,3 +1040,97 @@ describe("T4.2 — staging commits as it goes, and can be continued", () => {
     expect((await runOverview(staged.runId))?.resumable).toBe(false);
   });
 });
+
+/* ── T4.3 · slugs resolved on the constraint ────────────────────────────── */
+
+describe("T4.3 — a slug collision costs one row, not the directory", () => {
+  /*
+     What this replaced: `findMany({ select: { slug: true } })` — every slug in
+     the directory read into a Set on every publish, to answer a question about
+     the few thousand in the run. The cost grew with the directory rather than
+     with the file.
+
+     The behaviour that has to survive the change is what the old Set bought:
+     two rows of one file wanting the same slug must not collide, and a name
+     already in the directory must not be overwritten.
+  */
+  it("suffixes against the directory and against the rest of the file", async () => {
+    const name = `Slug Twin ${TAG}`;
+    /*
+       Three rows, one trade name, three licences and three *different* areas
+       and phones — so board 12b's matcher does not pair them with each other
+       and every one publishes. One stem, three slugs.
+    */
+    const staged = await stage(
+      [
+        row({ name, area: "Deira", phone: "042220001" }),
+        row({ name, area: "Al Quoz Industrial 2", phone: "043330002" }),
+        row({ name, area: "Jebel Ali Free Zone", phone: "048880003" }),
+      ],
+      `slug-${TAG}`,
+    );
+
+    const published = await publishRun({ actor: opsLead, runId: staged.runId, reason: REASON });
+    expect(published.ok).toBe(true);
+
+    const created = await prisma.business.findMany({
+      where: { licenceImportRunId: staged.runId },
+      orderBy: { slug: "asc" },
+      select: { slug: true },
+    });
+    const slugs = created.map((row) => row.slug);
+    /*
+       Three listings, three distinct slugs, one stem. `toBe(3)` rather than
+       `toBeGreaterThan(0)`: if the matcher paired two of these rows the test
+       would still pass on a weaker assertion while proving nothing about
+       suffixing, which is the only thing it is here for.
+    */
+    expect(slugs).toHaveLength(3);
+    expect(new Set(slugs).size).toBe(3);
+    /*
+       The stem is the shortest of the three, which is the one row that got the
+       name unsuffixed. Not `replace(/-\d+$/, "")` — `TAG` ends in digits, so
+       that strips part of the name and every slug then looks suffixed.
+    */
+    const stem = [...slugs].sort((a, b) => a.length - b.length)[0]!;
+    expect(slugs).toContain(stem);
+    expect(slugs.filter((slug) => slug === `${stem}-2` || slug === `${stem}-3`)).toHaveLength(2);
+  });
+
+  it("does not take a slug a listing already has", async () => {
+    /*
+       The directory read is gone, so the only thing standing between an
+       imported listing and an existing seller's address is the indexed lookup
+       plus the unique constraint. A seeded storefront's slug is the fixture.
+    */
+    const existing = await prisma.business.findFirstOrThrow({
+      where: { publishedAt: { not: null }, licenceImportRunId: null },
+      orderBy: { slug: "asc" },
+      select: { slug: true, displayName: true, tradeName: true },
+    });
+
+    const staged = await stage(
+      [row({ name: existing.tradeName ?? existing.displayName })],
+      `slug-clash-${TAG}`,
+    );
+
+    const published = await publishRun({ actor: opsLead, runId: staged.runId, reason: REASON });
+    expect(published.ok).toBe(true);
+
+    /*
+       Either the record published under a suffixed slug, or it was paired with
+       the listing as a duplicate and published nothing — board 12b's job and
+       the better outcome. What must not happen is the existing listing losing
+       its address.
+    */
+    const mine = await prisma.business.findMany({
+      where: { licenceImportRunId: staged.runId },
+      select: { slug: true },
+    });
+    for (const row of mine) expect(row.slug).not.toBe(existing.slug);
+    const still = await prisma.business.count({
+      where: { slug: existing.slug, licenceImportRunId: null },
+    });
+    expect(still, "the seeded listing keeps its slug").toBe(1);
+  });
+});

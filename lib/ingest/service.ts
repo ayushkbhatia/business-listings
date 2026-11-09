@@ -813,6 +813,149 @@ export type PublishResult =
       message: string;
     };
 
+/**
+ * A free slug for each base, resolved against the index rather than the table —
+ * T4.3.
+ *
+ * ## What it replaced
+ *
+ * `findMany({ select: { slug: true } })` — every slug in the directory, read
+ * into a Set on every publish, to answer a question about at most six thousand
+ * of them. A sequential scan whose cost grows with the directory instead of
+ * with the run.
+ *
+ * ## What it does
+ *
+ * One indexed read for the bases this run actually wants (`slug IN (…)`, at most
+ * a few thousand keys), and a second read **only for the bases that turn out to
+ * be taken** (`slug LIKE 'base-%'`), to find the lowest free suffix. A run whose
+ * trade names are all new — the common case for a register export — costs one
+ * query.
+ *
+ * ## And the constraint is still the authority
+ *
+ * Two rows of one file can want the same slug, so the batch resolves against
+ * itself as well. But nothing here holds a lock: another publish, or a seller
+ * claiming a listing, can take a slug between this read and the insert. That
+ * race is not closed by reading more — it is closed by `business.slug` being
+ * `@unique`, and by `insertBusinessChunk` retrying the rows Postgres refuses.
+ * This function's job is to make the refusal rare, not to make it impossible.
+ */
+async function claimSlugs(bases: readonly string[]): Promise<string[]> {
+  const wanted = [...new Set(bases)];
+  const exact =
+    wanted.length === 0
+      ? []
+      : await prisma.business.findMany({
+          where: { slug: { in: wanted } },
+          select: { slug: true },
+        });
+  const taken = new Set(exact.map((row) => row.slug));
+  // Suffixed siblings, read lazily: one query per base that is actually taken.
+  const families = new Map<string, Set<string>>();
+
+  const out: string[] = [];
+  for (const base of bases) {
+    if (!taken.has(base)) {
+      taken.add(base);
+      out.push(base);
+      continue;
+    }
+    let family = families.get(base);
+    if (!family) {
+      const rows = await prisma.business.findMany({
+        where: { slug: { startsWith: `${base}-` } },
+        select: { slug: true },
+      });
+      family = new Set(rows.map((row) => row.slug));
+      families.set(base, family);
+    }
+    let n = 2;
+    while (taken.has(`${base}-${String(n)}`) || family.has(`${base}-${String(n)}`)) n += 1;
+    const slug = `${base}-${String(n)}`;
+    taken.add(slug);
+    family.add(slug);
+    out.push(slug);
+  }
+  return out;
+}
+
+/** The suffix a row gets when Postgres refuses the slug this run chose. */
+function reslug(slug: string): string {
+  return `${slug}-${randomBytes(3).toString("hex")}`;
+}
+
+/**
+ * One chunk of listings, with the slug collisions Postgres finds — T4.3.
+ *
+ * The happy path is one statement for five hundred rows, which is what it was
+ * before. What is new is the refusal: `business.slug` is `@unique`, so a slug
+ * another writer took between `claimSlugs` and here comes back as `P2002`, and
+ * one `createMany` is all-or-nothing.
+ *
+ * On that refusal the chunk is retried **row by row**, each row keeping the slug
+ * it was given and the refused ones taking a random suffix — `safeName`'s
+ * answer to the same problem one layer down. Five hundred round trips, for a
+ * chunk that actually collided, which is the trade the task asks for: the cost
+ * lands on the rare case instead of on every publish.
+ *
+ * It returns the rows it created, in the shape `createManyAndReturn` does, so
+ * the caller's `idBySlug` map is built the same way either route was taken.
+ *
+ * ## Why the retry is not a loop
+ *
+ * A random three-byte suffix on a slug that was already free a moment ago does
+ * not collide twice in any realistic world, and a `while (true)` around an
+ * insert is how a function that should have failed loudly becomes one that
+ * spends its whole `maxDuration` instead. A second refusal on the same row
+ * throws, with the slug in the message.
+ */
+async function insertBusinessChunk(
+  tx: Prisma.TransactionClient,
+  slice: readonly { business: { slug: string } & Record<string, unknown> }[],
+): Promise<{ id: string; slug: string }[]> {
+  try {
+    return await tx.business.createManyAndReturn({
+      data: slice.map((item) => item.business as never),
+      select: { id: true, slug: true },
+    });
+  } catch (error) {
+    if (!isSlugCollision(error)) throw error;
+
+    const rows: { id: string; slug: string }[] = [];
+    for (const item of slice) {
+      try {
+        rows.push(
+          await tx.business.create({ data: item.business as never, select: { id: true, slug: true } }),
+        );
+      } catch (first) {
+        if (!isSlugCollision(first)) throw first;
+        /*
+           Renamed, and the **caller's** map is keyed by the slug that was
+           actually written — which is why this returns the row rather than the
+           slug it asked for. A location pointing at a business by a slug the
+           database refused is the defect this would otherwise introduce.
+        */
+        rows.push(
+          await tx.business.create({
+            data: { ...item.business, slug: reslug(item.business.slug) } as never,
+            select: { id: true, slug: true },
+          }),
+        );
+      }
+    }
+    return rows;
+  }
+}
+
+/** A unique violation naming the slug, and nothing else. */
+function isSlugCollision(error: unknown): boolean {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") return false;
+  const target = (error.meta as { target?: unknown } | undefined)?.target;
+  const fields = Array.isArray(target) ? target.map(String) : [String(target ?? "")];
+  return fields.some((field) => field.includes("slug"));
+}
+
 function slugify(value: string): string {
   return value
     .toLowerCase()
@@ -954,25 +1097,30 @@ export async function publishRun(
   }
 
   const categoryIds = [...new Set(ready.map((row) => row.categoryId!))];
-  const [categories, takenSlugs] = await Promise.all([
-    prisma.category.findMany({
-      where: { id: { in: categoryIds } },
-      select: { id: true, name: true, synonyms: true },
-    }),
-    // Slugs must be free on arrival, and two rows of one export can want the
-    // same one. Resolved against the database and against each other.
-    prisma.business.findMany({ select: { slug: true } }),
-  ]);
+  const categories = await prisma.category.findMany({
+    where: { id: { in: categoryIds } },
+    select: { id: true, name: true, synonyms: true },
+  });
   const categoryById = new Map(categories.map((category) => [category.id, category]));
-  const taken = new Set(takenSlugs.map((row) => row.slug));
 
-  const prepared = ready.map((row) => {
+  /*
+     T4.3 — the slugs this run wants, asked for by name.
+
+     This used to be `prisma.business.findMany({ select: { slug: true } })`:
+     **every slug in the directory**, into one Set, on every publish. At 41,000
+     listings that is a sequential scan and 41,000 strings in the function's
+     memory before a single listing is written, and it grows with the directory
+     rather than with the run — the one shape that is certain to be fine in
+     testing and wrong in production.
+  */
+  const slugFor = await claimSlugs(
+    ready.map((row) => slugify(row.tradeName ?? "") || `listing-${row.id.slice(-8)}`),
+  );
+
+  const prepared = ready.map((row, index) => {
     const authority = effectiveAuthority(row.licenceAuthority, run.source, KNOWN_AUTHORITIES)
       .code as $Enums.Authority;
-    const base = slugify(row.tradeName ?? "") || `listing-${row.id.slice(-8)}`;
-    let slug = base;
-    for (let n = 2; taken.has(slug); n += 1) slug = `${base}-${n}`;
-    taken.add(slug);
+    const slug = slugFor[index]!;
 
     const normalised = normaliseLicenceNumber(row.licenceNumber!, authority);
     const category = categoryById.get(row.categoryId!);
@@ -1099,10 +1247,18 @@ export async function publishRun(
     const slice = prepared.slice(i, i + CHUNK);
     created += await prisma.$transaction(
       async (tx) => {
-        const rows = await tx.business.createManyAndReturn({
-          data: slice.map((item) => item.business),
-          select: { id: true, slug: true },
-        });
+        /*
+           T4.3 — the constraint decides, and a refused row is renamed rather
+           than losing the chunk.
+
+           `claimSlugs` read the index a moment ago, which makes a collision
+           rare; it does not make it impossible, because nothing holds a lock
+           over a slug between that read and this insert. One `createMany` is
+           all-or-nothing, so a single colliding row used to be the whole
+           chunk's problem — and under the old whole-table read it was the whole
+           *publish's* problem, since the Set was built once.
+        */
+        const rows = await insertBusinessChunk(tx, slice);
         const idBySlug = new Map(rows.map((row) => [row.slug, row.id]));
 
         /*
