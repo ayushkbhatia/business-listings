@@ -4318,6 +4318,14 @@ model LicenceImportRun {
   /// licence root, a phone, most of a name — and scored under the floor.
   /// Board `12b` B10: a floor set too high shows up here.
   belowFloorCount  Int             @default(0) @map("below_floor_count")
+  /// Where in `ingest-uploads` the file this run was staged from still sits —
+  /// task T4.1. Null on a run staged before the bucket existed, and on one
+  /// staged from text by the seed or a test.
+  ///
+  /// Kept rather than deleted after staging, for the reason `StagedListing.raw`
+  /// keeps every column: a rejection has to be arguable, and the file is the
+  /// thing being argued about. It is also what a resumed stage re-reads.
+  uploadPath       String?         @map("upload_path")
   createdAt        DateTime        @default(now()) @map("created_at")
 
   actor        User             @relation("IngestActor", fields: [actorId], references: [id], onDelete: Restrict)

@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import { Button, FileDrop, Input, Label, Select, Textarea } from "@/components/primitives";
 import { Alert } from "@/components/display";
 import { formatBytes } from "@/lib/format";
+import { MAX_INGEST_BYTES, checkIngest } from "@/lib/storage/buckets";
 import { t } from "@/lib/i18n";
-import type { ActionResult } from "./actions";
+import type { ActionResult, SignResult } from "./actions";
 
 /**
  * Board 12a — staging a licence export.
@@ -23,58 +24,121 @@ import type { ActionResult } from "./actions";
 const MIN_REASON = 4;
 
 /**
- * What one staging request can carry: `serverActions.bodySizeLimit` in
- * next.config.ts, less room for the form's own encoding. A larger file is
- * refused here, with its size, rather than by the framework with none.
+ * What one staging request can carry — task T4.1, and it is now the bucket's
+ * number rather than the request body's.
+ *
+ * It was 3,900,000: `serverActions.bodySizeLimit` less room for the form's own
+ * encoding. That ceiling cut a register export at about 30,000 rows against a
+ * declared limit of 50,000, so the importer refused the file the feature exists
+ * for — in the browser, before any code of ours ran. The bytes go to object
+ * storage now and `MAX_INGEST_BYTES` is enforced by the bucket as well as here.
+ *
+ * Imported rather than restated. The old constant was a literal beside a
+ * comment pointing at a config file, which is how the two ended up different
+ * numbers; `lib/storage/buckets.ts` is free of server imports precisely so a
+ * client component can read the real one.
  */
-export const MAX_STAGE_BYTES = 3_900_000;
 
 export interface StageFormProps {
   authorities: readonly { value: string; label: string }[];
   stage: (formData: FormData) => Promise<ActionResult>;
+  /** T4.1 — mints the signed URL the browser PUTs the export to. */
+  sign: (formData: FormData) => Promise<SignResult>;
   /** Rendered inside a dialog, which supplies its own cancel. */
   onCancel?: () => void;
 }
 
-export function StageForm({ authorities, stage, onCancel }: StageFormProps) {
+export function StageForm({ authorities, stage, sign, onCancel }: StageFormProps) {
   const router = useRouter();
   const ids = { source: useId(), filename: useId(), reason: useId() };
   const [source, setSource] = useState(authorities[0]?.value ?? "");
   const [filename, setFilename] = useState("");
-  const [text, setText] = useState("");
+  /*
+     T4.1 — the object's path, not the file's text.
+
+     The form used to hold the whole export in React state and send it in the
+     action's body. A 10 MB CSV in a `useState` is 10 MB of string in the tab,
+     base64-encoded again on submit, and the framework refused it at 4 MB
+     anyway.
+  */
+  const [path, setPath] = useState("");
   const [reason, setReason] = useState("");
   const [result, setResult] = useState<ActionResult | null>(null);
-  const [reading, setReading] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [pending, startTransition] = useTransition();
 
+  /**
+   * Check, sign, PUT — T4.1.
+   *
+   * Three steps rather than one read, and the order matters: the size is
+   * refused here with its own number before a signature is minted, the
+   * signature is minted by a server that has checked the seat, and the bytes go
+   * straight from the tab to storage without passing through our runtime.
+   *
+   * The file is uploaded on **selection** rather than on submit, so the ops lead
+   * writes the reason while a 10 MB export is in flight instead of waiting for
+   * it afterwards. An upload nobody goes on to stage leaves one object in a
+   * private bucket that no row points at, which is the cost of that and is
+   * cheaper than the wait.
+   */
   async function take(files: FileList) {
     const file = files[0];
     if (!file) return;
     setResult(null);
-    if (file.size > MAX_STAGE_BYTES) {
+
+    const check = checkIngest(file.type, file.size);
+    if (!check.ok) {
       setResult({
         ok: false,
-        error: t("admin.ingest.stage_too_large", {
-          size: formatBytes(file.size),
-          limit: formatBytes(MAX_STAGE_BYTES),
-        }),
+        error:
+          file.size > MAX_INGEST_BYTES
+            ? t("admin.ingest.stage_too_large", {
+                size: formatBytes(file.size),
+                limit: formatBytes(MAX_INGEST_BYTES),
+              })
+            : check.reason,
       });
       return;
     }
-    setReading(true);
-    // Read in the browser, like the seller's product import: the server action
-    // takes the text, so there is no upload endpoint to hold a half-written
-    // file and nothing to clean up if somebody changes their mind.
-    setText(await file.text());
+
+    setUploading(true);
     setFilename(file.name);
-    setReading(false);
+
+    const signForm = new FormData();
+    signForm.set("filename", file.name);
+    signForm.set("type", file.type);
+    signForm.set("bytes", String(file.size));
+    const signed = await sign(signForm);
+    if (!signed.ok) {
+      setResult({ ok: false, error: signed.error });
+      setFilename("");
+      setUploading(false);
+      return;
+    }
+
+    const response = await fetch(signed.url, {
+      method: "PUT",
+      headers: { "content-type": file.type || "text/csv" },
+      body: file,
+    });
+    if (!response.ok) {
+      // The path is not kept. Staging from a half-written object would stage a
+      // truncated register and report a tidy number for it.
+      setResult({ ok: false, error: t("admin.ingest.stage_upload_failed") });
+      setFilename("");
+      setUploading(false);
+      return;
+    }
+
+    setPath(signed.path);
+    setUploading(false);
   }
 
   function submit() {
     const form = new FormData();
     form.set("source", source);
     form.set("filename", filename);
-    form.set("text", text);
+    form.set("path", path);
     form.set("reason", reason);
     startTransition(async () => {
       const outcome = await stage(form);
@@ -122,11 +186,17 @@ export function StageForm({ authorities, stage, onCancel }: StageFormProps) {
         idleLabel={t("admin.ingest.stage_drop")}
         idleHint={t("admin.ingest.stage_drop_hint")}
         {...(filename ? { filename } : {})}
-        state={reading || pending ? "uploading" : text ? "done" : "idle"}
+        state={uploading || pending ? "uploading" : path ? "done" : "idle"}
         onSelect={(files) => void take(files)}
         onRemove={() => {
+          /*
+             The object stays in the bucket. Removing it would need a second
+             action and a second permission check for a file nothing points at,
+             and the alternative — a delete the browser can ask for by path — is
+             a delete somebody can ask for by any path.
+          */
           setFilename("");
-          setText("");
+          setPath("");
         }}
       />
 
@@ -156,7 +226,7 @@ export function StageForm({ authorities, stage, onCancel }: StageFormProps) {
         )}
         <Button
           loading={pending}
-          disabled={!text || !source || reason.trim().length < MIN_REASON || pending}
+          disabled={!path || !source || reason.trim().length < MIN_REASON || pending || uploading}
           onClick={submit}
         >
           {t("admin.ingest.stage_action")}

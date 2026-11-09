@@ -14,7 +14,7 @@ import { queuedRecordCount } from "@/lib/ingest/queue";
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { AdminPage, getAdminNavBadges } from "../../_shell";
-import { discard, publish, rollback, stage } from "./actions";
+import { discard, publish, rollback, signIngestUpload, stage } from "./actions";
 import { IngestTabs } from "./IngestTabs";
 import { RunHistory, SourcesPanel } from "./IngestRail";
 import { NewImport } from "./NewImport";
@@ -67,7 +67,7 @@ export default async function IngestPage() {
             : t("admin.ingest.meta_none")}
         </span>
       }
-      actions={<NewImport authorities={AUTHORITIES} stage={stage} />}
+      actions={<NewImport authorities={AUTHORITIES} stage={stage} sign={signIngestUpload} />}
     >
       <IngestTabs active="runs" queued={queued} showDedupe={can(seat.actor, "business.merge")} />
 

@@ -1324,8 +1324,11 @@ export const en = {
   "admin.ingest.stage_source_hint": "Records with no authority column are read as this authority's.",
   "admin.ingest.stage_filename": "File name",
   "admin.ingest.stage_drop": "Drop a CSV export",
-  "admin.ingest.stage_drop_hint": "Needs a trade name column. Up to 3.9 MB, which is about 30,000 rows.",
+  "admin.ingest.stage_drop_hint": "Needs a trade name column. Up to 32 MB, which is more than one authority's whole register.",
   "admin.ingest.stage_too_large": "That file is {size}, and one run takes up to {limit}. Split it by emirate or by month and stage each part as its own run.",
+  "admin.ingest.stage_uploading": "Uploading the file",
+  "admin.ingest.stage_upload_failed": "The file did not finish uploading. Nothing was staged — try it again.",
+  "admin.ingest.storage_off": "Uploads are not set up in this environment. Run pnpm storage:setup against a Supabase project with a service key.",
   "admin.ingest.stage_action": "Stage the run",
   "admin.ingest.staged": {
     one: "{n} new listing staged. Nothing is live until the run is approved.",

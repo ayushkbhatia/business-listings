@@ -1,6 +1,7 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
 import { prisma } from "@/lib/db/client";
+import { readIngestText } from "@/lib/storage";
 import "@/lib/audit/prisma-writer";
 import { staffMutation } from "@/lib/audit/staff-mutation";
 import { assertCan } from "@/lib/auth/can";
@@ -156,13 +157,33 @@ export const MAX_LICENCE_ROWS = 50_000;
 
 export type StageResult =
   | { ok: true; runId: string; totals: ReturnType<typeof tally>; truncated: number }
-  | { ok: false; error: "empty" | "no_trade_name_column"; message: string };
+  | { ok: false; error: "empty" | "no_trade_name_column" | "no_file"; message: string };
 
 export interface StageInput {
   actor: Actor;
   source: string;
   filename: string;
-  text: string;
+  /**
+   * The file's text, when the caller already has it.
+   *
+   * The seed and the integration tests do, and they should: putting a fixture
+   * through object storage to test the classifier would be testing Supabase.
+   * The console does not — see `uploadPath`.
+   */
+  text?: string;
+  /**
+   * Where the browser put the file in `ingest-uploads` — task T4.1.
+   *
+   * The console's path. The file used to travel in the server action's request
+   * body, under a 4 MB `bodySizeLimit` against a declared 50,000-row ceiling —
+   * and a 40,000-row register export is 6–10 MB, so the importer refused the
+   * file the feature was built for. The browser writes to a signed URL and this
+   * is the object the server reads.
+   *
+   * Recorded on the run, because a resumed stage re-reads it and because a
+   * rejection has to be arguable from the file it came from.
+   */
+  uploadPath?: string;
   /** B8: the upload is logged with a written reason, like approval and rollback. */
   reason: string;
 }
@@ -223,11 +244,31 @@ export async function stageRun(input: StageInput, now = new Date()): Promise<Sta
   assertCan(input.actor, "queue.decide");
 
   /*
+     The bytes, from wherever this caller has them — T4.1.
+
+     Read *after* the capability check and before anything else, so a request
+     with no file costs one storage round trip rather than a parse. A path that
+     storage no longer holds is a sentence rather than a throw: the object can
+     be gone because somebody staged, failed, and came back an hour later, and
+     "upload the file again" is the whole of what they need to know.
+  */
+  const text = input.uploadPath ? await readIngestText(input.uploadPath) : (input.text ?? null);
+  if (text === null) {
+    return {
+      ok: false,
+      error: "no_file",
+      message: input.uploadPath
+        ? "That upload is no longer in storage. Upload the file again and stage it."
+        : "No file arrived with that request.",
+    };
+  }
+
+  /*
    * A ceiling of its own. `MAX_ROWS` is 5,000, which is right for a seller's
    * catalogue and wrong for an authority export — criterion 1 names 8,000, and
    * an emirate has rather more companies than that.
    */
-  const { headers, rows: body, truncated } = parseCsv(input.text, MAX_LICENCE_ROWS);
+  const { headers, rows: body, truncated } = parseCsv(text, MAX_LICENCE_ROWS);
   if (body.length === 0) {
     return { ok: false, error: "empty", message: "That file has no rows under its header." };
   }
@@ -384,6 +425,7 @@ export async function stageRun(input: StageInput, now = new Date()): Promise<Sta
               actorId: input.actor.id,
               source,
               filename: input.filename.trim() || "export.csv",
+              uploadPath: input.uploadPath ?? null,
               status: "parsing",
               rowCount: totals.rows,
               truncatedCount: truncated,

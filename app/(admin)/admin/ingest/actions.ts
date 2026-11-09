@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { AuditReasonError, PermissionError } from "@/lib/auth/errors";
 import { requireStaff } from "@/lib/auth/staff";
+import { assertCan } from "@/lib/auth/can";
+import { INGEST_BUCKET, checkIngest, ingestPath, signUpload } from "@/lib/storage";
 import {
   RunMovedError,
   discardRun,
@@ -28,6 +30,11 @@ export type ActionResult =
   | { ok: true; message: string; runId?: string }
   | { ok: false; error: string };
 
+/** T4.1 — where the browser should PUT the export, and the path it lands at. */
+export type SignResult =
+  | { ok: true; path: string; url: string }
+  | { ok: false; error: string };
+
 const n = (count: number) => ({ count, n: formatCount(count) });
 
 async function guarded(work: () => Promise<ActionResult>): Promise<ActionResult> {
@@ -50,6 +57,39 @@ function refresh(runId?: string) {
 
 const field = (formData: FormData, name: string) => String(formData.get(name) ?? "");
 
+/**
+ * Sign one upload into `ingest-uploads` — task T4.1.
+ *
+ * The path is built from the seat's own staff id and never from the form, so a
+ * signature cannot be talked into writing under somebody else's folder. The
+ * capability is the importer's own: `queue.decide`, the same one `stageRun`
+ * asserts, because the ability to put a 32 MB file where the importer reads
+ * from is the ability to start an import.
+ *
+ * It writes nothing and audits nothing. The audited event is the staging, which
+ * carries the reason; an upload nobody stages is an object with a random name
+ * that no row points at.
+ */
+export async function signIngestUpload(formData: FormData): Promise<SignResult> {
+  const seat = await requireStaff();
+  try {
+    assertCan(seat.actor, "queue.decide");
+  } catch {
+    return { ok: false, error: t("admin.queue.not_yours") };
+  }
+
+  const filename = field(formData, "filename") || "export.csv";
+  const check = checkIngest(field(formData, "type"), Number(formData.get("bytes") ?? 0));
+  if (!check.ok) return { ok: false, error: check.reason };
+
+  try {
+    const signed = await signUpload(INGEST_BUCKET, ingestPath(seat.actor.id, filename));
+    return { ok: true, path: signed.path, url: signed.url };
+  } catch {
+    return { ok: false, error: t("admin.ingest.storage_off") };
+  }
+}
+
 export async function stage(formData: FormData): Promise<ActionResult> {
   const seat = await requireStaff();
   return guarded(async () => {
@@ -57,7 +97,11 @@ export async function stage(formData: FormData): Promise<ActionResult> {
       actor: seat.actor,
       source: field(formData, "source"),
       filename: field(formData, "filename"),
-      text: field(formData, "text"),
+      /*
+         T4.1: the path, not the bytes. `text` stays on the input for the seed
+         and the integration tests, and the console has stopped using it.
+      */
+      uploadPath: field(formData, "path"),
       reason: field(formData, "reason"),
     });
     if (!result.ok) return { ok: false, error: result.message };
