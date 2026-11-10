@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { Alert } from "@/components/display";
 import { Card, StepHeader } from "@/components/structure";
 import { mayChangePlan } from "@/lib/auth/guards";
 import {
@@ -9,7 +10,7 @@ import {
   REASON_NEEDING_A_NOTE,
   cancellationView,
 } from "@/lib/billing/cancellation";
-import { whatChanges } from "@/lib/billing/cancel-table";
+import { lastPaidDay, whatChanges } from "@/lib/billing/cancel-table";
 import { FILS_PER_AED } from "@/lib/billing/proration";
 import { formatAED, formatDate } from "@/lib/format";
 import { t } from "@/lib/i18n";
@@ -67,6 +68,9 @@ export default async function CancelConfirmPage() {
 
   const freeStartsOn = formatDate(view.freeStartsOn);
   const paidTo = formatDate(view.paidTo);
+  // The last day a cancellation can be resumed — see 11h. T9.3.
+  const chooseBy = formatDate(lastPaidDay(view.freeStartsOn));
+  const pastDue = view.pastDue;
   const placement = view.rows.find((row) => row.key === "sponsored" && row.mark === "ends");
 
   return (
@@ -120,12 +124,26 @@ export default async function CancelConfirmPage() {
           confirm: t("cancel.confirm", { when: freeStartsOn }),
           confirmClosing: t("cancel.confirm_closing"),
           closingNote: t("cancel.closing_note"),
-          resumeNote: t("cancel.resume_note", { plan: view.planName, when: paidTo }),
+          resumeNote: t("cancel.resume_note", { plan: view.planName, when: chooseBy }),
           errorNoReason: t("cancel.error.no_reason"),
           errorNoteRequired: t("cancel.error.note_required"),
         }}
         rail={
           <>
+            {pastDue ? (
+              // The same sentence 11h opens with, on the same date — P-06's one date on every screen.
+              <Alert
+                tone="warn"
+                title={
+                  pastDue.finalNoticeSent
+                    ? t("cancel.past_due.title_final", { when: formatDate(pastDue.dropsOn) })
+                    : t("cancel.past_due.title", { failed: formatDate(pastDue.since), when: formatDate(pastDue.dropsOn) })
+                }
+                fix={t("billing.failed.fix")}
+              >
+                <p>{t("cancel.past_due.fix")}</p>
+              </Alert>
+            ) : null}
             <Card surface="card" padded>
               <p className="font-mono text-eyebrow uppercase tracking-[0.11em] text-muted">
                 {t("cancel.happens_eyebrow", { when: freeStartsOn })}
@@ -163,7 +181,9 @@ export default async function CancelConfirmPage() {
                 {t("cancel.dates_eyebrow")}
               </p>
               <p className="mt-2.5 text-caption leading-relaxed text-body-ink">
-                {t("cancel.dates.period", { plan: view.planName, paidTo, freeFrom: freeStartsOn })}
+                {pastDue
+                  ? t("cancel.past_due.dates_period", { plan: view.planName, paidTo, freeFrom: freeStartsOn })
+                  : t("cancel.dates.period", { plan: view.planName, paidTo, freeFrom: freeStartsOn })}
               </p>
               <p className="mt-2 text-caption leading-relaxed text-body-ink">
                 {/*
@@ -172,10 +192,12 @@ export default async function CancelConfirmPage() {
                    naming one figure differently is the defect the `3m`/`11f`
                    pair was drawn to fix.
                 */}
-                {t("cancel.dates.invoice", {
-                  amount: aed(view.nextInvoiceFils),
-                  when: freeStartsOn,
-                })}
+                {pastDue
+                  ? t("cancel.past_due.dates_invoice", { amount: aed(view.nextInvoiceFils) })
+                  : t("cancel.dates.invoice", {
+                      amount: aed(view.nextInvoiceFils),
+                      when: freeStartsOn,
+                    })}
               </p>
               {/*
                  The placement runs on its own term and outlasts the

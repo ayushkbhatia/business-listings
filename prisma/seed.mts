@@ -62,6 +62,7 @@ import { seedReviewWrite } from "./seed-review-write.mjs";
 import { seedBuyerCompany } from "./seed-buyer-company.mjs";
 import { seedCompareQuotes } from "./seed-compare-quotes.mjs";
 import { seedContactLeads } from "./seed-contact-leads.mjs";
+import { seedPastDueSeller } from "./seed-past-due.mjs";
 import { seedAccountHealth } from "./seed-account-health.mjs";
 import { seedRevenue } from "./seed-revenue.mjs";
 import { seedCrmCalls } from "./seed-crm.mjs";
@@ -1180,6 +1181,8 @@ async function main() {
   // and after the sweep above so neither is reported — one has lapsed, and a
   // report would take it out of the index for a reason the spec is not about.
   await seedUnclaimedListing(prisma, NOW);
+  // T9.7: the money-path e2e's own past-due seller. See the module for why its own seat.
+  await seedPastDueSeller(prisma, NOW);
   // Last, because everything above it can create a recipient row.
   await onlyOneSellerAtCap(prisma);
   await recomputeDerived(prisma);

@@ -8489,6 +8489,7 @@ export const en = {
   "pricing.cell.absent": "Not included",
   "pricing.cell.absent_label": "Not included on {plan}",
 
+  "pricing.kept_limits": "Your {plan} subscription keeps the limits it started with, which differ from this card. The card is what a new {plan} subscription gets. Each renewal charges the price shown.",
   "pricing.same_heading": "The same on every plan",
   "pricing.same.response_time":
     "How fast you reply is measured from your own enquiry timestamps. There is no field to fill in and no plan that changes it.",
@@ -8741,6 +8742,19 @@ export const en = {
   "cancel.note.counter": "{used} of {limit}",
 
   "cancel.happens_eyebrow": "What happens on {when}",
+  /*
+     T9.3 — board 11h and 11j for a past-due subscription, prompt P-06, spec S4.
+     Every date is the drop date the failed-payment sequence already shows.
+     The renewal date a failed renewal never advanced is in the past, and the
+     table used to date Free from it.
+  */
+  "cancel.past_due.title": "A payment did not go through on {failed}. Your plan already changes to Free on {when} if it is not paid.",
+  "cancel.past_due.title_final": "Your plan changes to Free on {when}. The final notice about the payment that did not go through has been sent.",
+  "cancel.past_due.fix": "Cancelling does not move that date. It stops the card retries and the reminders, and the plan changes to Free on the day it would have anyway.",
+  "cancel.past_due.today_note": "Nothing is charged today. {plan} was paid to {paidTo} and has run on grace since the payment did not go through. Once you confirm, you can resume {plan} any time before {chooseBy}.",
+  "cancel.past_due.dates_period": "{plan} was paid to {paidTo}. Since the payment did not go through it has run on grace, and Free starts {freeFrom}, the day it would have anyway.",
+  "cancel.past_due.dates_invoice": "The payment of {amount} that did not go through will not be tried again.",
+  "cancel.past_due.back": "Back to billing",
   "cancel.dates_eyebrow": "Dates",
   "cancel.dates.period": "{plan} is paid to {paidTo} and runs to {paidTo}. That period is not shortened and the unused part is not paid back. Free starts {freeFrom}.",
   "cancel.dates.invoice": "Your next invoice would have been {amount} on {when}. It will not be raised.",
@@ -8835,6 +8849,16 @@ export const en = {
   // put in front of somebody.
   "billing.cancel.consequence": "You drop to Free at the end of the period. On Free, {keeps} of your {used} products stay live and you pick which — the rest are stored, not deleted. Enquiries drop to {enquiries} a month.",
   "billing.cancel.consequence_within": "You drop to Free at the end of the period. Free holds everything you have live today, so nothing is unlisted. Enquiries drop to {enquiries} a month.",
+  /*
+     T9.2/T9.3 — past due. "The end of the period" is behind a seller whose
+     renewal failed; the date is the drop, the one the banner above states.
+  */
+  "billing.cancel.consequence_on": "You drop to Free on {when}, the day the plan would change anyway. On Free, {keeps} of your {used} products stay live and you pick which — the rest are stored, not deleted. Enquiries drop to {enquiries} a month.",
+  "billing.cancel.consequence_within_on": "You drop to Free on {when}, the day the plan would change anyway. Free holds everything you have live today, so nothing is unlisted. Enquiries drop to {enquiries} a month.",
+  "billing.status.payment_failed": "Payment failed",
+  "billing.renewal_failed": "The renewal on {when} did not go through.",
+  "billing.period.owed": "Owed since {when}",
+  "billing.invoices.none_past_due": "No invoices yet. One is written when the payment goes through.",
 
   "billing.scheduled.eyebrow": "Scheduled",
   "billing.scheduled.downgrade": "You move to {plan} on {when}. Nothing changes before then.",
@@ -8866,7 +8890,6 @@ export const en = {
   // promise about what does *not* happen during the grace period, and it holds
   // whether or not a retry is the next step — so the deadline is always stated
   // and the retry is mentioned when there is one.
-  "billing.failed.retry": "We try the card again on {when}.",
   "billing.failed.grace": "Your plan and your listing do not change before {deadline}.",
   "billing.failed.no_reason": "The payment did not go through.",
   /*
@@ -8874,7 +8897,52 @@ export const en = {
      says card capture does not exist yet — honest where it landed and a dead
      end where it was pressed.
   */
-  "billing.failed.fix": "Card details are handled by our payment provider, and that hand-off is not switched on yet. Reply to the email we sent about this payment and we will take it manually.",
+  /*
+     T9.2. The sentence told every seller to reply to "the email we sent about
+     this payment" — on 8 Nov, when no such email was sent. Spec S3: it names a
+     message only once a delivery row says it went, and by its date.
+  */
+  "billing.failed.fix": "Card details are handled by our payment provider, and that hand-off is not switched on yet.",
+  "billing.failed.fix_reply": "Card details are handled by our payment provider, and that hand-off is not switched on yet. Reply to the email we sent on {when} and we will take the payment by hand.",
+  "billing.failed.title_unknown": "Your payment on {when} did not go through",
+  "billing.failed.title_final": "Your plan changes to Free on {when}",
+  "billing.failed.title_cancelled": "A payment did not go through on {failed}. You cancelled, so your plan changes to Free on {when}.",
+  "billing.failed.cancelled_fix": "Cancelling stopped the card retries and the reminders. To keep your plan, resume it from the card beside this one.",
+  "billing.failed.title_dropped": "Your plan changed to Free on {when} because the payment did not go through.",
+  "billing.failed.dropped_body": "Your listing, your reviews and your badge are as they were. A plan change is the only thing the failed payment changed.",
+  "billing.failed.dropped_fix": "Choose a plan again whenever you are ready.",
+  "billing.failed.change_plan": "Compare plans",
+  "billing.recovered.title": "Payment received on {when}. Nothing changes.",
+  "billing.recovered.body": "{amount} went through on the second attempt. Your plan and your listing carry on as they were.",
+
+  /*
+     T9.2 — the five steps. The labels name the step; the text says what it
+     did, from the delivery log, or when it will happen, from `SCHEDULE`.
+  */
+  "billing.rail.title": "What happens, and when",
+  "billing.rail.step.card": "Day {day} · Card",
+  "billing.rail.step.first_notice": "Day {day} · First notice",
+  "billing.rail.step.second_notice": "Day {day} · Reminder",
+  "billing.rail.step.final_notice": "Day {day} · Final notice",
+  "billing.rail.step.drop": "Day {day} · Plan change",
+  "billing.rail.card_tried": "We tried the card on {when}.",
+  "billing.rail.card_not_yet": "The card has not been tried again yet.",
+  "billing.rail.card_no_gateway": "No card was retried. Card payments are not switched on yet.",
+  "billing.rail.notice_upcoming": "We send a notice on {when}.",
+  "billing.rail.final_upcoming": "We send the final notice on {when}.",
+  "billing.rail.sent": "Sent by {channels} on {when}.",
+  "billing.rail.sent_to": "Sent to {who} by {channels} on {when}.",
+  "billing.rail.deferred": "Held for quiet hours, to go on {when}.",
+  "billing.rail.pending": "Sending.",
+  "billing.rail.not_delivered": "Not delivered: {reason}.",
+  "billing.rail.no_record": "Due on {when}. No message was recorded.",
+  "billing.rail.not_after_cancel": "Not sent. You cancelled before this step.",
+  "billing.rail.drop_upcoming": "Your plan changes to Free on {when}.",
+  "billing.rail.drop_cancelled": "Your plan changes to Free on {when}, as you asked.",
+  "billing.rail.drop_done": "Your plan changed to Free on {when}.",
+  "billing.rail.fix_channel": "Add a verified number in Settings",
+  "billing.rail.staff.not_after_cancel": "Not sent. The seller cancelled before this step.",
+  "billing.rail.staff.drop_cancelled": "Plan changes to Free on {when}, by the seller's cancellation.",
 
   "billing.free.title": "You are on Free",
   "billing.free.body": "Free is a plan, not a trial. Nothing expires, and there is nothing to pay. Compare what each plan holds against what you have now.",
@@ -8921,7 +8989,13 @@ export const en = {
   "change.cell.keeps": "{keeps} of {used}",
   "change.cell.keeps_all": "All {used}",
   "change.cell.keeps_none": "None yet",
-  "change.cell.keeps_storage": "{keeps} of {used}",
+  /*
+     T9.6. Was "{keeps} of {used}" — "300 MB of 412 MB" — which reads as 112 MB
+     lost. Nothing is: a downgrade removes no file, and the cap bites at the
+     next upload (`storageRoom`, which every writer into the media bucket
+     calls). The cell says that, as the change rail and the cancel table do.
+  */
+  "change.cell.keeps_storage": "All {used} kept. Uploads stop above {keeps}",
   "change.cell.keeps_all_storage": "All {used}",
   "change.cell.per_month": { one: "{formatted} a month", other: "{formatted} a month" },
   "change.cell.unlimited": "Unlimited",
@@ -11323,6 +11397,25 @@ export const en = {
   "admin.plans.empty.title": "No plans",
   "admin.plans.empty.body": "Plans are seeded. An empty table means the seed did not run.",
 
+  /*
+     T9.4 — board 12i's `Last notice` column and the sequence behind it,
+     prompt P-07, spec A2. Read-only by design: no control here changes an
+     account and there is no resend.
+  */
+  "admin.dunning.col.notice": "Last notice",
+  "admin.dunning.notice.none": "None recorded",
+  "admin.dunning.notice.delivered": "Delivered",
+  "admin.dunning.notice.deferred": "Deferred",
+  "admin.dunning.notice.pending": "Sending",
+  "admin.dunning.notice.failed": "Failed",
+  "admin.dunning.notice.no_template": "No live template",
+  "admin.dunning.notice.skipped": "Skipped",
+  "admin.dunning.notice.meta": "{step} · {channels} · {when}",
+  "admin.dunning.notice.template_link": "Open the template",
+  "admin.dunning.sequence_toggle": "Sequence for {business}",
+  "admin.dunning.cancelled": "Cancelled by the seller on {when}. The sequence has stopped.",
+  "admin.dunning.meta_soon": { one: "{count} account changes plan in the next 3 days", other: "{count} accounts change plan in the next 3 days" },
+  "admin.dunning.meta_not_told": { one: "{count} has had no notice delivered", other: "{count} have had no notice delivered" },
   "admin.dunning.title": "Failed payments",
   "admin.dunning.eyebrow": "Billing operations",
   "admin.dunning.meta": "{count} in the sequence · {amount} at risk, incl. VAT",
@@ -11346,7 +11439,14 @@ export const en = {
   "admin.dunning.stage.dropped": "Dropped to Free",
   "admin.dunning.next.wait": "Nothing due",
   "admin.dunning.next.retry_silently": "Retry the card",
-  "admin.dunning.next.send": "Send the {channel} notice",
+  /*
+     T9.4: by step, not by channel. The action's `channel` was the board's plan
+     for the step; the notice itself goes wherever the owner's routing and the
+     platform floor send `payment_failed`, which is email and in-app at least.
+  */
+  "admin.dunning.next.send.emailed": "Send the first notice",
+  "admin.dunning.next.send.messaged": "Send the reminder",
+  "admin.dunning.next.send.final": "Send the final notice",
   "admin.dunning.next.drop_to_free": "Drop to Free",
   "admin.dunning.attempts": "{count} tried",
   "admin.dunning.no_attempts": "none",
@@ -11354,9 +11454,9 @@ export const en = {
   "admin.dunning.drops_in": "in {when}",
   "admin.dunning.drops_on": "on {when}",
   "admin.dunning.already_dropped": "already on Free",
-  "admin.dunning.sequence": "Day 0 retry, day 3 email, day 7 WhatsApp, day 14 final notice, then the plan drops to Free.",
+  "admin.dunning.sequence": "Day 0 the card is retried, day 3 the first notice, day 7 a reminder, day 14 the final notice, and on day 15 the plan changes to Free. Each notice goes wherever the owner's alerts send it, and by email and in-app whatever they chose.",
   "admin.dunning.never": "A drop to Free is a plan change and nothing else. The listing stays live, the catalogue stays visible, the reviews stay, and the badge stays — it records what we checked, and a card expiring does not unverify a trade licence.",
-  "admin.dunning.no_gateway": "No payment gateway is configured, so no card is being retried. The sequence still runs and the notices still go out; the attempts column stays empty because nothing was charged.",
+  "admin.dunning.no_gateway": "No payment gateway is configured, so no card is being retried and the attempts column stays empty. The sequence still runs. A notice goes out only where a channel has a carrier and a live template, and the Last notice column says what reached each seller.",
   "admin.dunning.empty.title": "Nobody is past due",
   "admin.dunning.empty.body": "A failed card puts a subscription here for fourteen days. Most are an expired card and fix themselves on the first retry.",
 

@@ -314,13 +314,13 @@ start before that is answered, and the answer involves a company registration.
 
 | # | Task | Gap | Anchor | Size |
 |---|---|---|---|---|
-| T9.1 | Fix past-due cancellation: date from the drop date, not from a `renewsAt` a failed renewal never advanced, and stop writing `status: "active"` over `past_due` while the dunning stage stays set | G25 | `lib/billing/cancellation.ts:478`, `:494` | M |
-| T9.2 | Build 3m's five-step failed-payment rail from **P-05**, with the delivery result per step | G— | `/dashboard/billing` | L |
-| T9.3 | Build 11h and 11j's past-due states from **P-06**, on one date across all three screens | G— | — | M |
-| T9.4 | Build 12i's `Last notice` column and expandable sequence from **P-07** | G— | `/admin/dunning` | L |
-| T9.5 | Rebuild 1l and 2e's cards and comparison from the plan table (**P-12**); strike the Lead-response-SLA row, which sells a trust signal | G2 | `/pricing`, `/onboarding/plan` | M |
-| T9.6 | A storage chooser on downgrade, or storage comes off the grid. Products, branches and seats each have one; storage has a stated overage and no chooser, so the limit is unenforced at the one moment it bites | G— | `billing/change/keep/[kind]` | M |
-| T9.7 | E2E the money path: subscribe, renew, fail, dun, pay, change plan, cancel, close. **It has no coverage today beyond page loads** | G26 | `tests/e2e/` | L |
+| T9.1 | **Done.** A past-due cancellation ends on the drop date (`cancellationDate`), keeps `past_due`, and stops the retries and reminders; `applyEndedCancellations` closes the dunning episode so the two jobs cannot both drop the plan. Resume no longer writes `active` either — the same hole, found on the way | G25 | `lib/billing/cancellation.ts`, `dunning-job.ts`, `service.ts` | M |
+| T9.2 | **Done.** `dunningRail` — five dated steps from `SCHEDULE`, results from the delivery log — rendered on 3m with recipient, channels and reason; one banner when cancelled; dropped and recovered states. The fix sentence names an email only once one was delivered. Also on 3m: the plan card said *Active* and *Renews 1 Nov* over a failed renewal, and the period and invoice panels quoted that past date | G— | `/dashboard/billing` | L |
+| T9.3 | **Done.** 11h and 11j's past-due state: one warn alert, every date the drop date, the picker and resume deadline the day before it, *Back to billing* instead of *Keep Basic* once the final notice has gone | G— | — | M |
+| T9.4 | **Done.** `Last notice` from the same rail, the five steps in a disclosure per row, urgent rows (≤72 h, nothing delivered) first with a bad rule, the header count. The *Next* column and intro stopped naming a channel per step — the notice goes where routing sends it | G— | `/admin/dunning` | L |
+| T9.5 | **Done — mostly already true.** Every price and cap on `/pricing` reads the plan table; the SLA row was never built. Added: the one sentence for a seller whose limits were frozen by their snapshot (the price is not frozen) | G2 | `/pricing`, `/onboarding/plan` | M |
+| T9.6 | **Done — no chooser, by design.** Storage has nothing to pick between: a downgrade removes no file and `storageRoom` refuses the next upload over the cap. The grid cell read *1 GB of 2.1 GB*, a loss that does not happen; it now says what does | G— | `billing/change` | M |
+| T9.7 | **Done for what a browser can prove.** `money-path.spec.ts` on its own past-due seat: the rail, 11h and 11j on one date, cancel, one banner, resume. Subscribe, renew, retry and drop are integration tests, because they need days to pass; card capture waits on S8's Stripe keys | G26 | `tests/e2e/` | L |
 
 **Exit gate.** A real card is charged on a test merchant account. The invoice is a compliant UAE
 tax invoice with the issuer's TRN. A failed renewal walks all five dunning steps and a delivery

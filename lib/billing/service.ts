@@ -853,7 +853,14 @@ export async function resumeSubscription(
     await tx.subscription.update({
       where: { businessId },
       // Both columns together, or the check constraint refuses the row.
-      data: { cancelledAt: null, endsAt: null, status: "active" },
+      /*
+         No `status`, for the reason `scheduleCancellation` gives (T9.1). This
+         wrote `status: "active"`, which a past-due seller who cancelled and then
+         resumed would have carried out of `past_due` with the dunning stage
+         still set. Resuming takes back the cancellation and nothing else: a
+         past-due account goes back into the sequence where it left it.
+      */
+      data: { cancelledAt: null, endsAt: null },
     });
 
     await tx.subscriptionChange.updateMany({
@@ -983,6 +990,17 @@ export async function applyEndedCancellations(now = new Date()) {
           */
           cancelledAt: null,
           endsAt: null,
+          /*
+             T9.1 — and the dunning episode, if the account was past due.
+
+             A past-due cancellation lands on the drop date, and `runDunning`
+             skips an account while `cancelledAt` is set. Clearing `cancelledAt`
+             above without ending the episode here would hand the account back
+             to `runDunning` the next morning, at whatever stage it stopped on,
+             and it would drop the plan a second time and book a second churn.
+          */
+          dunningStage: "none",
+          pastDueSince: null,
           /*
              The snapshot goes, and this is a defect fix rather than tidying.
 

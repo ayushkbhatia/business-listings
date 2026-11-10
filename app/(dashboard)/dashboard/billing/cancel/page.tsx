@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { Alert } from "@/components/display";
 import { buttonClassName } from "@/components/primitives";
 import { Card } from "@/components/structure";
 import { StepHeader } from "@/components/structure";
 import { mayChangePlan } from "@/lib/auth/guards";
+import { lastPaidDay } from "@/lib/billing/cancel-table";
 import { cancellationView } from "@/lib/billing/cancellation";
 import { formatCount, formatDate } from "@/lib/format";
 import { t } from "@/lib/i18n";
@@ -115,6 +117,15 @@ export default async function CancelPage() {
 
   const freeStartsOn = formatDate(view.freeStartsOn);
   const paidTo = formatDate(view.paidTo);
+  /*
+     The last day before Free — when the picker closes and the last day a
+     cancellation can be resumed. Derived from the date Free starts rather than
+     printed as `paidTo`, which for a past-due account is behind today: the
+     renewal that failed never moved, and the grace between is time the seller
+     has the plan without having paid for it. T9.3.
+  */
+  const chooseBy = formatDate(lastPaidDay(view.freeStartsOn));
+  const pastDue = view.pastDue;
 
   return (
     <SellerPage
@@ -137,6 +148,19 @@ export default async function CancelPage() {
     >
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_21.5rem]">
         <div className="flex min-w-0 flex-col gap-3.5">
+          {pastDue ? (
+            <Alert
+              tone="warn"
+              title={
+                pastDue.finalNoticeSent
+                  ? t("cancel.past_due.title_final", { when: formatDate(pastDue.dropsOn) })
+                  : t("cancel.past_due.title", { failed: formatDate(pastDue.since), when: formatDate(pastDue.dropsOn) })
+              }
+              fix={t("billing.failed.fix")}
+            >
+              <p>{t("cancel.past_due.fix")}</p>
+            </Alert>
+          ) : null}
           <ConsequenceTable
             rows={view.rows}
             planName={view.planName}
@@ -160,13 +184,15 @@ export default async function CancelPage() {
             </p>
           ) : (
             <p className="max-w-prose text-caption leading-relaxed text-body-ink">
-              {t("cancel.picker_note", { when: paidTo })}{" "}
+              {t("cancel.picker_note", { when: chooseBy })}{" "}
               <span className="text-muted">{t("cancel.picker_default")}</span>
             </p>
           )}
 
           <p className="max-w-prose text-caption leading-relaxed text-body-ink">
-            {t("cancel.today_note", { plan: view.planName, paidTo })}
+            {pastDue
+              ? t("cancel.past_due.today_note", { plan: view.planName, paidTo, chooseBy })
+              : t("cancel.today_note", { plan: view.planName, paidTo })}
           </p>
         </div>
 
@@ -201,7 +227,13 @@ export default async function CancelPage() {
                pause, no "are you sure". Wave 4 ruled retention offers out.
             */}
             <Link href="/dashboard/billing" className={buttonClassName({ block: true })}>
-              {t("cancel.keep_plan", { plan: view.planName })}
+              {/*
+                 P-06: with the final notice sent, the primary action must not
+                 imply the seller can avoid a change that is a day away. "Keep
+                 Pro" would; going back to the banner that says what is true
+                 does not.
+              */}
+              {pastDue?.finalNoticeSent ? t("cancel.past_due.back") : t("cancel.keep_plan", { plan: view.planName })}
             </Link>
             <Link
               href="/dashboard/billing/cancel/confirm"
@@ -248,7 +280,7 @@ export default async function CancelPage() {
                 : t("cancel.if_confirm.email_none")}
             </p>
             <p className="mt-2 text-caption leading-relaxed text-body-ink">
-              {t("cancel.if_confirm.banner", { when: paidTo, plan: view.planName })}
+              {t("cancel.if_confirm.banner", { when: chooseBy, plan: view.planName })}
             </p>
           </Card>
         </aside>

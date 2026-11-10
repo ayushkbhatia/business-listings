@@ -15,7 +15,9 @@ import { keepsOf } from "./plan-grid";
 import { storedTotals } from "./invoice";
 import { monthlyValueFils, offersAnnual, periodPriceAed, type BillingTerm } from "./period";
 import { FILS_PER_AED, VAT_RATE, vatOn } from "./proration";
-import { nextAction, SCHEDULE, GRACE_AFTER_FINAL_DAYS, type DunningStage } from "./dunning";
+import { dropsToFreeAt, type DunningStage } from "./dunning";
+import { noticeDeliveries } from "./dunning-notices";
+import { dunningRail, type Rail, type RailDelivery } from "./dunning-rail";
 import { pendingChangeFor, readIds, type KeepKind, type PendingChange } from "./schedule";
 import { paymentProvider } from "./provider";
 import { t } from "@/lib/i18n";
@@ -82,15 +84,25 @@ export interface PeriodView {
 
 export interface FailedPayment {
   stage: DunningStage;
-  /** What we tried to take, in fils. */
-  amountFils: number;
+  /** What we tried to take, in fils. Null where no charge was ever attempted. */
+  amountFils: number | null;
   failedOn: Date;
   /** Verbatim from the provider, or null where it gave nothing. */
   reason: string | null;
-  /** When the sequence tries again. Null once it has run out of retries. */
-  retryAt: Date | null;
   /** The day the plan drops if nothing changes. Criterion 12 counts to here. */
   dropsOn: Date;
+  /** The five steps and what each one did — T9.2. */
+  rail: Rail;
+  /** False with no gateway: step 1 then says no card was retried. */
+  gatewayLive: boolean;
+  /** Set where the seller cancelled while past due. The date is the same one. */
+  cancelledAt: Date | null;
+}
+
+/** A payment the sequence recovered, for the `ok` banner — spec S3. */
+export interface RecoveredPayment {
+  paidOn: Date;
+  amountFils: number;
 }
 
 export interface PendingKeep {
@@ -134,6 +146,7 @@ export interface BillingSummary {
    */
   pendingKeeps: PendingKeep[];
   failedPayment: FailedPayment | null;
+  recoveredPayment: RecoveredPayment | null;
   /**
    * The verified custom domain, where there is one.
    *
@@ -201,10 +214,14 @@ export async function billingSummary(
               entitlementSnapshot: true,
               dunningStage: true,
               pastDueSince: true,
+              dunningAdvancedAt: true,
+              cancelledAt: true,
               plan: { select: { monthlyPriceAed: true, annualMonthsCharged: true, name: true } },
               attempts: {
                 orderBy: [{ attemptedAt: "desc" }, { id: "desc" }],
-                take: 1,
+                // Two: the newest, and the one before it — a paid attempt after a
+                // failed one is a recovery, which the `ok` banner states.
+                take: 2,
                 select: { amountFils: true, succeeded: true, providerMessage: true, attemptedAt: true },
               },
             },
@@ -311,7 +328,14 @@ export async function billingSummary(
       : null,
     pendingChange,
     pendingKeeps: pendingChange ? await pendingKeepsFor(pendingChange, usage) : [],
-    failedPayment: failedPaymentOf(subscription, now),
+    failedPayment: subscription?.pastDueSince
+      ? failedPaymentOf(
+          subscription,
+          (await noticeDeliveries([{ businessId, since: subscription.pastDueSince }])).get(businessId) ?? [],
+          now,
+        )
+      : null,
+    recoveredPayment: recoveredOf(subscription, now),
     domain: business.customDomain?.verifiedAt ? business.customDomain.hostname : null,
     placements: placements.map((placement) => ({
       label: placement.category.name,
@@ -550,54 +574,81 @@ function expiryOf(month: number, year: number): string {
  * The state neither board had. Criterion 12 is a promise about what does *not*
  * happen — no downgrade and no listing change during the grace — and the screen
  * can only make it if it can say when the grace ends. `dropsOn` is that date,
- * and it comes from the same `SCHEDULE` the job runs on rather than from a
- * sentence written beside it.
+ * and it comes from the same `SCHEDULE` the job runs on.
+ *
+ * T9.2 adds the rail: what each step did, read from the delivery log. A
+ * dropped account keeps the banner for thirty days — long enough to be read,
+ * not so long that a seller who chose to stay on Free is reminded of it for
+ * good.
+ *
+ * `retryAt` is gone. It read "We try the card again on…" from the step after
+ * the retry, and the sequence retries once, on day zero; nothing it named was
+ * a retry.
  */
 function failedPaymentOf(
   subscription: {
     dunningStage: string;
     pastDueSince: Date | null;
+    dunningAdvancedAt: Date | null;
+    cancelledAt: Date | null;
     attempts: readonly {
       amountFils: number;
       succeeded: boolean;
       providerMessage: string | null;
       attemptedAt: Date;
     }[];
-  } | null,
+  },
+  deliveries: readonly RailDelivery[],
   now: Date,
 ): FailedPayment | null {
-  if (!subscription?.pastDueSince) return null;
+  if (!subscription.pastDueSince) return null;
   const stage = subscription.dunningStage as DunningStage;
   if (stage === "none") return null;
-
-  const failed = subscription.attempts.find((attempt) => !attempt.succeeded);
   const since = subscription.pastDueSince;
-  const next = nextAction(stage, since, now);
+  if (stage === "dropped" && now.getTime() - (subscription.dunningAdvancedAt ?? since).getTime() > 30 * 86_400_000) {
+    return null;
+  }
 
-  const dropsOn = new Date(
-    since.getTime() + (SCHEDULE.final + GRACE_AFTER_FINAL_DAYS) * 86_400_000,
-  );
+  const episode = subscription.attempts.filter((attempt) => attempt.attemptedAt.getTime() >= since.getTime());
+  const failed = episode.find((attempt) => !attempt.succeeded);
 
   return {
     stage,
-    amountFils: failed?.amountFils ?? 0,
+    amountFils: failed?.amountFils ?? null,
     failedOn: failed?.attemptedAt ?? since,
     reason: failed?.providerMessage ?? null,
-    // Only a silent retry is a retry. An email is not a second attempt at the
-    // card, and calling it one would have the seller waiting for a charge that
-    // is not coming.
-    retryAt: next.kind === "retry_silently" ? nextStepAt(since, stage) : null,
-    dropsOn,
+    dropsOn: dropsToFreeAt(since),
+    rail: dunningRail({
+      pastDueSince: since,
+      stage,
+      attempted: episode.length > 0,
+      cancelledAt: subscription.cancelledAt,
+      deliveries,
+    }),
+    gatewayLive: paymentProvider().live,
+    cancelledAt: subscription.cancelledAt,
   };
 }
 
-/** When the sequence next moves, from the schedule it actually runs on. */
-function nextStepAt(since: Date, stage: DunningStage): Date {
-  const day =
-    stage === "none" || stage === "retry"
-      ? SCHEDULE.emailed
-      : stage === "emailed"
-        ? SCHEDULE.messaged
-        : SCHEDULE.final;
-  return new Date(since.getTime() + day * 86_400_000);
+/**
+ * A payment the sequence got back, for a week after it did. Spec S3's
+ * *"Payment received on 9 Sep. Nothing changes."*
+ *
+ * A paid attempt straight after a failed one is the retry that worked — an
+ * ordinary renewal follows a paid one. A week rather than "shown once": the
+ * screen keeps no record of having been read, and a banner that vanished on
+ * a reload the seller did not notice would be a confirmation nobody saw.
+ */
+function recoveredOf(
+  subscription: {
+    dunningStage: string;
+    attempts: readonly { amountFils: number; succeeded: boolean; attemptedAt: Date }[];
+  } | null,
+  now: Date,
+): RecoveredPayment | null {
+  if (!subscription || subscription.dunningStage !== "none") return null;
+  const [latest, before] = subscription.attempts;
+  if (!latest?.succeeded || !before || before.succeeded) return null;
+  if (now.getTime() - latest.attemptedAt.getTime() > 7 * 86_400_000) return null;
+  return { paidOn: latest.attemptedAt, amountFils: latest.amountFils };
 }

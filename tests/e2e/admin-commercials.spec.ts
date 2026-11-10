@@ -281,9 +281,26 @@ test.describe("board 12e — failed payments, and criterion 10's negative", () =
   });
 
   test("names the sequence on the page", async ({ page }) => {
+    // T9.4: by step, not by channel — day 7 is a reminder on whatever the owner's alerts send.
     await expect(
-      page.getByText(/Day 0 retry, day 3 email, day 7 WhatsApp, day 14 final notice/),
+      page.getByText(/day 3 the first notice, day 7 a reminder, day 14 the final notice, and on day 15 the plan changes to Free/),
     ).toBeVisible();
+  });
+
+  test("says whether a notice reached anybody, from the delivery log (T9.4)", async ({ page }) => {
+    /*
+       P-07: the screen that answers "did we tell them?" before a plan changes.
+       The money-path fixture's reminder reached email and in-app; its WhatsApp
+       did not, and the column names only the channels that delivered.
+    */
+    const table = page.getByRole("table", { name: /past due/ });
+    await expect(table.getByRole("columnheader", { name: "Last notice" })).toBeVisible();
+    const corniche = table.getByRole("row", { name: /Corniche Packaging Supplies/ });
+    await expect(corniche).toContainText("Delivered");
+    await expect(corniche).toContainText(/Day 7 · Reminder · email and in-app/);
+
+    await corniche.getByText("Sequence for Corniche Packaging Supplies").click();
+    await expect(corniche.getByText(/We send the final notice on/)).toBeVisible();
   });
 
   test("says what a drop does not take away", async ({ page }) => {

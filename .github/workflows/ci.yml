@@ -205,7 +205,7 @@ jobs:
             projects: --project=mobile
           - shard: signed-in
             projects: >-
-              --project=seller --project=seller-free --project=seller-services --project=seller-facilities
+              --project=seller --project=seller-free --project=seller-services --project=seller-facilities --project=seller-past-due
               --project=staff --project=staff-moderator --project=staff-finance
 
     steps:

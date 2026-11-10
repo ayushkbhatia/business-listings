@@ -1,6 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { StatusBadge } from "@/components/display";
+import { cn } from "@/lib/cn";
+import type { StepLine, StepTone } from "@/lib/billing/rail-copy";
 import { DataTable, type Column } from "@/components/structure";
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
@@ -43,7 +46,22 @@ export interface DunningRowView {
   drops: string | null;
   /** The full date, as the title on a relative figure. Null once it has dropped. */
   dropsTitle: string | null;
+  /** P-07's column. Null until a notice step has run. */
+  lastNotice: { label: string; tone: StepTone; meta: string; templateHref: string | null } | null;
+  /** The five steps, in the words board 3m shows the seller. */
+  steps: StepLine[];
+  /** Set where the seller cancelled while past due. */
+  cancelled: string | null;
+  /** Changes plan within 72 hours with nothing delivered: first, with a bad rule. */
+  urgent: boolean;
 }
+
+const STEP_TEXT: Record<StepTone, string> = {
+  ok: "text-ok-ink",
+  warn: "text-warn-ink",
+  bad: "text-bad-ink",
+  neutral: "text-body",
+};
 
 /**
  * Stage tones.
@@ -124,7 +142,49 @@ export function DunningTable({ rows }: { rows: readonly DunningRowView[] }) {
       key: "next",
       header: t("admin.dunning.col.next"),
       hideBelow: "md",
-      render: (row) => <span className="text-muted">{row.next}</span>,
+      render: (row) => <span className="text-muted">{row.cancelled ?? row.next}</span>,
+    },
+    {
+      /*
+         T9.4 — "did we tell them?". The badge is the delivery log's answer for
+         the newest notice step; the disclosure under it is every step, in the
+         words the seller reads on board 3m. A `<details>` rather than an
+         expanding row: one native control, keyboard-reachable, nothing for a
+         screen reader to guess.
+      */
+      key: "notice",
+      header: t("admin.dunning.col.notice"),
+      width: "16rem",
+      render: (row) => (
+        <div className="flex flex-col gap-1">
+          {row.lastNotice ? (
+            <>
+              <StatusBadge tone={row.lastNotice.tone}>{row.lastNotice.label}</StatusBadge>
+              <span className="text-caption text-muted">{row.lastNotice.meta}</span>
+              {row.lastNotice.templateHref ? (
+                <Link href={row.lastNotice.templateHref} className="text-caption text-moss underline underline-offset-2">
+                  {t("admin.dunning.notice.template_link")}
+                </Link>
+              ) : null}
+            </>
+          ) : (
+            <span className="text-faint">{t("admin.dunning.notice.none")}</span>
+          )}
+          <details className="mt-1 text-caption">
+            <summary className="cursor-pointer text-moss underline underline-offset-2 focus-visible:outline-none focus-visible:shadow-focus">
+              {t("admin.dunning.sequence_toggle", { business: row.businessName })}
+            </summary>
+            <ol className="mt-2 flex flex-col gap-1.5">
+              {row.steps.map((step) => (
+                <li key={step.key}>
+                  <span className="block font-mono text-muted">{step.label}</span>
+                  <span className={cn("block", STEP_TEXT[step.tone])}>{step.text}</span>
+                </li>
+              ))}
+            </ol>
+          </details>
+        </div>
+      ),
     },
     {
       key: "drops",
@@ -160,6 +220,7 @@ export function DunningTable({ rows }: { rows: readonly DunningRowView[] }) {
       columns={columns}
       rows={rows}
       rowKey={(row) => row.subscriptionId}
+      rowTone={(row) => (row.urgent ? "blocked" : "default")}
       stickyHeader
       empty={
         <div className="text-center">

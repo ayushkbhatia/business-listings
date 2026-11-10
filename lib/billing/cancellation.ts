@@ -11,6 +11,7 @@ import { absoluteUrl, siteUrl } from "@/lib/site";
 import { formatDate } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { consequenceTable, lastPaidDay, type CancelFacts, type ConsequenceRow } from "./cancel-table";
+import { dropsToFreeAt, type DunningStage } from "./dunning";
 import { periodPriceAed, type BillingTerm } from "./period";
 import { FILS_PER_AED, VAT_RATE, vatOn } from "./proration";
 import { pendingChangeFor, type PendingChange } from "./schedule";
@@ -106,6 +107,57 @@ export interface CancellationView {
   scheduled: PendingChange | null;
   /** True where Free holds everything the seller has, so nothing is reduced. */
   nothingReduced: boolean;
+  /**
+   * Set where a payment has failed — board 11h's past-due state, T9.1.
+   *
+   * `freeStartsOn` is then the drop date the sequence already shows, not the
+   * renewal date: a failed renewal never advances `renewsAt`, so dating from it
+   * put a past-due seller's plan change in the past.
+   */
+  pastDue: PastDue | null;
+}
+
+export interface PastDue {
+  /** The day the payment first failed. */
+  since: Date;
+  /** The day the plan changes to Free, cancelled or not. */
+  dropsOn: Date;
+  /** The final notice has gone, so the change is a day away. */
+  finalNoticeSent: boolean;
+}
+
+/**
+ * When a cancellation takes effect — one date on every screen. T9.1, spec S4 Q2.
+ *
+ * Not past due: the renewal moment, as it always was. Past due: **the drop date
+ * the sequence already shows**. The renewal that failed never moved `renewsAt`,
+ * so it is behind today; a cancellation dated from it wrote an end date that had
+ * already gone by, and the nightly sweep dropped the account the next morning —
+ * before the grace the banner had promised. Cancelling stops the retries and the
+ * reminders; it does not take the rest of the grace away from a seller whose
+ * card expired.
+ */
+export function cancellationDate(
+  subscription: { status: string; renewsAt: Date; pastDueSince: Date | null },
+  now: Date,
+): Date {
+  if (subscription.status !== "past_due") return subscription.renewsAt;
+  // No start date yet: the job's own rule, `pastDueSince ?? now`, is day zero.
+  return dropsToFreeAt(subscription.pastDueSince ?? now);
+}
+
+function pastDueOf(
+  subscription: { status: string; pastDueSince: Date | null; dunningStage: string },
+  now: Date,
+): PastDue | null {
+  if (subscription.status !== "past_due") return null;
+  const stage = subscription.dunningStage as DunningStage;
+  const since = subscription.pastDueSince ?? now;
+  return {
+    since,
+    dropsOn: dropsToFreeAt(since),
+    finalNoticeSent: stage === "final" || stage === "dropped",
+  };
 }
 
 /**
@@ -207,6 +259,8 @@ export async function cancellationView(
               cancelledAt: true,
               endsAt: true,
               entitlementSnapshot: true,
+              pastDueSince: true,
+              dunningStage: true,
             },
           },
         },
@@ -293,6 +347,7 @@ export async function cancellationView(
 
   const plan = effectiveCaps(toCaps(business.plan), subscription.entitlementSnapshot);
   const free = toCaps(freePlan);
+  const freeStartsOn = cancellationDate(subscription, now);
 
   const usage: Usage = {
     products,
@@ -307,7 +362,7 @@ export async function cancellationView(
     plan,
     free,
     usage,
-    freeStartsOn: subscription.renewsAt,
+    freeStartsOn,
     enquiriesLastMonth: enquiries,
     // The badge follows the licence, and `3e` owns the ladder. Tier 2 is the
     // top achievable one; anything at or above it is "Licence verified".
@@ -346,7 +401,12 @@ export async function cancellationView(
     kind: "cancellable",
     planName: business.plan.name,
     term: subscription.term,
-    freeStartsOn: subscription.renewsAt,
+    freeStartsOn,
+    /*
+       The last day paid for, which for a past-due account is the day before the
+       renewal that failed — not the day before the drop. The grace between is
+       time the seller has the plan without having paid for it.
+    */
     paidTo: lastPaidDay(subscription.renewsAt),
     rows,
     enquiriesLastMonth: enquiries,
@@ -355,6 +415,7 @@ export async function cancellationView(
     billingEmail: recipient,
     scheduled: pending?.kind === "cancellation" ? pending : null,
     nothingReduced: rows.every((row) => row.mark === "unchanged"),
+    pastDue: pastDueOf(subscription, now),
   };
 }
 
@@ -447,6 +508,7 @@ export async function scheduleCancellation(
       renewsAt: true,
       cancelledAt: true,
       status: true,
+      pastDueSince: true,
       plan: { select: { monthlyPriceAed: true } },
     },
   });
@@ -475,7 +537,7 @@ export async function scheduleCancellation(
   }
   if (subscription.cancelledAt) return { ok: false, error: "already_cancelling" };
 
-  const freeStartsOn = subscription.renewsAt;
+  const freeStartsOn = cancellationDate(subscription, now);
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -491,7 +553,14 @@ export async function scheduleCancellation(
           // Paired by a check constraint: a cancellation that does not say when
           // it ends is one nothing can act on.
           endsAt: freeStartsOn,
-          status: "active",
+          /*
+             No `status`. This wrote `status: "active"`, which did nothing to an
+             active subscription and something wrong to the only other one that
+             reaches here: a past-due account came out of `past_due` while its
+             dunning stage stayed set, so every count that reads status treated
+             it as healthy and paying (spec S4). The trial case was fenced
+             in PR 147; this is the same hole for a failed payment.
+          */
         },
       });
 
@@ -530,9 +599,10 @@ export async function scheduleCancellation(
      accounts@alwaha.ae"* — so the send is part of the promise, but it is not
      part of the record.
   */
-  const emailedTo = await sendCancellationEmail(businessId, freeStartsOn);
+  const paidTo = lastPaidDay(subscription.renewsAt);
+  const emailedTo = await sendCancellationEmail(businessId, freeStartsOn, paidTo);
 
-  return { ok: true, freeStartsOn, paidTo: lastPaidDay(freeStartsOn), emailedTo };
+  return { ok: true, freeStartsOn, paidTo, emailedTo };
 }
 
 /**
@@ -549,7 +619,7 @@ export async function scheduleCancellation(
  * success: `emailInvoice` refuses the same way, and a staging environment that
  * reports delivery is how somebody comes to believe the mail works.
  */
-async function sendCancellationEmail(businessId: string, freeStartsOn: Date): Promise<string | null> {
+async function sendCancellationEmail(businessId: string, freeStartsOn: Date, paidTo: Date): Promise<string | null> {
   const address = await billingRecipient(businessId);
   const sender = resolveNotificationSenders().email;
   if (!address || !sender) return null;
@@ -560,7 +630,7 @@ async function sendCancellationEmail(businessId: string, freeStartsOn: Date): Pr
       to: address,
       subject: t("cancel.email.subject"),
       body: t("cancel.email.body", {
-        paidTo: formatDate(lastPaidDay(freeStartsOn)),
+        paidTo: formatDate(paidTo),
         freeFrom: formatDate(freeStartsOn),
       }),
       actionLabel: t("cancel.email.action"),

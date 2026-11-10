@@ -48,6 +48,8 @@ export interface PricingCard {
   features: readonly PlanFeature[];
   recommended: boolean;
   current: boolean;
+  /** The seller's own limits differ from this card's — they kept the ones they started on. */
+  keptNote?: string;
   cta: PricingCta;
 }
 
@@ -139,6 +141,7 @@ export function PlanGrid({ cards, monthsInYear }: PlanGridProps) {
               recommendedLabel={t("plan.recommended")}
               current={card.current}
               currentLabel={t("plan.current")}
+              {...(card.keptNote ? { note: card.keptNote } : {})}
               action={
                 card.cta.href ? (
                   <Link

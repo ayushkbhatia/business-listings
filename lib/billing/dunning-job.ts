@@ -58,6 +58,19 @@ export async function runDunning(now: Date = new Date()): Promise<DunningResult>
     where: {
       OR: [{ status: "past_due" }, { dunningStage: { not: "none" } }],
       NOT: { dunningStage: "dropped" },
+      /*
+         T9.1 — a seller who cancelled while past due is out of the sequence.
+
+         Cancelling stops the card retries and the reminders (spec S4, Q2 (a)):
+         charging a card the seller has told us to stop using is the wrong
+         answer to an expired card, and a "pay to keep your plan" message to
+         somebody who has chosen Free is noise. The date does not move —
+         `scheduleCancellation` set `endsAt` to the same drop date — so the
+         plan changes on the day it would have, by `applyEndedCancellations`
+         rather than by this job. Two jobs acting on one account on one day
+         would each change the plan and each book a churn movement.
+      */
+      cancelledAt: null,
     },
     select: { ...RENEWAL_SELECT, dunningStage: true, pastDueSince: true },
   });
