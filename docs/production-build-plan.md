@@ -316,14 +316,15 @@ template."*
 
 **Sprints S8–S9.** Design input: **P-11**, **P-12**, **P-05**, **P-06**, **P-07**.
 ~~Blocked on decision N9~~ — **answered 10 Nov 2026**: Bearing Deployment Company, Inc, Delaware,
-no TRN. The milestone is unblocked except for T8.4's VAT treatment (spec Q3), which waits on a tax
-advisor, and T8.1's gateway account, which waits on the owner opening one.
+no TRN. The gateway is **Stripe** (10 Nov 2026). The milestone is unblocked except for T8.4's VAT
+treatment (spec Q3), which waits on a tax advisor, and the Stripe test-mode keys, which wait on the
+owner opening the account.
 
 ### S8 · The provider and the document
 
 | # | Task | Gap | Anchor | Size |
 |---|---|---|---|---|
-| T8.1 | Implement `PaymentProvider` against a UAE-capable gateway, and call `setPaymentProvider`, which has no caller today | G22 | `lib/billing/provider.ts:54`, `:77`, `:80` | L |
+| T8.1 | Implement `PaymentProvider` against **Stripe** (owner decision, 10 Nov 2026 — a US account, charging UAE cards in AED), and call `setPaymentProvider`, which has no caller today. Built against test-mode keys; live keys at launch | G22 | `lib/billing/provider.ts:54`, `:77`, `:80` | L |
 | T8.2 | Add a webhook route with signature verification and idempotency keys; reconcile `providerRef` against the invoice. `app/api` has no webhook directory | G22 | new `app/api/billing/webhook/` | L |
 | T8.3 | Build card capture from **P-11**, provider-hosted so card data never reaches our server | G22 | new route | L |
 | T8.4 | **Settle the invoice's VAT treatment (spec Q3).** The issuer is a Delaware company with no TRN, so the document cannot be a UAE tax invoice carrying a supplier TRN. Either it invoices **without VAT** under the reverse charge — heading `INVOICE`, VAT lines out of scope, a statutory note that the recipient accounts for UAE VAT — or the company registers for UAE VAT as a non-resident and charges 5% under its own TRN. Build the treatment as data on the invoice, not a constant, so the answer is a config change and every issued document keeps the one it was issued under | G23 | `lib/billing/tax-invoice.ts:43`, `lib/billing/invoice.ts:65` | S in code; the answer is the tax advisor's |
