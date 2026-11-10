@@ -16,6 +16,24 @@ here, and four of them gate a whole milestone: N9 (the invoice issuer and its TR
 (the fee-basis set) gates the services half of M5, N18 (the `6a-s` rollout policy) gates 1,267
 landing pages, and N19 (the area weight) decides whether the product rewards over-claimed coverage.
 
+**Owner decisions, 10 November 2026** — three answers that change the order of this plan:
+
+1. **N9 is answered: the issuer is Bearing Deployment Company, Inc**, incorporated in Delaware,
+   operating the product globally from the US. No UAE entity is coming. `ISSUER` in
+   `lib/billing/invoice.ts` already names it, so M4 is no longer blocked on a registration. What
+   stays open is **spec Q3, the VAT treatment** — whether a US supplier with no TRN charges 5% at
+   all, or invoices without VAT under the reverse charge. That is a tax advisor's answer, it
+   changes the document's heading and its VAT lines, and T8.4 is rewritten around it below.
+2. **The renders are reference, not specification.** The November packages are read for their
+   schema and their architectural intent; where shipped code has superseded a render, the code
+   stands. Nothing built is undone to match a drawing. High-value conflicts go to the owner; the
+   rest are judged in the PR and named in its body.
+3. **Build first, seed last.** The 41,000-record import (S5) moves to the end of the plan, after
+   the core app is functional, because seeding is what starts the traffic and the funnel. S2–S4
+   already hardened the read path, the crawl surface and the transport at 41,000 against a
+   synthetic set, so the scale work is not lost by waiting. The order is now
+   **S7 → S8–S9 → S10–S11 → S12 → S13 → S5 → S14**.
+
 **One correction to the first revision of this plan:** task T12.2 asked for `/onboarding/kind` to
 be built to a new board. Board `2b-s` already is that board, so T12.2 is deleted and prompt P-19 is
 withdrawn. The error came from reading the goods package without the services canvas.
@@ -297,8 +315,9 @@ template."*
 ## 8 · M4 · Money moves
 
 **Sprints S8–S9.** Design input: **P-11**, **P-12**, **P-05**, **P-06**, **P-07**.
-**Blocked on decision N9** — who issues the invoice, under what TRN. Nothing in this milestone can
-start before that is answered, and the answer involves a company registration.
+~~Blocked on decision N9~~ — **answered 10 Nov 2026**: Bearing Deployment Company, Inc, Delaware,
+no TRN. The milestone is unblocked except for T8.4's VAT treatment (spec Q3), which waits on a tax
+advisor, and T8.1's gateway account, which waits on the owner opening one.
 
 ### S8 · The provider and the document
 
@@ -307,7 +326,7 @@ start before that is answered, and the answer involves a company registration.
 | T8.1 | Implement `PaymentProvider` against a UAE-capable gateway, and call `setPaymentProvider`, which has no caller today | G22 | `lib/billing/provider.ts:54`, `:77`, `:80` | L |
 | T8.2 | Add a webhook route with signature verification and idempotency keys; reconcile `providerRef` against the invoice. `app/api` has no webhook directory | G22 | new `app/api/billing/webhook/` | L |
 | T8.3 | Build card capture from **P-11**, provider-hosted so card data never reaches our server | G22 | new route | L |
-| T8.4 | Make the tax invoice a UAE tax invoice: issuer TRN, place of supply, VAT treatment. Today the issuing entity is registered in Delaware and holds no TRN, so the document renders a recipient TRN and no supplier TRN | G23 | `lib/billing/tax-invoice.ts:43` | S in code |
+| T8.4 | **Settle the invoice's VAT treatment (spec Q3).** The issuer is a Delaware company with no TRN, so the document cannot be a UAE tax invoice carrying a supplier TRN. Either it invoices **without VAT** under the reverse charge — heading `INVOICE`, VAT lines out of scope, a statutory note that the recipient accounts for UAE VAT — or the company registers for UAE VAT as a non-resident and charges 5% under its own TRN. Build the treatment as data on the invoice, not a constant, so the answer is a config change and every issued document keeps the one it was issued under | G23 | `lib/billing/tax-invoice.ts:43`, `lib/billing/invoice.ts:65` | S in code; the answer is the tax advisor's |
 | T8.5 | Make `changePlan` check `provider.live` as both jobs do. Today an upgrade issues a paid invoice with a stored PDF for money nobody took, while the screen says "No card has been charged" | G24 | `lib/billing/service.ts:325` | S |
 
 ### S9 · The sequence, end to end
@@ -504,8 +523,8 @@ In parallel, on day one, five things that are not code:
 2. **Send P-54.** It is the cheapest prompt in the book — a retraction pass over four services
    renders that still draw an availability enum closed as *no* on 11 Sep and a verification tier
    cut on 5 Sep. An engineer building those boards faithfully reintroduces both.
-3. **Answer N9** — who issues the invoice and under what TRN. It gates all of M4, and the answer
-   involves a company registration, so the clock starts now.
+3. ~~**Answer N9**~~ — answered 10 Nov 2026: Bearing Deployment Company, Inc. What remains is
+   spec Q3, the VAT treatment, for a tax advisor.
 4. **Answer N16** — is the fee-basis set open or closed? It gates the services track's one blocking
    screen defect, and the recommendation is a small migration rather than a redesign.
 5. **Submit the Meta templates and provision Resend, Bird and the Supabase phone provider.** T7.5
@@ -532,12 +551,12 @@ they unblock M5.
 
 | Risk | Why it is real | Owner | Recommendation |
 |---|---|---|---|
-| **N9 is a company registration, not a decision** | no UAE entity, no TRN, so no compliant tax invoice and no gateway onboarding. M4 cannot start | you | start it in week 1; it is the longest lead time in the plan |
+| **A US issuer and UAE VAT** | N9 is answered — Bearing Deployment Company, Inc, Delaware, no TRN. A US supplier billing UAE businesses either invoices without VAT under the reverse charge or registers in the UAE as a non-resident; charging 5% with no TRN is neither | you | ask a tax advisor before the first real charge; T8.4 makes the answer a config change |
 | **Meta approval is not ours to schedule** | 7 WhatsApp templates are `pending_meta` and the authentication template is unapproved. WhatsApp is the channel a UAE supplier actually reads | you | submit in week 1; plan M3's exit around email plus in-app only |
 | **T5.1, the source-to-schema mapping, is under-scoped here** | the licence export's activity text drives categorisation, and 40,000 rows cannot be categorised by hand | you | dry-run on 1,000 rows in S4, before S5 commits to a shape |
 | **The SEO surface is bounded by copy, not by data** | the publish floor needs 60 listings, 30% verified **and** 250 words of unique intro plus four FAQ rows per page. 41,000 listings do not produce landing pages; an editor does | you | decide the per-page copy budget before counting on landing-page traffic |
 | **Narrow layouts are XL and the ranking depends on them** | reply speed decides ranking and sellers are in a warehouse. Until the reply path works on a phone, the response-time band measures laptop proximity | you | P-18 before P-17 if one has to go first |
-| **Forty renders are older than the code, and the services ones are worse** | building them literally regresses shipped work, and both packages' rule says the render is newer. Four services renders draw a decision closed as *no*; one draws a tier cut twice over | you | §2 of the gap analysis is the exception list. P-54 retracts the services four in an hour |
+| ~~**Forty renders are older than the code**~~ | **Resolved 10 Nov 2026**: the renders are reference for schema and architecture, not specification. Shipped code stands where it has superseded a drawing; §2 of the gap analysis is the exception list | — | judge per PR, name the call in its body, escalate only the high-value ones |
 | **The services package ships a 4 Sep audit board as context, and TASK-1 tells the designer to classify against it** | four of its six recorded decisions have been reversed — including both halves of the data model | you | withdraw the board or stamp it; §1.2.4 of the gap analysis lists the reversals |
 | **1,267 services landing pages behind one nullable column** | no rollout rule, no evidence bar, no rollback. The repo's own doc calls it "roughly double" when it is ~14× | you | N18 before any trade opens; the real constraint is editorial capacity, not data |
 | **Over-claimed coverage** | three readers filter on area and none weighs it, so naming Business Bay ranks level with ticking *anywhere in Dubai*. A services directory whose coverage is over-claimed is useless, and the product currently teaches sellers to do it | you | N19, set on `12c-s`, before services traffic matters |
