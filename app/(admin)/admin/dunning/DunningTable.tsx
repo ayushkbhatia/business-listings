@@ -142,7 +142,8 @@ export function DunningTable({ rows }: { rows: readonly DunningRowView[] }) {
       key: "next",
       header: t("admin.dunning.col.next"),
       hideBelow: "md",
-      render: (row) => <span className="text-muted">{row.cancelled ?? row.next}</span>,
+      // Muted only on a plain row: on the urgent row's bad surface `text-muted` is 4.17:1.
+      render: (row) => <span className={row.urgent ? undefined : "text-muted"}>{row.cancelled ?? row.next}</span>,
     },
     {
       /*
@@ -160,7 +161,7 @@ export function DunningTable({ rows }: { rows: readonly DunningRowView[] }) {
           {row.lastNotice ? (
             <>
               <StatusBadge tone={row.lastNotice.tone}>{row.lastNotice.label}</StatusBadge>
-              <span className="text-caption text-muted">{row.lastNotice.meta}</span>
+              <span className={cn("text-caption", !row.urgent && "text-muted")}>{row.lastNotice.meta}</span>
               {row.lastNotice.templateHref ? (
                 <Link href={row.lastNotice.templateHref} className="text-caption text-moss underline underline-offset-2">
                   {t("admin.dunning.notice.template_link")}

@@ -32,7 +32,8 @@ const STEP_TEXT: Record<StepTone, string> = {
   ok: "text-ok-ink",
   warn: "text-warn-ink",
   bad: "text-bad-ink",
-  neutral: "text-body",
+  // Inherit the alert's ink: `text-body` and `text-muted` are paper-surface tokens.
+  neutral: "",
 };
 
 function aed(fils: number): string {
@@ -92,14 +93,21 @@ export function FailedPaymentBanner({ failed }: { failed: FailedPayment }) {
         <p>{failed.reason ? t("billing.failed.reason", { reason: failed.reason }) : t("billing.failed.no_reason")}</p>
       )}
 
-      <h3 className="mt-3 font-mono text-eyebrow uppercase text-muted">{t("billing.rail.title")}</h3>
+      {/*
+         A paragraph, not a heading: the Alert's title is not a heading either,
+         so an `h3` here followed the page's `h1` directly (axe heading-order).
+         And no `text-muted` anywhere in the banner — on the warn and bad
+         surfaces it measures 4.2:1 against the 4.5:1 floor; the tone's own
+         ink, inherited, passes.
+      */}
+      <p className="mt-3 font-mono text-eyebrow uppercase">{t("billing.rail.title")}</p>
       <ol className="mt-1.5 flex flex-col gap-1.5">
         {lines.map((line, index) => {
           const step = failed.rail.steps[index]!;
           const done = step.state === "done";
           return (
             <li key={line.key} className="grid gap-x-3 sm:grid-cols-[11rem_minmax(0,1fr)]">
-              <span className={cn("font-mono text-caption", done ? "text-ink" : "text-muted")}>{line.label}</span>
+              <span className={cn("font-mono text-caption", done && "font-medium")}>{line.label}</span>
               <span className={cn("text-body-sm", STEP_TEXT[line.tone])}>
                 {line.text}
                 {line.needsChannel ? (
