@@ -3,6 +3,7 @@ import { EVENT_AUDIENCE } from "./params";
 import {
   DEFAULT_ROUTING,
   PLATFORM_FLOOR,
+  choiceSource,
   inQuietHours,
   localParts,
   overridesQuietHours,
@@ -175,7 +176,26 @@ describe("criterion 10 — the high-value override", () => {
 
 describe("the matrix", () => {
   it("sends nothing for an event the seller has switched off", () => {
-    expect(route(PREFERENCE, { event: "review_posted", now: MONDAY_1000 })).toEqual([]);
+    const off: RoutingPreference = { ...PREFERENCE, matrix: { ...PREFERENCE.matrix, review_posted: [] } };
+    expect(route(off, { event: "review_posted", now: MONDAY_1000 })).toEqual([]);
+  });
+
+  /*
+     T7.2. This test used to assert `[]` for an event the matrix does not name,
+     under the title above — so it held "absent" equal to "switched off", which
+     is the defect: every matrix saved before an event existed omits it, and
+     those sellers were sent nothing for it on any channel. Absent takes ours.
+  */
+  it("sends the default for an event the seller has never been asked about", () => {
+    const decisions = route(PREFERENCE, { event: "review_posted", now: MONDAY_1000 });
+    expect(decisions.map((d) => d.channel)).toEqual([...DEFAULT_ROUTING.matrix.review_posted!]);
+  });
+
+  it("names where each row's channels come from", () => {
+    const matrix = { quote_accepted: ["whatsapp"], review_posted: [] } as RoutingPreference["matrix"];
+    expect(choiceSource(matrix, "review_posted")).toBe("own");
+    expect(choiceSource(matrix, "quote_partly_accepted")).toBe("inherited");
+    expect(choiceSource(matrix, "weekly_digest")).toBe("default");
   });
 
   it("sends only the channels the seller chose", () => {

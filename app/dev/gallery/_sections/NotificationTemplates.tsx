@@ -1,6 +1,10 @@
+import { CoverageGrid } from "@/app/(admin)/admin/notifications/CoverageGrid";
 import { TemplateList } from "@/app/(admin)/admin/notifications/TemplateList";
 import { TemplateRail } from "@/app/(admin)/admin/notifications/TemplateRail";
-import { presentBoard, presentDetail, readFilters } from "@/app/(admin)/admin/notifications/present";
+import { presentBoard, presentCoverage, presentDetail, readFilters } from "@/app/(admin)/admin/notifications/present";
+import { coverageGrid, defaultChannels, type CoverageInput } from "@/lib/notify/coverage";
+import { EVENT_AUDIENCE, isEmitted } from "@/lib/notify/params";
+import type { NotificationEvent } from "@/lib/notify/routing";
 import type { TemplateBoard, TemplateDetail, TemplateRow, VersionView } from "@/lib/notify/templates";
 import { sortRows } from "@/lib/notify/templates";
 import { Section, States } from "../_kit";
@@ -135,6 +139,22 @@ function Rail({ value, measured = 0, canWrite = true }: { value: TemplateDetail;
   );
 }
 
+/**
+ * T7.1's grid in its two meta states. Full coverage is every emitted event's
+ * default routes live, which is what production reads today; the gap state is
+ * the list's own rows, which leave most pairs unwritten.
+ */
+function Coverage({ inputs, canWrite = true }: { inputs: readonly CoverageInput[]; canWrite?: boolean }) {
+  const filters = readFilters({});
+  return <CoverageGrid view={presentCoverage(coverageGrid(inputs), filters, canWrite)} landmark={false} />;
+}
+
+const FULL: CoverageInput[] = (Object.keys(EVENT_AUDIENCE) as NotificationEvent[])
+  .filter(isEmitted)
+  .flatMap((event) =>
+    defaultChannels(event).map((channel) => ({ event, channel, state: "live" as const, liveVersion: 2, pendingVersion: null })),
+  );
+
 const NEUTRAL = version({
   kind: "neutral",
   subject: "Your trade licence expires {expiresAt} — {days} days",
@@ -160,6 +180,33 @@ export function NotificationTemplatesGallery() {
       title="Notification templates"
       note="Board 12g. Volume is a query; FIRED BY comes from the code; no trade-kind language and not written read differently; WhatsApp goes through Meta."
     >
+      <States label="Coverage · gaps first" stack>
+        <Coverage inputs={ROWS} />
+      </States>
+      <States label="Coverage · every default route live" stack>
+        <Coverage inputs={FULL} />
+      </States>
+      <States label="Coverage · read only, no write action" stack>
+        <Coverage inputs={ROWS} canWrite={false} />
+      </States>
+      <States label="Write first version · email, nothing exists yet" stack>
+        <Rail
+          value={detail({
+            event: "review_dispute_decided",
+            channel: "email",
+            firedBy: ["11c"],
+            variables: ["outcome"],
+            primaryKind: null,
+            twin: "no_body",
+            live: null,
+            pending: null,
+            head: null,
+            seed: { subject: null, body: "", actionLabel: null, actionPath: null, metaTemplateName: null },
+            nextVersion: 1,
+            versions: [],
+          })}
+        />
+      </States>
       <States label="List · as drawn" stack>
         <Board rows={ROWS} open="enquiry_received.whatsapp" />
       </States>

@@ -62,9 +62,11 @@ export async function saveVersionAction(form: FormData): Promise<ActionResult> {
     return {
       ok: true,
       message:
-        result.status === "pending_meta"
-          ? t("notifications.saved.pending", { version: String(result.version) })
-          : t("notifications.saved.live", { version: String(result.version) }),
+        result.status === "draft"
+          ? t("notifications.saved.draft", { version: String(result.version) })
+          : result.status === "pending_meta"
+            ? t("notifications.saved.pending", { version: String(result.version) })
+            : t("notifications.saved.live", { version: String(result.version) }),
     };
   } catch (error) {
     return caught(error);

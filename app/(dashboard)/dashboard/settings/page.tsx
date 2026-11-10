@@ -6,7 +6,8 @@ import { mayCloseAccount } from "@/lib/auth/guards";
 import { prisma } from "@/lib/db/client";
 import { t } from "@/lib/i18n";
 import { defaultAutoReplyBody } from "@/lib/messaging/auto-reply";
-import { withInheritedChoices } from "@/lib/notify/routing";
+import { choiceSource, chosenChannels, DEFAULT_ROUTING, ROUTES_LIKE, type RoutingPreference } from "@/lib/notify/routing";
+import { liveTemplatePairs } from "@/lib/notify/templates";
 import { resolveNotificationSenders } from "@/lib/notify/senders";
 import { channelsFor, ADDABLE_KINDS } from "@/lib/team/channels";
 import { maySeeOtherSeats, reachabilityFor } from "@/lib/team/reachability";
@@ -20,7 +21,7 @@ import { ChannelsCard } from "./ChannelsCard";
 import { SellsKindCard } from "./SellsKindCard";
 import { ReachabilityRail } from "./_reachability";
 import { confirmChannelCode, dropChannel, sendChannelCode, changeSellsKindAction } from "./actions";
-import { EVENTS, GOES_TO } from "./matrix";
+import { ALERT_GROUPS, EVENTS, GOES_TO } from "./matrix";
 
 /**
  * Board 7e — how a lead actually reaches a person.
@@ -51,23 +52,25 @@ import { EVENTS, GOES_TO } from "./matrix";
 export const metadata = { title: t("alerts.title") };
 export const dynamic = "force-dynamic";
 
-const DEFAULTS: AlertsValue = {
-  routing: {
-    enquiry_received: ["whatsapp", "in_app"],
-    enquiry_escalated: ["whatsapp", "email", "in_app"],
-    quote_accepted: ["whatsapp", "email", "in_app"],
-    quote_partly_accepted: ["whatsapp", "email", "in_app"],
-    quote_expiring: ["in_app"],
-    review_posted: ["email", "in_app"],
-    document_expiring: ["email", "in_app"],
-    setup_nudge: ["whatsapp"],
-    weekly_digest: ["email"],
-  },
-  quietHoursEnabled: true,
-  quietFromHour: 21,
-  quietToHour: 7,
-  quietOnSunday: true,
-  highValueOverrideAed: 50_000,
+/**
+ * What a business that has never saved this screen actually receives — T7.2.
+ *
+ * This was its own list: WhatsApp ticked on five rows, an override at
+ * AED 50,000. None of it was what such a business received. `notify()` reads
+ * `DEFAULT_ROUTING` when there is no preference row (T6.1) — email and in-app,
+ * nothing that interrupts, no override — so every imported listing opened this
+ * screen to ticks the platform was not honouring. The matrix is now drawn from
+ * `chosenChannels` for every business, and the rest from `DEFAULT_ROUTING`.
+ *
+ * Escalation and the follow-up keep the schema's defaults, which are what the
+ * jobs read for a business with no row.
+ */
+const DEFAULTS: Omit<AlertsValue, "routing"> = {
+  quietHoursEnabled: DEFAULT_ROUTING.quiet.enabled,
+  quietFromHour: DEFAULT_ROUTING.quiet.fromHour,
+  quietToHour: DEFAULT_ROUTING.quiet.toHour,
+  quietOnSunday: DEFAULT_ROUTING.quiet.onSunday,
+  highValueOverrideAed: DEFAULT_ROUTING.highValueOverrideAed,
   escalateAfterMinutes: 120,
   nudgeEnabled: true,
   nudgeAfterHours: 24,
@@ -96,7 +99,7 @@ export default async function SettingsPage({
   */
   const effective: Tab = policy ? tab : "channels";
 
-  const [preference, badges, pendingWhatsApp, business, reach, myChannels] = await Promise.all([
+  const [preference, badges, pendingWhatsApp, business, reach, myChannels, live] = await Promise.all([
     prisma.notificationPreference.findUnique({ where: { businessId: seat.businessId } }),
     getNavBadges(seat.businessId),
     // Said out loud rather than left to look broken: a seller who switches
@@ -123,12 +126,31 @@ export default async function SettingsPage({
     }),
     reachabilityFor(seat.businessId),
     channelsFor(seat.actor),
+    // T7.2: a tick on a channel with no live message reads *Not sent yet*.
+    liveTemplatePairs(),
   ]);
+
+  /*
+     Each row shows the channels `route()` will act on, and says where they came
+     from: the seller's own choice, the one it inherits (board `1o`), or ours.
+     One function for both — the screen cannot show a tick the router ignores.
+  */
+  const stored = (preference?.routing ?? {}) as RoutingPreference["matrix"];
+  const routing = Object.fromEntries(EVENTS.map((event) => [event, [...chosenChannels(stored, event)]]));
+  const sources = Object.fromEntries(EVENTS.map((event) => [event, choiceSource(stored, event)]));
+  const follows = Object.fromEntries(
+    EVENTS.flatMap((event) => {
+      const like = ROUTES_LIKE[event];
+      return like ? [[event, t(`notify.event.${like}` as "notify.event.quote_accepted")]] : [];
+    }),
+  );
+  const liveChannels = Object.fromEntries(
+    EVENTS.map((event) => [event, ["whatsapp", "email", "in_app"].filter((channel) => live.has(`${event}.${channel}`))]),
+  );
 
   const value: AlertsValue = preference
     ? {
-        // Board `1o`: an event the seller has not chosen for shows the choice it inherits, which `route()` reads.
-        routing: withInheritedChoices((preference.routing ?? {}) as Record<string, string[]>),
+        routing,
         quietHoursEnabled: preference.quietHoursEnabled,
         quietFromHour: preference.quietFromHour,
         quietToHour: preference.quietToHour,
@@ -139,7 +161,7 @@ export default async function SettingsPage({
         nudgeAfterHours: preference.nudgeAfterHours,
         billingEmail: preference.billingEmail,
       }
-    : DEFAULTS;
+    : { ...DEFAULTS, routing };
 
   /*
      Which channels this deployment can actually send on, read from the senders
@@ -218,6 +240,10 @@ export default async function SettingsPage({
                 ]),
               )}
               available={available}
+              groups={ALERT_GROUPS.map((group) => ({ key: group.key, events: [...group.events] }))}
+              sources={sources}
+              follows={follows}
+              liveChannels={liveChannels}
               hours={{
                 published: known.length > 0,
                 closedNow: known.length > 0 && !known.some((state) => state.state === "open"),

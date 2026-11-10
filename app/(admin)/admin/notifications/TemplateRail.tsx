@@ -88,6 +88,14 @@ export function TemplateRail({
         ) : null}
 
         {view.dormant ? <p className="border-b border-line bg-fill px-4 py-2 text-caption text-body">{view.dormant}</p> : null}
+        {view.first ? (
+          /*
+             T7.1 — the create panel is this editor, opened on a pair with no
+             row. Said at the top so nobody reads an empty box as a body that
+             failed to load.
+          */
+          <p className="border-b border-line bg-fill px-4 py-2 text-caption text-body">{t("notifications.detail.first")}</p>
+        ) : null}
 
         <TemplateEditor view={view} seed={seed} origin={origin} canWrite={canWrite} />
       </div>
@@ -141,7 +149,7 @@ export function TemplateRail({
                       {row.status}
                     </span>
                     {row.note ? <span className="mt-0.5 block text-bad-ink">{row.note}</span> : null}
-                    {row.canPublish && canWrite ? <PublishDraftButton templateId={row.id} version={row.version} /> : null}
+                    {row.canPublish && canWrite ? <PublishDraftButton templateId={row.id} version={row.version} whatsapp={view.channel === "whatsapp"} /> : null}
                   </td>
                   <td className="px-4 py-2 text-body">
                     {row.by}

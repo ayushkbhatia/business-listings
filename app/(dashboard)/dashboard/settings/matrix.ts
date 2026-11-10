@@ -8,43 +8,65 @@ import { PLATFORM_FLOOR } from "@/lib/notify/routing";
  * neither. Next reports this at module evaluation rather than at build, so it
  * ships and then fails on the first request — which is how it got here twice.
  */
-export const EVENTS = [
-  "enquiry_received",
-  /*
-     Board 7e §2 lists one row for an unanswered lead — "Lead unanswered after
-     2h → Owner. The escalation job" — and that job emits `enquiry_escalated`.
-     `enquiry_unanswered` was a second row for the same thing with no emitter
-     behind it, which is a control a seller can set and nothing can honour, so
-     it is gone from the matrix. The event name survives in the union because
-     `NotificationDelivery.event` has history in it and a seeded template still
-     names it.
-  */
-  "enquiry_escalated",
-  "quote_accepted",
-  "quote_expiring",
-  "review_posted",
-  "document_expiring",
-  /*
-     Board 8a's one nudge.
 
-     Here because `saveAlerts` rebuilds the whole matrix from this list: an
-     event missing from it is an event silently dropped out of the seller's
-     stored routing the next time they press save, so the nudge would work until
-     somebody visited this screen and then never fire again. That it is sent
-     once ever rather than repeatedly makes no difference — it still routes.
-  */
-  "setup_nudge",
-  "weekly_digest",
-  /*
-     Board `1n`. A buyer chose another supplier's quote, and a buyer nudged for
-     one. In-app is on the platform floor for both (`PLATFORM_FLOOR`); the rows
-     are here so email and WhatsApp can be chosen — and so saving this screen
-     does not drop them from the stored matrix.
-  */
-  "quote_declined",
-  "quote_partly_accepted",
-  "enquiry_nudged",
+/**
+ * Board 7e's rows, in four groups — task T7.2, prompt P-09, spec S1.
+ *
+ * ## Every seller event that is emitted, and nothing else
+ *
+ * The screen rendered eleven rows against sixteen emitted seller events.
+ * Two of the six it left out reached a seller only if their stored matrix
+ * happened to name them (`subscription_renewed`, `review_dispute_decided`);
+ * the other four were floor-only, so a seller received them and could see no
+ * row saying so, nor add WhatsApp to them.
+ *
+ * Two seller events have no row, and they are the two with no emitter. A row
+ * for either would be a control a seller can set and nothing honours:
+ *
+ *   · `enquiry_unanswered`. Board 7e §2 lists one row for an unanswered lead —
+ *     "Lead unanswered after 2h → Owner. The escalation job" — and that job
+ *     emits `enquiry_escalated`.
+ *   · `weekly_digest`. It had a row on the shipped screen and nothing has ever
+ *     sent it. Its row returns with the job that sends it; until then a stored
+ *     choice is carried through by `nextRouting`, untouched.
+ *
+ * Both enum values survive because `NotificationDelivery.event` has history in
+ * them and seeded templates name them.
+ *
+ * P-09 asked for eighteen rows in six groups and the spec it points at draws
+ * seventeen in five, each counting a row for the digest. The grouping is the
+ * spec's, less its `Summary` group, so the platform floor reads as a property
+ * of a group — *these are ours to send* — rather than as a lock repeated cell
+ * by cell.
+ *
+ * `alerts-matrix.test.ts` fails when a new seller event appears without a
+ * decision about which group it joins.
+ */
+export const ALERT_GROUPS = [
+  {
+    key: "leads_quotes",
+    events: [
+      "enquiry_received",
+      "enquiry_escalated",
+      "enquiry_nudged",
+      "quote_accepted",
+      "quote_partly_accepted",
+      "quote_declined",
+      "quote_expiring",
+    ],
+  },
+  { key: "reviews", events: ["review_posted", "review_dispute_decided"] },
+  { key: "listing", events: ["document_expiring", "setup_nudge", "ramadan_dates_moved"] },
+  {
+    key: "billing",
+    events: ["subscription_renewed", "placement_slot_freed", "payment_failed", "payment_final_notice"],
+  },
 ] as const;
+
+export type AlertGroupKey = (typeof ALERT_GROUPS)[number]["key"];
+
+/** Every row, in screen order. `saveAlerts` writes exactly these. */
+export const EVENTS = ALERT_GROUPS.flatMap((group) => group.events);
 
 /**
  * The channels a seller may choose between — decision N10, task T6.8.
@@ -65,7 +87,7 @@ export const CHANNELS = ["whatsapp", "email", "in_app"] as const;
 export const ESCALATION_CHOICES = [30, 60, 120, 240, 480] as const;
 export const NUDGE_CHOICES = [12, 24, 48, 72] as const;
 
-export type AlertEvent = (typeof EVENTS)[number];
+export type AlertEvent = (typeof ALERT_GROUPS)[number]["events"][number];
 export type AlertChannel = (typeof CHANNELS)[number];
 
 /**
@@ -75,33 +97,43 @@ export type AlertChannel = (typeof CHANNELS)[number];
  * half: which person. Without it a seller reads a row of ticks with no idea
  * whose handset they are ticking, and the answer is not the same for every row.
  *
- * `assigned` is what board 7d's routing decided. It is the reason these two
- * screens are one handoff: an `assigned` that names a seat with no verified
- * channel would be a promise nothing keeps, so `lib/notify/events.ts` falls back
- * to the owner and counts it.
+ * ## Read off the emitters, not off the board
+ *
+ * T7.2 checked every row against the `notify()` call in `lib/notify/events.ts`
+ * that sends it, and three claims were false. `quote_accepted` and
+ * `quote_partly_accepted` said *the assigned seat and the owner*; both are sent
+ * to the owner alone. `document_expiring` said *the owner and finance*; it is
+ * sent to the owner alone. A seller who relied on the column would have
+ * expected a colleague to have been told, and nobody was.
+ *
+ * So the column now says what the code does. Whether an accepted quote should
+ * also reach the seat that wrote it is a product question, and widening the
+ * recipients is a change to the emitter, not to this map.
+ *
+ * `assigned` is what board 7d's routing decided, via `recipientFor` — an
+ * `assigned` that names a seat with no verified channel would be a promise
+ * nothing keeps, so it falls back to the owner and counts it.
  */
-export type Recipient =
-  | "assigned"
-  | "assigned_and_owner"
-  | "owner"
-  | "owner_and_finance";
+export type Recipient = "assigned" | "owner";
 
 export const GOES_TO: Readonly<Record<AlertEvent, Recipient>> = {
   enquiry_received: "assigned",
-  // Escalation is the owner by definition — it exists because the assigned seat
-  // did not answer. `NotificationPreference.escalateToUserId` would let a
-  // supplier name somebody else and is read by nothing; a screen for it belongs
-  // with the person who asked for it.
+  // Escalation is the owner by definition — it exists because the assigned seat did not answer.
   enquiry_escalated: "owner",
-  quote_accepted: "assigned_and_owner",
+  enquiry_nudged: "assigned",
+  quote_accepted: "owner",
+  quote_partly_accepted: "owner",
+  quote_declined: "assigned",
   quote_expiring: "assigned",
   review_posted: "owner",
-  document_expiring: "owner_and_finance",
+  review_dispute_decided: "owner",
+  document_expiring: "owner",
   setup_nudge: "owner",
-  weekly_digest: "owner",
-  quote_declined: "assigned",
-  quote_partly_accepted: "assigned_and_owner",
-  enquiry_nudged: "assigned",
+  ramadan_dates_moved: "owner",
+  subscription_renewed: "owner",
+  placement_slot_freed: "owner",
+  payment_failed: "owner",
+  payment_final_notice: "owner",
 };
 
 /**

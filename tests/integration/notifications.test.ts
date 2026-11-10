@@ -525,7 +525,12 @@ describe("T6.1 — a business with no stored preference", () => {
     */
     if (!bareBusinessId || !bareSeatUserId) return;
     await prisma.notificationPreference.create({
-      data: { businessId: bareBusinessId, routing: {}, quietHoursEnabled: false },
+      /*
+         `weekly_digest: []`, not `{}`. Since T7.2 an event the matrix does not
+         name takes the default; switched off is an explicit empty list, which
+         is what board 7e writes when every box on a row is unticked.
+      */
+      data: { businessId: bareBusinessId, routing: { weekly_digest: [] }, quietHoursEnabled: false },
     });
 
     try {

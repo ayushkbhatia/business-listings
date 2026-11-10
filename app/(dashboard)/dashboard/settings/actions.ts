@@ -13,6 +13,8 @@ import {
 import { recordEvent } from "@/lib/telemetry/record";
 import { t } from "@/lib/i18n";
 import { changeSellsKind, isSellsChoice } from "@/lib/onboarding/kind";
+import { chosenChannels, type RoutingPreference } from "@/lib/notify/routing";
+import { resolveNotificationSenders } from "@/lib/notify/senders";
 import { getSellerSeat } from "../_shell";
 import {
   ALWAYS_IN_APP,
@@ -73,8 +75,18 @@ export async function saveAlerts(formData: FormData): Promise<SaveAlertsResult> 
      value would make an untick a no-op, which is the opposite defect.
   */
   const posted: Partial<Record<(typeof EVENTS)[number], string[]>> = {};
+  /*
+     T7.2. A channel with no carrier renders disabled — "the setting is kept
+     for when one is configured" — and a disabled box posts nothing, so the save
+     dropped every choice on it. Its value is carried from what the router
+     would have acted on, which for a row never chosen is the default.
+  */
+  const available = new Set(Object.keys(resolveNotificationSenders()));
   for (const event of EVENTS) {
-    const on = CHANNELS.filter((channel) => formData.get(`matrix.${event}.${channel}`) === "on");
+    const was = chosenChannels(previous as RoutingPreference["matrix"], event);
+    const on = CHANNELS.filter((channel) =>
+      available.has(channel) ? formData.get(`matrix.${event}.${channel}`) === "on" : was.includes(channel),
+    );
     /*
        7e §2.2, enforced rather than only rendered. The checkbox is disabled on
        screen and a disabled checkbox posts nothing at all, so without this line
