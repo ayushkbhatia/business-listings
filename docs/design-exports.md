@@ -194,6 +194,10 @@ template in the database, rendered with plausible values. Each one states what h
 is worth, and one action. None carries a buyer's phone number, email address or company name —
 asserted in tests/integration/notifications.test.ts, not left to a reading."*
 
+> **Fixed 10 Nov 2026, task T7.4.** Values now come from `sampleParams`, and only live, with-Meta
+> and draft rows render, each labelled with its kind. The description below is of the page before
+> that change and is kept because the ledger line that follows argues from it.
+
 Then one section per event, headed by the raw event name in mono (`quote_accepted`), in enum
 order. Under each, one card per template row — every channel, every version, every status:
 

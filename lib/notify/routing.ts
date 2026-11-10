@@ -177,7 +177,42 @@ export const ROUTES_LIKE: Readonly<Partial<Record<NotificationEvent, Notificatio
   quote_partly_accepted: "quote_accepted",
 };
 
-/** The channels a seller chose for an event: their own choice, or the one it inherits. */
+/**
+ * Where a row's channels come from: the seller's own choice, the choice it
+ * inherits through `ROUTES_LIKE`, or ours.
+ *
+ * Board 7e's `Default` and `Follows …` tags read this, so the screen names the
+ * same source `route()` acts on.
+ */
+export type ChoiceSource = "own" | "inherited" | "default";
+
+export function choiceSource(matrix: RoutingPreference["matrix"], event: NotificationEvent): ChoiceSource {
+  if (matrix[event]) return "own";
+  const like = ROUTES_LIKE[event];
+  if (like && matrix[like]) return "inherited";
+  return "default";
+}
+
+/**
+ * The channels an event reaches for one business: their own choice, else the
+ * one it inherits, else `DEFAULT_ROUTING`'s — task T7.2.
+ *
+ * ## The third fallback, and why it is per event
+ *
+ * T6.1 gave a business with **no** preference row the default. A business
+ * **with** a row fell back to nothing for any event its row did not name — and
+ * every row written before an event existed does not name it. So a seller who
+ * saved board 7e once in September received `subscription_renewed` and
+ * `review_dispute_decided` on no channel at all, because those rows were not on
+ * the screen when they pressed Save, and the screen showed them nothing to
+ * correct.
+ *
+ * Absent is not a choice. A seller who unticked every box has a stored `[]` —
+ * `nextRouting` writes every rendered row explicitly — and that empty array is
+ * honoured here; only an event the business has never been asked about takes
+ * ours. For a buyer's matrix this changes nothing: `DEFAULT_ROUTING` holds
+ * seller events only.
+ */
 export function chosenChannels(
   matrix: RoutingPreference["matrix"],
   event: NotificationEvent,
@@ -185,7 +220,8 @@ export function chosenChannels(
   const own = matrix[event];
   if (own) return own;
   const like = ROUTES_LIKE[event];
-  return like ? (matrix[like] ?? []) : [];
+  if (like && matrix[like]) return matrix[like]!;
+  return DEFAULT_ROUTING.matrix[event] ?? [];
 }
 
 /** A stored matrix with each inherited choice written in, for a form that shows it. */

@@ -4,10 +4,13 @@ import { can } from "@/lib/auth/can";
 import { requireStaff } from "@/lib/auth/staff";
 import type { NotificationChannel, NotificationEvent } from "@/lib/db/generated/enums";
 import { t } from "@/lib/i18n";
+import { COVERAGE_CHANNELS, coverageGrid } from "@/lib/notify/coverage";
+import { EVENT_AUDIENCE } from "@/lib/notify/params";
 import { sortRows, templateBoard, templateDetail } from "@/lib/notify/templates";
 import { AdminPage, getAdminNavBadges } from "../../_shell";
 import { NotificationTabs } from "./_tabs";
-import { presentBoard, presentDetail, readFilters } from "./present";
+import { CoverageGrid } from "./CoverageGrid";
+import { presentBoard, presentCoverage, presentDetail, readFilters } from "./present";
 import { TemplateList } from "./TemplateList";
 import { TemplateRail } from "./TemplateRail";
 
@@ -48,15 +51,28 @@ export default async function NotificationsPage({
      a stale link from yesterday's log is not an error.
   */
   const shown = filters.channel === "all" ? sorted : sorted.filter((row) => row.channel === filters.channel);
-  const openRow = (filters.open && board.rows.find((row) => `${row.event}.${row.channel}` === filters.open)) || shown[0] || null;
+  const listed = filters.open ? board.rows.find((row) => `${row.event}.${row.channel}` === filters.open) : undefined;
+  /*
+     T7.1 — a pair the list does not hold. The coverage grid links every cell
+     here, including the ones with no template at all, and the editor opens on
+     them in its create mode (`templateDetail` answers a pair with no rows). It
+     used to fall through to the first row, so *Write first version* opened some
+     other template's editor — the gap could be seen and not fixed.
+  */
+  const unlisted = !listed && filters.open ? openablePair(filters.open) : null;
+  const openRow = listed ?? (unlisted ? null : (shown[0] ?? null));
+  const target = openRow
+    ? { event: openRow.event, channel: openRow.channel, twin: openRow.twin, servicesInGoods: openRow.volume.servicesInGoodsWording }
+    : unlisted
+      ? { ...unlisted, twin: "no_body" as const, servicesInGoods: 0 }
+      : null;
   // A twin is only asked of a goods body. `?line=services` on a neutral one opens the body itself.
-  const line = openRow && openRow.twin !== "neutral" && openRow.twin !== "no_body" ? filters.line : "primary";
-  const effective = { ...filters, line, open: openRow ? `${openRow.event}.${openRow.channel}` : null };
-  const detail = openRow
-    ? await templateDetail(openRow.event as NotificationEvent, openRow.channel as NotificationChannel, effective.line)
-    : null;
-  const detailView = detail && openRow ? presentDetail(detail, effective, now, openRow.volume.servicesInGoodsWording) : null;
+  const line = target && target.twin !== "neutral" && target.twin !== "no_body" ? filters.line : "primary";
+  const effective = { ...filters, line, open: target ? `${target.event}.${target.channel}` : null };
+  const detail = target ? await templateDetail(target.event, target.channel, effective.line) : null;
+  const detailView = detail && target ? presentDetail(detail, effective, now, target.servicesInGoods) : null;
   const view = presentBoard(board, effective, sorted);
+  const coverage = presentCoverage(coverageGrid(board.rows), effective, canWrite);
 
   return (
     <AdminPage
@@ -68,6 +84,8 @@ export default async function NotificationsPage({
       meta={<span className="font-mono text-eyebrow uppercase text-muted">{view.meta}</span>}
     >
       <NotificationTabs active="templates" />
+
+      <CoverageGrid view={coverage} />
 
       <div className="grid items-start gap-[var(--gutter)] board:grid-cols-[minmax(0,1fr)_minmax(0,26rem)]">
         <TemplateList view={view} filters={effective} />
@@ -98,4 +116,12 @@ export default async function NotificationsPage({
       </div>
     </AdminPage>
   );
+}
+
+/** An `event.channel` the grid can link to: a declared event on a channel still offered. */
+function openablePair(open: string): { event: NotificationEvent; channel: NotificationChannel } | null {
+  const [event, channel] = open.split(".") as [string, string];
+  if (!(event in EVENT_AUDIENCE)) return null;
+  if (!(COVERAGE_CHANNELS as readonly string[]).includes(channel)) return null;
+  return { event: event as NotificationEvent, channel: channel as NotificationChannel };
 }

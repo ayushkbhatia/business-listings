@@ -1,8 +1,11 @@
 import { prisma } from "@/lib/db/client";
 import { Card } from "@/components/structure";
 import { StatusBadge, type StatusTone } from "@/components/display/StatusBadge";
-import { placeholdersIn, render } from "@/lib/notify/render";
-import { t } from "@/lib/i18n";
+import type { NotificationEvent } from "@/lib/db/generated/enums";
+import { render } from "@/lib/notify/render";
+import { isEmitted, sampleParams } from "@/lib/notify/params";
+import { siteUrl } from "@/lib/site";
+import { t, type MessageKey } from "@/lib/i18n";
 
 /**
  * Board 7f — the notification design system.
@@ -26,35 +29,28 @@ const STATUS_TONE: Record<string, StatusTone> = {
   retired: "neutral",
 };
 
-/** The shape of value the product actually passes, for each placeholder. */
-const PLAUSIBLE: Record<string, string> = {
-  ref: "ENQ-8841",
-  quoteRef: "QT-8841-ALMR1",
-  summary: "resilient seated gate valves for a chilled water riser",
-  neededBy: "14 Sep 2026",
-  closesAt: "28 Aug 2026",
-  area: "Al Quoz Industrial 1",
-  lineCount: "3",
-  hours: "2",
-  amount: "AED 15,344",
-  revision: "2",
-  businessName: "Al Marwan Industrial Supplies",
-  businessSlug: "al-marwan-industrial-supplies-llc",
-  supplierName: "Al Marwan Industrial Supplies",
-  buyerFirstName: "Rashid",
-  enquiryId: "cmt73h5cr007yddit0mrgfx39",
-  shortLink: "businesslistings.ae/l/8841",
-  rating: "4",
-  documentKind: "Trade licence",
-  expiresOn: "12 Nov 2026",
-  count: "7",
-  value: "AED 84,200",
-  days: "3",
-};
+/**
+ * Which versions are worth a specimen — task T7.4, prompt P-10.
+ *
+ * The page rendered every version ever saved, with its own 22-key map of
+ * sample values; 25 of the 41 placeholders the events supply were missing from
+ * it and printed raw as `{approver}`, `{planName}`, `{quotes}`. A page whose
+ * job is to show how a message arrives showed half of them broken, and the
+ * breakage was the page's, not the template's.
+ *
+ * Now the values are `sampleParams` — the same fixture board 12g's preview and
+ * `Send test to me` use, which `params.test.ts` holds total over every event's
+ * declared placeholders — and only the versions that mean something: what
+ * sends, what is waiting on Meta, and what is drafted. A retired or replaced
+ * version is history, and 12g's history table is where history is read.
+ */
+const SHOWN = ["live", "pending_meta", "draft"] as const;
 
 export default async function NotificationSpecimens() {
+  const origin = siteUrl();
   const templates = await prisma.notificationTemplate.findMany({
-    orderBy: [{ event: "asc" }, { channel: "asc" }, { version: "desc" }],
+    where: { status: { in: [...SHOWN] } },
+    orderBy: [{ event: "asc" }, { channel: "asc" }, { kind: "asc" }, { version: "desc" }, { id: "asc" }],
   });
 
   const byEvent = new Map<string, typeof templates>();
@@ -78,10 +74,27 @@ export default async function NotificationSpecimens() {
             <h2 className="font-mono text-eyebrow uppercase text-muted">{event}</h2>
             <div className="mt-2 space-y-3">
               {group.map((template) => {
-                const params: Record<string, string> = {};
-                for (const name of placeholdersIn(template)) {
-                  params[name] = PLAUSIBLE[name] ?? `{${name}}`;
+                /*
+                   An event nothing emits declares no placeholders, so there is
+                   nothing to fill its body with. The old page invented values
+                   for it; this one shows the body as written and says why —
+                   a specimen of a message nobody is sent.
+                */
+                const event = template.event as NotificationEvent;
+                if (!isEmitted(event)) {
+                  return (
+                    <Card key={template.id} padded as="article">
+                      <p className="font-mono text-caption text-muted">
+                        {template.channel} · v{template.version} · {t(`notifications.kind.${template.kind}` as MessageKey)}
+                      </p>
+                      <p className="mt-2 text-caption text-muted">{t("specimens.dormant")}</p>
+                      <p className="mt-1 max-w-[var(--measure-prose)] whitespace-pre-line font-mono text-caption text-body">
+                        {template.body}
+                      </p>
+                    </Card>
+                  );
                 }
+                const params = sampleParams(event, origin);
 
                 let rendered: ReturnType<typeof render> | null = null;
                 let failure: string | null = null;
@@ -97,6 +110,8 @@ export default async function NotificationSpecimens() {
                       <span className="font-mono text-caption text-muted">
                         {template.channel} · v{template.version}
                       </span>
+                      {/* P-10: label the kind, so a goods body and its services twin are not read as one. */}
+                      <span className="text-caption text-body">{t(`notifications.kind.${template.kind}` as MessageKey)}</span>
                       <StatusBadge tone={STATUS_TONE[template.status] ?? "neutral"} size="sm" shape="chip">
                         {template.status}
                       </StatusBadge>

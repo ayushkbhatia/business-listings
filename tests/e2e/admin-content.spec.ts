@@ -251,6 +251,35 @@ test.describe("board 12g — notification templates", () => {
     await expect(page.getByText(/Version \d+ is live/)).toBeVisible();
   });
 
+  test("draws every event on a coverage grid, including pairs with no template", async ({ page }) => {
+    /*
+       T7.1. The list is built from rows, so an event with no template never
+       appeared on it — the gap that silences a notification was the one gap the
+       console could not show. The grid is built from the event list.
+    */
+    const grid = page.getByRole("table", { name: "Which events can send on which channel" });
+    await expect(grid).toBeVisible();
+    for (const group of ["To a supplier", "To a buyer", "To someone claiming a listing"]) {
+      await expect(grid.getByText(group, { exact: true })).toBeVisible();
+    }
+    await expect(grid.getByRole("rowheader", { name: /payment_failed/ })).toBeVisible();
+    // The meta line is a query, and it reads one of exactly two ways.
+    await expect(
+      page.getByText(/^(Every emitted event has a live template on every default route\.|\d+ events? emits? with no live template on at least one default route\.)$/),
+    ).toBeVisible();
+  });
+
+  test("opens the editor on a pair that has no template, as a draft", async ({ page }) => {
+    /*
+       P-08: *Write first version* opens the existing editor in a new mode. Not
+       saved here — a version cannot be deleted, and a draft written on every
+       run would be a fixture this suite eats.
+    */
+    await page.getByRole("link", { name: /^Write first version: / }).first().click();
+    await expect(page.getByText("No version of this message exists yet.", { exact: false })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Save v1 as a draft$/ })).toBeVisible();
+  });
+
   test("names who can turn a message off, and the two that ignore it", async ({ page }) => {
     await page.getByRole("link", { name: "Open document_expiring on Email" }).click();
     await expect(page.getByText("Who can turn this off")).toBeVisible();

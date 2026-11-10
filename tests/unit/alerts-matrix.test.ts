@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { EVENTS, GOES_TO, nextRouting } from "@/app/(dashboard)/dashboard/settings/matrix";
-import { EVENT_AUDIENCE } from "@/lib/notify/params";
-import { PLATFORM_FLOOR, type NotificationEvent } from "@/lib/notify/routing";
+import { ALERT_GROUPS, EVENTS, GOES_TO, floorLocked, inAppLocked, nextRouting } from "@/app/(dashboard)/dashboard/settings/matrix";
+import { EVENT_AUDIENCE, isEmitted } from "@/lib/notify/params";
+import type { NotificationEvent } from "@/lib/notify/routing";
 
 /**
  * Board 7e's alert matrix — task T6.5.
@@ -22,18 +22,18 @@ describe("T6.5 — saving keeps what the screen does not show", () => {
       // Rendered: the form decides.
       enquiry_received: ["whatsapp", "email", "in_app"],
       // Not rendered: nothing on this screen has an opinion about it.
-      subscription_renewed: ["whatsapp", "email"],
-      review_dispute_decided: ["email"],
+      weekly_digest: ["whatsapp", "email"],
+      enquiry_unanswered: ["email"],
     };
 
     const next = nextRouting(previous, { enquiry_received: ["email", "in_app"] });
 
     expect(next["enquiry_received"]).toEqual(["email", "in_app"]);
-    expect(next["subscription_renewed"], "deleted on save before T6.5").toEqual([
+    expect(next["weekly_digest"], "deleted on save before T6.5").toEqual([
       "whatsapp",
       "email",
     ]);
-    expect(next["review_dispute_decided"]).toEqual(["email"]);
+    expect(next["enquiry_unanswered"]).toEqual(["email"]);
   });
 
   it("lets a seller untick everything, which merging would have made a no-op", () => {
@@ -54,60 +54,75 @@ describe("T6.5 — saving keeps what the screen does not show", () => {
     expect(stored).toEqual(["email"]);
   });
 
-  it("names every seller event it omits, so none is omitted by accident", () => {
+  it("renders every emitted seller event, and names the one it omits", () => {
     /*
        The guard that matters for the next event rather than this one. A new
-       seller event appears in `EVENT_AUDIENCE` and somebody has to decide
-       whether it belongs on this screen; without this test the decision is made
-       by not making it, and the event routes to whatever the floor says — or to
-       nothing.
+       seller event appears in `EVENT_AUDIENCE` and somebody has to decide which
+       group it joins; without this test the decision is made by not making it.
 
-       Seven today. Four of them are on `PLATFORM_FLOOR`, which puts their
-       channels back whatever the matrix says, so the seller still hears. The
-       other three are the ones a seller cannot choose for at all, and each is
-       listed with why that is currently acceptable.
+       T7.2 took the omissions from seven to two. The six it added were four
+       floor-only events a seller received and could see no row for, and two —
+       `subscription_renewed`, `review_dispute_decided` — a seller could not
+       choose for at all. The two left are the two nothing emits; a row for
+       either is a box nothing honours.
     */
     const shown = new Set<string>(EVENTS);
     const omitted = SELLER_EVENTS.filter((event) => !shown.has(event)).sort();
 
-    expect(omitted).toEqual(
-      [
-        /*
-           On the floor, so the seller hears whatever the matrix says — the
-           screen renders them nowhere because there is nothing to choose.
-        */
-        "payment_failed",
-        "payment_final_notice",
-        "placement_slot_freed",
-        "ramadan_dates_moved",
-        /*
-           Not on the floor, and not choosable. Each is a real gap and T6.5 is
-           what stops it being a *destructive* one:
+    // No emitter. `matrix.ts` says why each row was taken off the screen and the enum value kept.
+    expect(omitted).toEqual(["enquiry_unanswered", "weekly_digest"]);
+    for (const event of omitted) expect(isEmitted(event), event).toBe(false);
+    for (const event of EVENTS) expect(isEmitted(event), event).toBe(true);
+  });
 
-           · `subscription_renewed` — a receipt. It routes on whatever the
-             seller last stored, which is now preserved rather than deleted.
-           · `enquiry_unanswered` — no emitter at all; `matrix.ts` says why the
-             row was taken off the screen and the enum value kept.
-           · `review_dispute_decided` — the rail promises the outcome is "sent
-             to you", and the channel for it is not the seller's to set yet.
-        */
-        "enquiry_unanswered",
-        "review_dispute_decided",
-        "subscription_renewed",
-      ].sort(),
-    );
-
-    const unreachable = omitted.filter((event) => !PLATFORM_FLOOR[event]);
-    expect(unreachable.sort()).toEqual([
-      "enquiry_unanswered",
-      "review_dispute_decided",
-      "subscription_renewed",
-    ]);
+  it("puts every row in exactly one group", () => {
+    const flat = ALERT_GROUPS.flatMap((group) => [...group.events]);
+    expect(new Set(flat).size).toBe(flat.length);
+    expect(flat).toEqual([...EVENTS]);
   });
 
   it("says who every rendered row reaches", () => {
     // `GOES_TO` is the screen's own `GOES TO` column. A rendered row without an
     // entry renders a tick nobody can attribute to a handset.
     for (const event of EVENTS) expect(GOES_TO[event], event).toBeTruthy();
+  });
+});
+
+/**
+ * T7.2 — each group note is a sentence about the rules, so the rules hold it.
+ *
+ * The notes in `lib/i18n/en.ts` name which rows we always send. A note that
+ * outlived a change to `PLATFORM_FLOOR` or `ALWAYS_IN_APP` would tell a seller
+ * they cannot switch off something they can, or the reverse — which is the
+ * defect the old single footnote had: it said "licence expiry" while the floor
+ * held nine events.
+ */
+describe("T7.2 — the group notes say what the floor does", () => {
+  const group = (key: string) => ALERT_GROUPS.find((g) => g.key === key)!.events as readonly (typeof EVENTS)[number][];
+  const always = (event: (typeof EVENTS)[number], channel: "email" | "in_app") =>
+    floorLocked(event, channel) || (channel === "in_app" && inAppLocked(event));
+
+  it("leads and quotes: in app is locked on every row except an accepted quote", () => {
+    const unlocked = group("leads_quotes").filter((event) => !always(event, "in_app"));
+    expect(unlocked).toEqual(["quote_accepted"]);
+  });
+
+  it("listing: email and in app are locked for licence expiry and Ramadan dates, and nothing else", () => {
+    const locked = group("listing").filter((event) => always(event, "email") && always(event, "in_app"));
+    expect(locked).toEqual(["document_expiring", "ramadan_dates_moved"]);
+    expect(group("listing").filter((event) => always(event, "email") !== always(event, "in_app"))).toEqual([]);
+  });
+
+  it("billing: email and in app are locked for a freed slot and both payment notices, and not for a renewal", () => {
+    const locked = group("billing").filter((event) => always(event, "email") && always(event, "in_app"));
+    expect(locked).toEqual(["placement_slot_freed", "payment_failed", "payment_final_notice"]);
+    expect(always("subscription_renewed", "email")).toBe(false);
+  });
+
+  it("reviews: nothing is locked, so the group carries no note", () => {
+    for (const event of group("reviews")) {
+      expect(always(event, "email"), event).toBe(false);
+      expect(always(event, "in_app"), event).toBe(false);
+    }
   });
 });

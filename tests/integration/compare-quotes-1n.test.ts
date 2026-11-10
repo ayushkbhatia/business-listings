@@ -271,9 +271,19 @@ describe("accepting declines the others out loud (B8)", () => {
     // The winner and the supplier who never quoted hear nothing of this.
     expect(declined.some((d) => d.businessId === suppliers[0]!.id || d.businessId === suppliers[4]!.id)).toBe(false);
 
-    // Nothing about the winner travels: not the supplier, not the price.
-    expect(sentEmail).toHaveLength(3);
-    for (const mail of sentEmail) {
+    /*
+       Nothing about the winner travels to a loser: not the supplier, not the
+       price. The winner hears too, by email — since T7.2 an event a stored
+       matrix never named takes the default rather than nothing, and this
+       fixture's matrices predate `quote_accepted`'s row. Before that, the
+       supplier who won was told only in app. Their own email names their own
+       price, which is theirs to read.
+    */
+    const winnerMail = sentEmail.filter((mail) => mail.to === `${PREFIX}-owner0@example.test`);
+    expect(winnerMail.map((mail) => mail.subject)).toEqual([expect.stringMatching(/accepted/)]);
+    const loserMail = sentEmail.filter((mail) => mail.to !== `${PREFIX}-owner0@example.test`);
+    expect(loserMail).toHaveLength(3);
+    for (const mail of loserMail) {
       expect(mail.body).not.toContain("Rawabi");
       expect(mail.body).not.toMatch(/14,?880/);
     }

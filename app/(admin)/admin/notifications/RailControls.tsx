@@ -333,7 +333,13 @@ export function MetaDecisionForm({ templateId }: { templateId: string }) {
   );
 }
 
-export function PublishDraftButton({ templateId, version }: { templateId: string; version: string }) {
+/**
+ * Takes a draft live — or, on WhatsApp, to Meta. P-08: *"a WhatsApp draft,
+ * where the action is Send to Meta not Put it live"*, because publishing it
+ * makes nothing live; it joins a queue somebody else answers.
+ */
+export function PublishDraftButton({ templateId, version, whatsapp = false }: { templateId: string; version: string; whatsapp?: boolean }) {
+  const label = t(whatsapp ? "notifications.history.send_to_meta" : "notifications.history.publish", { version });
   const id = useId();
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
@@ -343,7 +349,7 @@ export function PublishDraftButton({ templateId, version }: { templateId: string
   if (!open) {
     return (
       <button type="button" className="mt-1 block text-moss underline underline-offset-2 hover:text-moss-hover" onClick={() => setOpen(true)}>
-        {t("notifications.history.publish", { version })}
+        {label}
       </button>
     );
   }
@@ -364,7 +370,7 @@ export function PublishDraftButton({ templateId, version }: { templateId: string
           startTransition(async () => setResult(await publishDraftAction(form)));
         }}
       >
-        {t("notifications.history.publish", { version })}
+        {label}
       </Button>
       <Result result={result} />
     </div>

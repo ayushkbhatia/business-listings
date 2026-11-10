@@ -6712,8 +6712,9 @@ export const en = {
 
   // ── Board 7f, the template specimen surface at /dev/notifications ──
   "specimens.title": "Notification templates",
-  "specimens.lede": "Every template in the database, rendered with plausible values. Each one states what happened, what it is worth, and one action. None carries a buyer's phone number, email address or company name — asserted in tests/integration/notifications.test.ts, not left to a reading.",
+  "specimens.lede": "Every body that can still go out — live, with Meta, or drafted — rendered with the same sample values the console's preview uses. Kind is labelled, so a goods body and its services twin are read as two. Each one states what happened, what it is worth, and one action. None carries a buyer's phone number, email address or company name — asserted in tests/integration/notifications.test.ts, not left to a reading.",
   "specimens.no_action": "No action",
+  "specimens.dormant": "Nothing sends this event yet, so it has no values to fill. The body is shown as written.",
 
   // ── Seller: notification settings [7e] ──
   "alerts.title": "Settings",
@@ -6734,34 +6735,79 @@ export const en = {
   "alerts.toggle": "{channel} for {event}",
 
   "alerts.goes_to.assigned": "The assigned seat",
-  "alerts.goes_to.assigned_and_owner": "The assigned seat and the owner",
   "alerts.goes_to.owner": "The owner",
-  "alerts.goes_to.owner_and_finance": "The owner and finance",
   "alerts.goes_to.you": "You",
   "alerts.nothing_dropped": "If nobody is assigned, or the assigned seat has no verified channel, it goes to the owner instead. Nothing is dropped.",
-  "alerts.in_app_locked": "In app stays on for anything with a deadline. Turn every other channel off and the work still appears in a list.",
   "alerts.in_app_locked_cell": "In app is always on for {event}",
-  "alerts.floor_locked": "Licence expiry always reaches you by email and in app. It is a consequence rather than an update, so it cannot be switched off.",
+  /*
+     T7.2 — the groups, and one note per group that holds rows we always send.
+     Spec S1: the floor reads as a property of a group rather than as a lock
+     repeated in each cell; the cell keeps its own reason for a screen reader.
+     `alerts-matrix.test.ts` holds each note to `PLATFORM_FLOOR` and
+     `ALWAYS_IN_APP`, so a sentence here cannot outlive the rule it describes.
+  */
+  "alerts.group.leads_quotes": "Leads and quotes",
+  "alerts.group.reviews": "Reviews",
+  "alerts.group.listing": "Your listing",
+  "alerts.group.billing": "Billing and placement",
+  "alerts.group_note.leads_quotes": "In app stays on for every row here except an accepted quote. Each is work you already have open, so it always has a place to appear.",
+  "alerts.group_note.listing": "We always email you, and show it in app, when a licence is about to expire or the published Ramadan dates move. You can add WhatsApp.",
+  "alerts.group_note.billing": "We always email you, and show it in app, when a sponsored slot frees up or a payment does not go through. You can add WhatsApp.",
+  "alerts.tag.default": "Default",
+  "alerts.tag.follows": "Follows \u201c{event}\u201d",
+  "alerts.default_note": "Rows marked Default use ours, email and in app, until you change them. Saving keeps whatever is ticked.",
+  "alerts.not_sent_cell": "Not sent yet",
+  "alerts.not_sent_note": { one: "{count} ticked box has no message written for it yet, so nothing goes out on it until there is one.", other: "{count} ticked boxes have no message written for them yet, so nothing goes out on them until there is one." },
+  "alerts.dirty": "Unsaved changes",
   "alerts.floor_locked_cell": "{channel} is always on for {event}",
   "alerts.channel_unavailable": "{channel} has no carrier yet, so nothing is sent on it. The setting is kept for when one is configured.",
   "alerts.escalation_precedence": "Escalation ignores quiet hours in the app, and never sends a WhatsApp at three in the morning.",
   "alerts.outbound_note": "This is what reaches your team. Replies to a buyer go back on the channel the buyer used, which is a different thing and is not set here.",
 
-  "alerts.event.enquiry_received": "A new enquiry arrives",
-  "alerts.event.enquiry_unanswered": "An enquiry is still unanswered",
-  "alerts.event.enquiry_escalated": "An unanswered enquiry escalates to the owner",
-  "alerts.event.quote_accepted": "A buyer accepts your quote",
-  "alerts.event.quote_declined": "A buyer accepts another supplier's quote",
-  "alerts.event.quote_partly_accepted": "A buyer accepts some of your lines",
+  /*
+     Every event's name, as the person receiving it would say it — T7.1/T7.2.
+     One family for every screen that names an event: board 7e's rows and board
+     12g's coverage grid read the same key, so a row cannot be called one thing
+     in a seller's settings and another in the console that writes its message.
+     Phrased from the recipient's side, which is why a buyer event reads "A
+     supplier sends a quote" and a claimant one "Your claim is approved".
+  */
+  "notify.event.enquiry_received": "A new enquiry arrives",
+  "notify.event.enquiry_unanswered": "An enquiry is still unanswered",
+  "notify.event.enquiry_escalated": "An unanswered enquiry escalates to the owner",
+  "notify.event.enquiry_nudged": "A buyer nudges you for a quote",
+  "notify.event.quote_accepted": "A buyer accepts your quote",
+  "notify.event.quote_partly_accepted": "A buyer accepts some of your lines",
+  "notify.event.quote_declined": "A buyer accepts another supplier's quote",
+  "notify.event.quote_expiring": "A quote you sent is about to expire",
+  "notify.event.review_posted": "Someone leaves a review",
+  "notify.event.review_dispute_decided": "We decide a review you disputed",
+  "notify.event.document_expiring": "A licence or certificate is about to expire",
+  "notify.event.setup_nudge": "Your listing is still unfinished",
+  "notify.event.ramadan_dates_moved": "We move the published Ramadan dates",
+  "notify.event.subscription_renewed": "Your subscription renews",
+  "notify.event.placement_slot_freed": "A sponsored slot you are waiting for frees up",
+  "notify.event.payment_failed": "A payment does not go through",
+  "notify.event.payment_final_notice": "Final notice before your plan changes",
+  "notify.event.weekly_digest": "The weekly summary",
+  "notify.event.quote_received": "A supplier sends a quote",
+  "notify.event.quote_revised": "A supplier revises a quote",
+  "notify.event.message_received": "A supplier sends a message",
+  "notify.event.review_requested": "A supplier asks for a review",
+  "notify.event.report_resolved": "We close a report you filed",
+  "notify.event.product_alert_matched": "A product matches a saved alert",
+  "notify.event.approval_requested": "A colleague asks you to approve a quote",
+  "notify.event.approval_decided": "Your approval request is decided",
+  "notify.event.off_platform_flagged": "A message asks to move off the platform",
+  "notify.event.enquiry_closing": "An enquiry is about to close",
+  "notify.event.claim_conflict_opened": "Someone else claims the same listing",
+  "notify.event.claim_awarded": "Your claim is approved",
+  "notify.event.claim_not_awarded": "Your claim is not approved",
+  "notify.event.claim_documents_requested": "We ask for more documents on a claim",
+  "notify.event.claim_new_listing_created": "We create a separate listing for your claim",
   // Board `1o`: the phrase `quote_partly_accepted` carries — this supplier's own lines, nobody else's.
   "notify.partly_accepted.lines": "{count} of your {of} lines: {names}",
   "notify.partly_accepted.line": "{description} ×{qty}",
-  "alerts.event.enquiry_nudged": "A buyer nudges you for a quote",
-  "alerts.event.quote_expiring": "A quote you sent is about to expire",
-  "alerts.event.review_posted": "Someone leaves a review",
-  "alerts.event.document_expiring": "A licence or certificate is about to expire",
-  "alerts.event.setup_nudge": "Your listing is still unfinished",
-  "alerts.event.weekly_digest": "The weekly summary",
 
   "alerts.quiet_heading": "Quiet hours",
   /*
@@ -6799,7 +6845,7 @@ export const en = {
   "alerts.save": "Save alert settings",
   "alerts.saving": "Saving",
   "alerts.saved": "Saved {when}",
-  "alerts.whatsapp_pending": "WhatsApp alerts are built and waiting on Meta to approve the message templates. Until then these events fall back to the other channels you have on.",
+  "alerts.whatsapp_pending": "WhatsApp alerts are built and waiting on Meta to approve the message templates. Until then the other channels you have on still send.",
 
   // ── Can this seat be reached, board 7e §3 ─────────────────────────────────
   "reach.heading": "Can this seat be reached",
@@ -12009,6 +12055,36 @@ export const en = {
   "notifications.detail.variables": "Variables · {count}",
   "notifications.detail.privacy": "No variable carries a buyer's contact details or how many quotes they hold. Board 7c releases contact details on acceptance, and nowhere before.",
   "notifications.detail.dormant": "Nothing in the product sends this event yet. The copy is worth writing when the sender lands, and not before.",
+  "notifications.detail.first": "No version of this message exists yet. What you save here is version 1, as a draft.",
+
+  /*
+     T7.1 — the coverage grid. Events down, channels across, built from the
+     event list rather than from the rows, so a pair with no template is on it.
+  */
+  "notifications.coverage.title": "Coverage",
+  "notifications.coverage.caption": "Which events can send on which channel",
+  "notifications.coverage.col.event": "Event",
+  "notifications.coverage.col.default": "Default route",
+  "notifications.coverage.group.seller": "To a supplier",
+  "notifications.coverage.group.buyer": "To a buyer",
+  "notifications.coverage.group.claimant": "To someone claiming a listing",
+  "notifications.coverage.meta_ok": "Every emitted event has a live template on every default route.",
+  "notifications.coverage.meta_gaps": { one: "{count} event emits with no live template on at least one default route.", other: "{count} events emit with no live template on at least one default route." },
+  "notifications.coverage.default_none": "None by default",
+  "notifications.coverage.cell.live": "Live v{version}",
+  "notifications.coverage.cell.draft": "Draft",
+  "notifications.coverage.cell.with_meta": "With Meta",
+  "notifications.coverage.cell.rejected": "Meta refused",
+  "notifications.coverage.cell.gap": "Missing",
+  "notifications.coverage.cell.optional": "Not written",
+  "notifications.coverage.dormant": "Nothing sends this yet",
+  "notifications.coverage.action.edit": "Edit",
+  "notifications.coverage.action.review": "Review",
+  "notifications.coverage.action.view": "View",
+  "notifications.coverage.action.rewrite": "Rewrite",
+  "notifications.coverage.action.write": "Write first version",
+  "notifications.coverage.action_label": "{action}: {event} on {channel}",
+  "notifications.coverage.foot": "Default route is what a recipient gets without choosing anything: our defaults plus the messages we always send. Missing on a default route is a message nobody receives. Not written is a channel a supplier can choose and nobody has yet.",
   "notifications.editor.empty_preview": "The body is empty.",
   "notifications.editor.unused": "not used in this body",
   "notifications.editor.no_variables": "This event supplies no variables, because nothing sends it. A placeholder here would fail to send.",
@@ -12031,8 +12107,12 @@ export const en = {
   "notifications.save.live": "Save as v{version}",
   "notifications.save.hint_whatsapp": "Saving creates a version in Meta review. The live version keeps sending until Meta's approval is recorded here.",
   "notifications.save.hint_live": "Email and in-app take effect on save. The version it replaces is retired, and past deliveries still point at it.",
+  "notifications.save.first": "Save v{version} as a draft",
+  "notifications.save.hint_first": "A first version saves as a draft and sends nothing. Send it to yourself, then put it live from the history below.",
+  "notifications.save.hint_first_whatsapp": "A first version saves as a draft and nothing goes to Meta. Send it to Meta from the history below when the wording is final.",
   "notifications.saved.pending": "Version {version} is with Meta. The live version keeps sending until the approval is recorded.",
   "notifications.saved.live": "Version {version} is live. The version it replaced is retired.",
+  "notifications.saved.draft": "Version {version} is saved as a draft. Nothing sends until it is put live.",
   "notifications.test.label": "Send test of v{version} to me",
   "notifications.test.blocked_whatsapp": "Nothing live to test. WhatsApp sends only wording Meta has approved.",
   "notifications.test.blocked_none": "Nothing saved to test yet.",
@@ -12111,6 +12191,7 @@ export const en = {
   "notifications.history.col.by": "Written by",
   "notifications.history.seeded": "Platform default",
   "notifications.history.publish": "Put {version} live",
+  "notifications.history.send_to_meta": "Send {version} to Meta",
   "notifications.status.draft": "Draft",
   "notifications.status.pending_meta": "With Meta",
   "notifications.status.live": "Live",

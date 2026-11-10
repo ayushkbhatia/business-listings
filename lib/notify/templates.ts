@@ -238,6 +238,27 @@ export async function templateBoard(now: Date = new Date()): Promise<TemplateBoa
   };
 }
 
+/**
+ * Which (event, channel) pairs have a live body — the primary line only.
+ *
+ * Board 7e's *Not sent yet* caption reads this (T7.2), so a seller's tick and
+ * board 12g's coverage grid answer "will this send" from the same rows. A
+ * services twin alone does not count: it replaces goods wording for a services
+ * brief and sends nothing on its own.
+ */
+export async function liveTemplatePairs(): Promise<Set<string>> {
+  const groups = await prisma.notificationTemplate.groupBy({
+    by: ["event", "channel"],
+    where: {
+      locale: LOCALE,
+      status: "live",
+      kind: { in: ["goods", "neutral"] },
+      event: { in: Object.values(EVENTS_THIS_BUILD_READS) },
+    },
+  });
+  return new Set(groups.map((group) => key(group.event, group.channel)));
+}
+
 export type TemplateSort = "volume" | "key" | "twin";
 
 /**
@@ -421,6 +442,8 @@ export interface SaveVersionInput {
 /**
  * Save a new version. `B4`: WhatsApp goes to Meta, everything else goes live.
  *
+ * - **A first version** of a body is a `draft` on every channel (T7.1). See
+ *   the note where `status` is decided.
  * - **WhatsApp.** The new version is `pending_meta`. The live version is not
  *   touched and keeps sending until Meta's approval is recorded. A version
  *   already with Meta in the same line is `superseded` — `Q1`: v5 takes v4's
@@ -454,7 +477,6 @@ export async function saveTemplateVersion(
 
   const whatsapp = input.channel === "whatsapp";
   const kind: TemplateKind = input.line === "services" ? "services" : input.neutral ? "neutral" : "goods";
-  const action = whatsapp ? "notification_template_submitted" : "notification_template_saved";
 
   try {
     const saved = await prisma.$transaction(async (tx) => {
@@ -510,12 +532,28 @@ export async function saveTemplateVersion(
       const version = nextVersion(rows, input.line);
       const now = new Date();
       const sameLine = rows.filter((r) => lineOf(r.kind) === input.line);
+      /*
+         T7.1 — a first version is a draft (P-08: *"Saving creates version 1 as
+         a draft; the existing publish flow takes it live"*).
+
+         An edit to a live body replaces words a seller already receives, and
+         goes live on save as it always has. A first version is different in
+         kind: the event has been silent, and the save would start sending to
+         every recipient at once. The draft is the moment to send it to
+         yourself first — `sendTestToMe` takes a draft on email and in-app —
+         and `publishDraft` is one audited step from there. Primary line only:
+         a twin's first version replaces goods wording that already sends, so
+         it is an edit, not a first message.
+      */
+      const first = !head && input.line === "primary";
+      const status: TemplateStatus = first ? "draft" : whatsapp ? "pending_meta" : "live";
 
       return staffMutation(
         {
           actor: input.actor,
           capability: "notification.template.write",
-          action,
+          // A first WhatsApp version is a draft: nothing has gone to Meta yet.
+          action: status === "pending_meta" ? "notification_template_submitted" : "notification_template_saved",
           subject: `NotificationTemplate:${input.event}.${input.channel}.${input.line}`,
           reason: input.reason,
           tx,
@@ -527,7 +565,7 @@ export async function saveTemplateVersion(
             await tx.notificationTemplate.updateMany({ where: { id: { in: replaced.map((r) => r.id) } }, data: { status: "superseded" } });
           }
           const previousLive = liveOf(sameLine, input.line);
-          if (!whatsapp && previousLive) {
+          if (status === "live" && previousLive) {
             await tx.notificationTemplate.updateMany({
               where: { id: { in: sameLine.filter((r) => r.status === "live").map((r) => r.id) } },
               data: { status: "retired" },
@@ -540,13 +578,13 @@ export async function saveTemplateVersion(
               locale: LOCALE,
               kind,
               version,
-              status: whatsapp ? "pending_meta" : "live",
+              status,
               subject: draft.subject,
               body: draft.body,
               actionLabel: draft.actionLabel,
               actionPath: draft.actionPath,
               metaTemplateName: draft.metaTemplateName,
-              submittedAt: whatsapp ? now : null,
+              submittedAt: status === "pending_meta" ? now : null,
               createdById: input.actor.id,
             },
             select: { id: true, version: true, status: true },
@@ -667,9 +705,10 @@ export async function recordMetaDecision(
 /**
  * Put a draft live, or send a WhatsApp draft to Meta.
  *
- * The editor never makes a draft — a save is live or pending — so this is for
- * the rows that arrive as drafts from elsewhere: the seed and any version from
- * before this board.
+ * The editor makes a draft in one case — the first version of a body, T7.1 —
+ * and every other save is live or pending. So this takes those first versions
+ * live, and the rows that arrive as drafts from elsewhere: the seed and any
+ * version from before this board.
  */
 export async function publishDraft(
   actor: Actor,

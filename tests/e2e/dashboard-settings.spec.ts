@@ -65,7 +65,37 @@ test.describe("board 7e — the event matrix", () => {
     const locked = page.getByRole("checkbox", { name: /^In app is always on for/ });
     await expect(locked.first()).toBeChecked();
     await expect(locked.first()).toBeDisabled();
-    await expect(page.getByText(/In app stays on for anything with a deadline/)).toBeVisible();
+    // T7.2: one note per group rather than a footnote per rule.
+    await expect(page.getByText(/In app stays on for every row here except an accepted quote/)).toBeVisible();
+  });
+
+  test("groups the rows, and has one for every event the platform sends a seller", async ({ page }) => {
+    /*
+       T7.2. The screen drew eleven rows against sixteen emitted seller events;
+       the six it added include both payment notices and the two a seller could
+       not choose for at all.
+    */
+    const table = page.getByRole("table", { name: /Notification channels by event/ });
+    for (const group of ["Leads and quotes", "Reviews", "Your listing", "Billing and placement"]) {
+      await expect(table.getByText(group, { exact: true })).toBeVisible();
+    }
+    for (const row of ["Your subscription renews", "We decide a review you disputed", "A payment does not go through"]) {
+      await expect(table.getByRole("rowheader", { name: new RegExp(row) })).toBeVisible();
+    }
+    // A payment notice is a consequence, not marketing: email is locked on.
+    const payment = page.getByRole("checkbox", { name: "Email is always on for A payment does not go through" });
+    await expect(payment).toBeChecked();
+    await expect(payment).toBeDisabled();
+    // No row for a digest nothing sends.
+    await expect(table.getByRole("rowheader", { name: /The weekly summary/ })).toHaveCount(0);
+  });
+
+  test("brings Save into view once something has changed", async ({ page }) => {
+    // Sixteen rows and four headings put Save below the fold at 1280 × 720.
+    await expect(page.getByText("Unsaved changes")).toHaveCount(0);
+    await page.getByRole("checkbox", { name: "In app for Someone leaves a review" }).click();
+    await expect(page.getByText("Unsaved changes")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Save alert settings" })).toBeInViewport();
   });
 
   test("states what happens when nobody can be reached", async ({ page }) => {

@@ -1,7 +1,8 @@
 import type { NotificationChannel } from "@/lib/db/generated/enums";
 import { formatCount, formatDate, formatList, formatRelative } from "@/lib/format";
 import { t, type MessageKey } from "@/lib/i18n";
-import { EVENT_PARAMS } from "@/lib/notify/params";
+import { COVERAGE_CHANNELS, type CoverageGrid, type CoverageState } from "@/lib/notify/coverage";
+import { EVENT_PARAMS, type Audience } from "@/lib/notify/params";
 import { BUYER_DEFAULT, PLATFORM_FLOOR } from "@/lib/notify/routing";
 import type { TemplateBoard, TemplateDetail, TemplateRow, TemplateSort, VersionView } from "@/lib/notify/templates";
 import type { Line, PrimaryState, TwinState } from "@/lib/notify/template-lines";
@@ -223,6 +224,8 @@ export interface DetailView {
   testBlocked: string | null;
   saveLabel: string;
   saveHint: string;
+  /** No version exists in the primary line: the rail is the create panel. */
+  first: boolean;
   canNeutral: boolean;
   neutralLocked: string | null;
   neutralDefault: boolean;
@@ -242,6 +245,8 @@ export function presentDetail(detail: TemplateDetail, filters: Filters, now: Dat
   const key = `${detail.event}.${detail.channel}`;
   const whatsapp = detail.channel === "whatsapp";
   const { live, pending, rejected, head, line } = detail;
+  /** Nothing has ever been written in this line — P-08's *Write first version*. */
+  const first = head === null && line === "primary";
 
   const versionsMeta = [
     live ? t("notifications.detail.live_version", { version: String(live.version) }) : t("notifications.detail.nothing_live"),
@@ -396,13 +401,143 @@ export function presentDetail(detail: TemplateDetail, filters: Filters, now: Dat
     history,
     testable,
     testBlocked,
-    saveLabel: whatsapp
-      ? t("notifications.save.whatsapp", { version: String(detail.nextVersion) })
-      : t("notifications.save.live", { version: String(detail.nextVersion) }),
-    saveHint: whatsapp ? t("notifications.save.hint_whatsapp") : t("notifications.save.hint_live"),
+    /*
+       T7.1. A first version saves as a draft (`saveTemplateVersion` says why),
+       so the button and the hint say so — a button reading "Save as v1" over a
+       save that sends nothing yet would be the console's own small lie.
+    */
+    saveLabel: first
+      ? t("notifications.save.first", { version: String(detail.nextVersion) })
+      : whatsapp
+        ? t("notifications.save.whatsapp", { version: String(detail.nextVersion) })
+        : t("notifications.save.live", { version: String(detail.nextVersion) }),
+    saveHint: first
+      ? whatsapp
+        ? t("notifications.save.hint_first_whatsapp")
+        : t("notifications.save.hint_first")
+      : whatsapp
+        ? t("notifications.save.hint_whatsapp")
+        : t("notifications.save.hint_live"),
+    first,
     canNeutral: line === "primary",
     neutralLocked: line === "primary" && twinExists ? t("notifications.neutral.locked") : null,
     neutralDefault: detail.primaryKind === "neutral",
     basedOn: head?.version ?? null,
+  };
+}
+
+// ── The coverage grid ─────────────────────────────────────────────────────────
+
+/**
+ * T7.1 — board 12g's coverage grid, as sentences.
+ *
+ * `coverageGrid` decides each cell's state; this names it and picks the action.
+ * Every cell links to the rail, and a cell with no row opens the editor in its
+ * create mode — the page resolves an `?t=` pair that has no row instead of
+ * dropping it, which is what made *Write first version* impossible before.
+ */
+export interface CoverageCellView {
+  key: string;
+  channel: NotificationChannel;
+  state: CoverageState;
+  label: string;
+  tone: Tone;
+  action: string | null;
+  actionLabel: string | null;
+  /** The primary action — a missing default route — is drawn as a button. */
+  primary: boolean;
+  href: string;
+  selected: boolean;
+}
+
+export interface CoverageRowView {
+  event: string;
+  label: string;
+  defaultRoute: string;
+  dormant: boolean;
+  cells: CoverageCellView[];
+}
+
+export interface CoverageView {
+  meta: string;
+  metaTone: Tone;
+  groups: { audience: Audience; label: string; rows: CoverageRowView[] }[];
+  channels: { channel: NotificationChannel; label: string }[];
+  footnote: string;
+}
+
+const CELL_TONE: Record<CoverageState, Tone> = {
+  live: "ok",
+  draft: "warn",
+  with_meta: "warn",
+  rejected: "bad",
+  gap: "bad",
+  optional: "neutral",
+  dormant: "neutral",
+};
+
+const CELL_ACTION: Record<CoverageState, MessageKey | null> = {
+  live: "notifications.coverage.action.edit",
+  draft: "notifications.coverage.action.review",
+  with_meta: "notifications.coverage.action.view",
+  rejected: "notifications.coverage.action.rewrite",
+  gap: "notifications.coverage.action.write",
+  optional: "notifications.coverage.action.write",
+  dormant: null,
+};
+
+export function presentCoverage(grid: CoverageGrid, filters: Filters, canWrite: boolean): CoverageView {
+  const eventLabel = (event: string) => t(`notify.event.${event}` as MessageKey);
+  const rows = grid.rows.map((row): CoverageRowView & { audience: Audience } => ({
+    audience: row.audience,
+    event: row.event,
+    label: eventLabel(row.event),
+    defaultRoute:
+      row.defaultRoute.length > 0
+        ? row.defaultRoute.map((channel) => channelLabel(channel)).join(" · ")
+        : t("notifications.coverage.default_none"),
+    dormant: !row.emitted,
+    cells: row.cells.map((cell): CoverageCellView => {
+      const key = `${cell.event}.${cell.channel}`;
+      // Read-only staff see the state; *Write first version* is an ops-lead control.
+      const writes = cell.state === "gap" || cell.state === "optional";
+      const actionKey = writes && !canWrite ? "notifications.coverage.action.view" : CELL_ACTION[cell.state];
+      const action = actionKey ? t(actionKey) : null;
+      return {
+        key,
+        channel: cell.channel,
+        state: cell.state,
+        label:
+          cell.state === "live"
+            ? t("notifications.coverage.cell.live", { version: String(cell.version ?? "") })
+            : t(`notifications.coverage.cell.${cell.state === "dormant" ? "optional" : cell.state}` as MessageKey),
+        tone: CELL_TONE[cell.state],
+        action,
+        actionLabel: action
+          ? t("notifications.coverage.action_label", { action, event: row.event, channel: channelLabel(cell.channel) })
+          : null,
+        primary: cell.state === "gap" && canWrite,
+        href: `${hrefFor(filters, { open: key, line: "primary" })}#template`,
+        selected: filters.open === key,
+      };
+    }),
+  }));
+
+  const audiences: Audience[] = ["seller", "buyer", "claimant"];
+  return {
+    meta:
+      grid.silentEvents === 0
+        ? t("notifications.coverage.meta_ok")
+        : t("notifications.coverage.meta_gaps", { count: grid.silentEvents }),
+    metaTone: grid.silentEvents === 0 ? "ok" : "bad",
+    groups: audiences
+      .map((audience) => ({
+        audience,
+        label: t(`notifications.coverage.group.${audience}` as MessageKey),
+        rows: rows.filter((row) => row.audience === audience),
+      }))
+      .filter((group) => group.rows.length > 0),
+    channels: COVERAGE_CHANNELS.map((channel) => ({ channel, label: channelLabel(channel) })),
+    footnote: t("notifications.coverage.foot"),
   };
 }

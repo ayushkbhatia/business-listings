@@ -14,6 +14,9 @@
  *
  * The runtime cannot fail on this and the build can, so the build does.
  *
+ * The rule itself is `coverageGrid` in `lib/notify/coverage.ts` (T7.1), shared
+ * with board 12g's grid so the console and the build name the same gaps.
+ *
  * ## What "routes to by default" means
  *
  * Not every channel: a seller may switch WhatsApp off and that is their
@@ -37,81 +40,62 @@
  * has the rows once its migration runs. A check against a database would pass
  * or fail on which environment it ran in, which is not a property of the code.
  */
-import { EVENT_AUDIENCE, isEmitted } from "../lib/notify/params.js";
-import { BUYER_DEFAULT, DEFAULT_ROUTING, PLATFORM_FLOOR } from "../lib/notify/routing.js";
+import { coverageGrid, type CoverageInput } from "../lib/notify/coverage.js";
 import type { NotificationChannel, NotificationEvent } from "../lib/notify/routing.js";
+import type { PrimaryState } from "../lib/notify/template-lines.js";
 import { TEMPLATES } from "../prisma/seed-notification-templates.mjs";
 
-/** Every (event, channel) the catalogue has a **live** body for. */
-const live = new Set(
-  TEMPLATES.filter((template) => template.status === "live").map(
-    (template) => `${template.event}:${template.channel}`,
-  ),
-);
+/*
+   The catalogue as `coverageGrid` reads it. The rule for what is a gap lives in
+   `lib/notify/coverage.ts` once (T7.1), so board 12g's grid and this check
+   cannot disagree about which cells are silent — they differ only in reading
+   the database or the committed intent.
 
-/**
- * WhatsApp bodies written and waiting on Meta.
- *
- * `pending_meta` is a real state and somebody else's queue: a WhatsApp template
- * cannot change version without Meta approving it, so a build that refused one
- * would stop the product shipping until a third party answered an email. The
- * body exists, the gap is theirs, and `notify` already records
- * `no_live_template` against each send — so this is reported as a note rather
- * than a failure.
- *
- * Only WhatsApp. A `pending_meta` email or in-app body would be a body somebody
- * wrote and never published, which is a gap of ours.
- */
-const waitingOnMeta = new Set(
-  TEMPLATES.filter(
-    (template) => template.channel === "whatsapp" && template.status === "pending_meta",
-  ).map((template) => `${template.event}:${template.channel}`),
-);
-
-/** The channels this event reaches without the recipient choosing anything. */
-function defaultChannels(event: NotificationEvent): NotificationChannel[] {
-  const audience = EVENT_AUDIENCE[event];
-  const chosen =
-    audience === "seller"
-      ? [...(DEFAULT_ROUTING.matrix[event] ?? []), ...(PLATFORM_FLOOR[event] ?? [])]
-      : [...(BUYER_DEFAULT.matrix[event] ?? [])];
-  return [...new Set(chosen)];
+   Primary line only: a services twin replaces the goods wording for a services
+   brief and sends nothing on its own, so a pair whose only live body is a twin
+   is a pair a goods seller is never sent.
+*/
+const STATUS_RANK: Record<string, PrimaryState> = { live: "live", pending_meta: "in_review", draft: "draft", rejected: "rejected" };
+const pairs = new Map<string, CoverageInput>();
+for (const template of TEMPLATES) {
+  if (template.kind === "services") continue;
+  const state = STATUS_RANK[template.status ?? "live"];
+  if (!state) continue;
+  const k = `${template.event}.${template.channel}`;
+  const held = pairs.get(k);
+  const order: PrimaryState[] = ["live", "in_review", "rejected", "draft"];
+  if (held && order.indexOf(held.state) <= order.indexOf(state)) continue;
+  pairs.set(k, {
+    event: template.event as NotificationEvent,
+    channel: template.channel as NotificationChannel,
+    state,
+    liveVersion: state === "live" ? 1 : null,
+    pendingVersion: state === "in_review" ? 1 : null,
+  });
 }
 
-const emitted = (Object.keys(EVENT_AUDIENCE) as NotificationEvent[]).filter(isEmitted).sort();
-
-const missing: { event: NotificationEvent; channels: NotificationChannel[] }[] = [];
-const pending: string[] = [];
-let checked = 0;
-
-for (const event of emitted) {
-  const channels = defaultChannels(event);
-  checked += channels.length;
-  const gaps: NotificationChannel[] = [];
-  for (const channel of channels) {
-    if (live.has(`${event}:${channel}`)) continue;
-    if (waitingOnMeta.has(`${event}:${channel}`)) {
-      pending.push(`${event} on ${channel}`);
-      continue;
-    }
-    gaps.push(channel);
-  }
-  if (gaps.length > 0) missing.push({ event, channels: gaps });
-}
+const grid = coverageGrid([...pairs.values()]);
+const emitted = grid.rows.filter((row) => row.emitted);
+const silent = grid.rows.filter((row) => row.silentCells > 0);
+const pending = grid.rows.flatMap((row) =>
+  row.cells.filter((cell) => cell.byDefault && cell.state === "with_meta").map((cell) => `${cell.event} on ${cell.channel}`),
+);
+const liveBodies = grid.rows.reduce((sum, row) => sum + row.cells.filter((cell) => cell.state === "live").length, 0);
 
 console.log("→ an emitted event has a live template on every channel it routes to by default");
 console.log(
-  `   ${String(emitted.length)} emitted event(s), ${String(checked)} default route(s) checked, ` +
-    `${String(live.size)} live body/bodies in the catalogue`,
+  `   ${String(emitted.length)} emitted event(s), ${String(grid.defaultRoutes)} default route(s) checked, ` +
+    `${String(liveBodies)} live body/bodies in the catalogue`,
 );
 
 /*
    Named rather than counted. "3 events are missing templates" sends somebody to
    read two files; the event and the channel is the whole of what they need.
 */
-if (missing.length > 0) {
-  for (const row of missing) {
-    console.log(`   FAIL — ${row.event} has no live template on ${row.channels.join(", ")}`);
+if (silent.length > 0) {
+  for (const row of silent) {
+    const channels = row.cells.filter((cell) => cell.silent).map((cell) => cell.channel);
+    console.log(`   FAIL — ${row.event} has no live template on ${channels.join(", ")}`);
   }
   console.log(
     "   A recipient gets these without choosing anything, so a missing body is a message " +
@@ -123,11 +107,10 @@ if (missing.length > 0) {
 
 /*
    An event nothing emits is not checked, and the number is printed so the
-   silence is a measurement rather than an omission — board 12g's screen says
-   the same thing with the words "nothing sends this yet".
+   silence is a measurement rather than an omission — board 12g's grid says the
+   same thing with the words "nothing sends this yet".
 */
-const declared = (Object.keys(EVENT_AUDIENCE) as NotificationEvent[]).length;
-console.log(`   note  ${String(declared - emitted.length)} declared event(s) that nothing emits yet`);
+console.log(`   note  ${String(grid.dormantEvents)} declared event(s) that nothing emits yet`);
 if (pending.length > 0) {
   console.log(`   note  ${String(pending.length)} written and waiting on Meta: ${pending.join(", ")}`);
 }

@@ -12,6 +12,8 @@ import {
   templateBoard,
   templateDetail,
 } from "@/lib/notify/templates";
+import { coverageGrid } from "@/lib/notify/coverage";
+import { EVENT_PARAMS, isEmitted } from "@/lib/notify/params";
 import { purgeAuditRows } from "./audit-cleanup";
 
 /**
@@ -483,5 +485,88 @@ describe("a buyer's held message reaches them when quiet hours lift", () => {
     const after = await prisma.notificationDelivery.findUniqueOrThrow({ where: { id: row.id } });
     expect(after.status).toBe("sent");
     await prisma.notificationDelivery.update({ where: { id: row.id }, data: { reason: "board_12g_fixture" } });
+  });
+});
+
+/**
+ * T7.1 — *Write first version*. P-08: "there is no way to write the first
+ * version of a template". The service could always create one; the page could
+ * not open a pair with no row, and a first save would have gone live to every
+ * recipient at once. Now it is a draft, published in one audited step.
+ */
+describe("T7.1 — a first version", () => {
+  async function emptyPair(channel: NotificationChannel): Promise<NotificationEvent> {
+    for (const event of (Object.keys(EVENT_PARAMS) as NotificationEvent[]).filter(isEmitted).sort()) {
+      const rows = await prisma.notificationTemplate.count({ where: { event, channel } });
+      if (rows === 0) return event;
+    }
+    throw new Error(`every emitted event has a ${channel} row — this test needs one that does not`);
+  }
+
+  it("opens with no rows, saves as a draft, and goes live only when published", async () => {
+    const event = await emptyPair("email");
+    const detail = await templateDetail(event, "email", "primary");
+    expect(detail?.head).toBeNull();
+    expect(detail?.nextVersion).toBe(1);
+
+    const body = EVENT_PARAMS[event].length > 0 ? `First version for {${EVENT_PARAMS[event][0]}}.` : "First version.";
+    const saved = await saveTemplateVersion({
+      actor: opsLead,
+      event,
+      channel: "email",
+      line: "primary",
+      subject: "First version",
+      body,
+      basedOn: null,
+      reason: REASON,
+    });
+    expect(saved).toMatchObject({ ok: true, version: 1, status: "draft" });
+    if (!saved.ok) return;
+
+    // A draft sends nothing: the live resolver does not see it.
+    expect(await prisma.notificationTemplate.count({ where: { event, channel: "email", status: "live" } })).toBe(0);
+    const audit = await prisma.auditEvent.findFirst({
+      where: { subject: `NotificationTemplate:${event}.email.primary`, reason: REASON },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      select: { action: true },
+    });
+    expect(audit?.action).toBe("notification_template_saved");
+
+    const published = await publishDraft(opsLead, saved.id, REASON);
+    expect(published).toEqual({ ok: true, status: "live" });
+    expect(await prisma.notificationTemplate.findUniqueOrThrow({ where: { id: saved.id }, select: { status: true } })).toEqual({
+      status: "live",
+    });
+  });
+
+  it("a first WhatsApp version is a draft that has not gone to Meta", async () => {
+    const event = await emptyPair("whatsapp");
+    const body = EVENT_PARAMS[event].length > 0 ? `First version for {${EVENT_PARAMS[event][0]}}.` : "First version.";
+    const saved = await saveTemplateVersion({
+      actor: opsLead,
+      event,
+      channel: "whatsapp",
+      line: "primary",
+      body,
+      metaTemplateName: `bl_${event}_t71_v1`,
+      basedOn: null,
+      reason: REASON,
+    });
+    expect(saved).toMatchObject({ ok: true, version: 1, status: "draft" });
+    if (!saved.ok) return;
+    const row = await prisma.notificationTemplate.findUniqueOrThrow({ where: { id: saved.id }, select: { submittedAt: true } });
+    expect(row.submittedAt).toBeNull();
+    expect(await publishDraft(opsLead, saved.id, REASON)).toEqual({ ok: true, status: "pending_meta" });
+  });
+
+  it("puts every declared event on the coverage grid, including ones with no row", async () => {
+    const board = await templateBoard();
+    const grid = coverageGrid(board.rows);
+    expect(grid.rows).toHaveLength(Object.keys(EVENT_PARAMS).length);
+    const event = await emptyPair("in_app").catch(() => null);
+    if (event) {
+      const cell = grid.rows.find((row) => row.event === event)!.cells.find((c) => c.channel === "in_app")!;
+      expect(["gap", "optional"]).toContain(cell.state);
+    }
   });
 });

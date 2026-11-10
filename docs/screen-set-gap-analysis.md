@@ -441,7 +441,7 @@ withdrawn** — the board exists. Services decisions are `N16`–`N25`.
 | **N6** | Free's service cap (`2e-s`) | **Three**, matching `8c-s`'s done-condition and the seed's `serviceLimit: 3`. Still *proposed, not ratified* — ratify it. |
 | **N7** | Saved requirements: draw or delete? | Delete for launch. |
 | **N8** | Does `ApiKey` survive? | Drop the table and the 12h API panel. |
-| **N9** | Who issues the invoice, and under what TRN? | A UAE entity with a TRN, before any money moves. Gates all of M4. |
+| **N9** | Who issues the invoice, and under what TRN? | **Answered 10 Nov 2026:** Bearing Deployment Company, Inc, Delaware, operating from the US, no TRN. Leaves spec Q3 — the VAT treatment — for a tax advisor. |
 | **N10** | SMS: carrier or retire? | Retire for launch. |
 | **N11** | Support desk: build or buy? | Buy. Design the integration surface, not a helpdesk. |
 | **N12** | The attribute dictionary | Hold D3's *no*. Strike the nav item, the button and the promotion path. |
