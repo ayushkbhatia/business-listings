@@ -145,8 +145,15 @@ describe("criterion 4 — one denominator per row", () => {
        shortfall stays visible, because 1 GB of 2.1 GB is exactly as legible as
        "1.1 over" and reads the same way as the row above it.
     */
+    /*
+       T9.6 moved the shortfall cell off that frame. "1 GB of 2.1 GB" is right
+       for products, where the rest really are hidden, and wrong for storage,
+       where a downgrade removes no file: it read as 1.1 GB lost. The cell now
+       says what happens — everything kept, uploads stop at the cap — which is
+       what the change rail and the cancel table already said.
+    */
     expect(cellsFor("storage").map((cell) => cell.label)).toEqual([
-      "1 GB of 2.1 GB",
+      "All 2.1 GB kept. Uploads stop above 1 GB",
       "All 2.1 GB",
       "All 2.1 GB",
     ]);

@@ -5,7 +5,31 @@ import { PlanMatrix, type PlanColumn } from "@/app/(admin)/admin/plans/PlanMatri
 import type { ActionResult, PreviewResult } from "@/app/(admin)/admin/plans/actions";
 import { PLAN_FIELDS, type PlanEditableField } from "@/lib/plan/plan-fields";
 import type { PlanFieldValue } from "@/lib/billing/plan-diff";
+import { dunningRail, type RailDelivery } from "@/lib/billing/dunning-rail";
+import type { DunningStage } from "@/lib/billing/dunning";
+import { railLines } from "@/lib/billing/rail-copy";
 import { Section, States } from "../_kit";
+
+/*
+   T9.4 — each specimen's sequence, through the real rail and the real copy.
+   `notice` is the Last notice cell as the page builds it.
+*/
+const NOW = new Date("2026-09-16T08:00:00Z");
+function sequence(
+  stage: DunningStage,
+  daysPastDue: number,
+  deliveries: RailDelivery[],
+  notice: DunningRowView["lastNotice"],
+  urgent = false,
+): Pick<DunningRowView, "lastNotice" | "steps" | "cancelled" | "urgent"> {
+  const since = new Date(NOW.getTime() - daysPastDue * 86_400_000);
+  const rail = dunningRail({ pastDueSince: since, stage, attempted: true, cancelledAt: null, deliveries });
+  return { lastNotice: notice, steps: railLines(rail, { gatewayLive: true, cancelled: false, audience: "staff" }), cancelled: null, urgent };
+}
+const delivery = (event: RailDelivery["event"], channel: string, daysAgo: number, status: RailDelivery["status"], reason: string | null = null): RailDelivery => {
+  const at = new Date(NOW.getTime() - daysAgo * 86_400_000);
+  return { event, channel, status, reason, createdAt: at, sentAt: status === "sent" ? at : null, scheduledFor: null, recipientName: "Hassan Qureshi" };
+};
 
 /**
  * Board 12e, in the states it has.
@@ -139,6 +163,7 @@ const DUNNING: DunningRowView[] = [
     reason: null,
     drops: "on 1 Oct 2026",
     dropsTitle: "1 Oct 2026",
+    ...sequence("none", 0, [], null),
   },
   {
     subscriptionId: "one",
@@ -146,12 +171,23 @@ const DUNNING: DunningRowView[] = [
     planName: "Pro",
     stage: "messaged",
     daysPastDue: 9,
-    next: "Send the email notice",
+    next: "Send the final notice",
     attempts: 2,
     amount: "AED 943.95",
     reason: "Card expired",
     drops: "in 6 days",
     dropsTitle: "22 Sep 2026",
+    ...sequence(
+      "messaged",
+      9,
+      [
+        delivery("payment_failed", "email", 6, "sent"),
+        delivery("payment_failed", "in_app", 6, "sent"),
+        delivery("payment_failed", "email", 2, "sent"),
+        delivery("payment_failed", "whatsapp", 2, "skipped", "recipient_has_no_address_for_this_channel"),
+      ],
+      { label: "Delivered", tone: "ok", meta: "Day 7 · Reminder · email and WhatsApp · 14 Sep", templateHref: null },
+    ),
   },
   {
     subscriptionId: "two",
@@ -159,12 +195,13 @@ const DUNNING: DunningRowView[] = [
     planName: "Basic",
     stage: "retry",
     daysPastDue: 1,
-    next: "Send the email notice",
+    next: "Send the first notice",
     attempts: 1,
     amount: "AED 366.45",
     reason: "Insufficient funds",
     drops: "on 30 Sep 2026",
     dropsTitle: "30 Sep 2026",
+    ...sequence("retry", 1, [], null),
   },
   {
     subscriptionId: "three",
@@ -178,6 +215,17 @@ const DUNNING: DunningRowView[] = [
     reason: "Bank declined",
     drops: null,
     dropsTitle: null,
+    ...sequence(
+      "dropped",
+      21,
+      [delivery("payment_final_notice", "email", 7, "skipped", "no_live_template")],
+      {
+        label: "No live template",
+        tone: "bad",
+        meta: "Day 14 · Final notice · email · 9 Sep",
+        templateHref: "/admin/notifications?t=payment_final_notice.email#template",
+      },
+    ),
   },
   {
     // Dropped with no gateway: nothing was charged, so there is no amount.
@@ -192,6 +240,28 @@ const DUNNING: DunningRowView[] = [
     reason: null,
     drops: null,
     dropsTitle: null,
+    ...sequence("dropped", 16, [], null),
+  },
+  {
+    // P-07's urgent row: changes plan within 72 hours and nobody was told.
+    subscriptionId: "five",
+    businessName: "Jebel Ali Pallet Works",
+    planName: "Basic",
+    stage: "final",
+    daysPastDue: 14,
+    next: "Drop to Free",
+    attempts: 2,
+    amount: "AED 366.45",
+    reason: "Card expired",
+    drops: "tomorrow",
+    dropsTitle: "17 Sep 2026",
+    ...sequence(
+      "final",
+      14,
+      [delivery("payment_final_notice", "email", 0, "skipped", "recipient_has_no_address_for_this_channel")],
+      { label: "Skipped — Recipient has no address on this channel", tone: "neutral", meta: "Day 14 · Final notice · email · 16 Sep", templateHref: null },
+      true,
+    ),
   },
 ];
 

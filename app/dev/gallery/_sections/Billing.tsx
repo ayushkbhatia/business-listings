@@ -1,4 +1,4 @@
-import { Alert, StatusBadge } from "@/components/display";
+import { StatusBadge } from "@/components/display";
 import { Card } from "@/components/structure";
 import { planGrid, type GridRow, type Usage } from "@/lib/billing/plan-grid";
 import { consequenceTable, type CancelFacts } from "@/lib/billing/cancel-table";
@@ -10,7 +10,43 @@ import { InvoiceSheet } from "@/app/(dashboard)/dashboard/billing/invoice/[id]/I
 import { ConsequenceTable } from "@/app/(dashboard)/dashboard/billing/cancel/ConsequenceTable";
 import { CancelCard } from "@/app/(dashboard)/dashboard/billing/CancelCard";
 import { Button } from "@/components/primitives";
+import { FailedPaymentBanner, RecoveredPaymentBanner } from "@/app/(dashboard)/dashboard/billing/FailedPaymentBanner";
+import { dunningRail, type RailDelivery } from "@/lib/billing/dunning-rail";
+import type { DunningStage } from "@/lib/billing/dunning";
+import type { FailedPayment } from "@/lib/billing/summary";
 import { Frame, Section, States } from "../_kit";
+
+/**
+ * T9.2 — the failed-payment banner in each of spec S3's states, through the
+ * real rail and the real banner. Day 0 is 4 Sep, so the drop is 19 Sep.
+ */
+const SINCE = new Date("2026-09-04T06:00:00Z");
+const at = (day: number, hour = 6) => new Date(SINCE.getTime() + day * 86_400_000 + (hour - 6) * 3_600_000);
+const sent = (event: RailDelivery["event"], channel: string, day: number): RailDelivery => ({
+  event, channel, status: "sent", reason: null, createdAt: at(day), sentAt: at(day), scheduledFor: null, recipientName: "Fatima Al Marri",
+});
+const skipped = (event: RailDelivery["event"], channel: string, day: number, reason: string): RailDelivery => ({
+  event, channel, status: "skipped", reason, createdAt: at(day), sentAt: null, scheduledFor: null, recipientName: "Fatima Al Marri",
+});
+
+function failed(stage: DunningStage, deliveries: RailDelivery[], over: Partial<FailedPayment> = {}): FailedPayment {
+  const cancelledAt = over.cancelledAt ?? null;
+  return {
+    stage,
+    amountFils: 94_395,
+    failedOn: SINCE,
+    reason: "Card expired",
+    dropsOn: at(15),
+    gatewayLive: true,
+    cancelledAt,
+    rail: dunningRail({ pastDueSince: SINCE, stage, attempted: over.gatewayLive !== false, cancelledAt, deliveries }),
+    ...over,
+  };
+}
+
+const FIRST = [sent("payment_failed", "email", 3), sent("payment_failed", "in_app", 3)];
+const SECOND = [sent("payment_failed", "email", 7), sent("payment_failed", "in_app", 7), skipped("payment_failed", "whatsapp", 7, "recipient_has_no_address_for_this_channel")];
+const FINAL = [sent("payment_final_notice", "email", 14), sent("payment_final_notice", "in_app", 14)];
 
 /**
  * Board 11f's comparison grid, in every state it has.
@@ -404,24 +440,14 @@ export function Billing() {
       </States>
 
       <States label={t("gallery.billing.failed")} stack>
-        <Alert
-          tone="bad"
-          title={t("billing.failed.title", { amount: "AED 943.95", when: "4 Sep 2026" })}
-          /*
-             A `bad` notice owes the reader a way out — design-system §05.1, and
-             `Alert` warns in development when neither is given.
-
-             The real banner on `3m` passes the same `fix` now. It used to pass
-             an `Update payment method` button pointing at `#payment-method`, a
-             panel whose own footer says card capture is not built: honest where
-             it landed and a dead end where it was pressed.
-          */
-          fix={t("billing.failed.fix")}
-        >
-          <p>{t("billing.failed.reason", { reason: "Card expired" })}</p>
-          <p className="mt-1">{t("billing.failed.retry", { when: "11 Sep 2026" })}</p>
-          <p className="mt-1">{t("billing.failed.grace", { deadline: "19 Sep 2026" })}</p>
-        </Alert>
+        <FailedPaymentBanner failed={failed("retry", [])} />
+        <FailedPaymentBanner failed={failed("emailed", FIRST)} />
+        <FailedPaymentBanner failed={failed("messaged", [...FIRST, ...SECOND])} />
+        <FailedPaymentBanner failed={failed("final", [...FIRST, ...SECOND, ...FINAL])} />
+        <FailedPaymentBanner failed={failed("emailed", FIRST, { cancelledAt: at(5) })} />
+        <FailedPaymentBanner failed={failed("retry", [], { gatewayLive: false, amountFils: null })} />
+        <FailedPaymentBanner failed={failed("dropped", [...FIRST, ...SECOND, ...FINAL])} />
+        <RecoveredPaymentBanner recovered={{ paidOn: at(2), amountFils: 94_395 }} />
       </States>
     </Section>
   );

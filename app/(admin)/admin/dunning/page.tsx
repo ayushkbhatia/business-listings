@@ -2,16 +2,18 @@ import { notFound } from "next/navigation";
 import { Alert } from "@/components/display";
 import { can } from "@/lib/auth/can";
 import { requireStaff } from "@/lib/auth/staff";
-import { dunningQueue } from "@/lib/billing/dunning-queue";
+import { dunningQueue, type DunningRow } from "@/lib/billing/dunning-queue";
+import { railLines, reasonText, RESULT_TONE } from "@/lib/billing/rail-copy";
 import { FILS_PER_AED } from "@/lib/billing/proration";
 import {
   formatAED,
   formatCloses,
   formatCount,
   formatDateShort,
+  formatList,
   isWithinRelativeWindow,
 } from "@/lib/format";
-import { t } from "@/lib/i18n";
+import { t, type MessageKey } from "@/lib/i18n";
 import { AdminPage, getAdminNavBadges } from "../../_shell";
 import { CommerceTabs } from "../CommerceTabs";
 import { DunningTable, type DunningRowView } from "./DunningTable";
@@ -43,12 +45,37 @@ function dropsLabel(when: Date | null, now: Date): string | null {
     : t("admin.dunning.drops_on", { when: formatDateShort(when) });
 }
 
-function nextLabel(next: { kind: string; channel?: string }): string {
-  if (next.kind === "send") {
-    return t("admin.dunning.next.send", { channel: next.channel ?? "" });
-  }
+function nextLabel(next: { kind: string; stage?: string }): string {
+  if (next.kind === "send") return t(`admin.dunning.next.send.${next.stage}` as MessageKey);
   return t(`admin.dunning.next.${next.kind}` as never);
 }
+
+/**
+ * The `Last notice` cell — P-07. Channel, date and result from the delivery
+ * log; a notice lost to a missing template links to its 12g cell.
+ */
+function lastNoticeOf(row: DunningRow): DunningRowView["lastNotice"] {
+  const step = row.rail.lastNotice;
+  if (!step || step.result === null) return null;
+  const when = step.deliveries[0]?.createdAt ?? step.at;
+  const label = t(`admin.dunning.notice.${step.result}` as MessageKey);
+  const missing = step.deliveries.find((d) => d.reason === "no_live_template" || d.reason === "no_template");
+  return {
+    label: step.result === "skipped" && step.failureReason ? `${label} — ${reasonText(step.failureReason)}` : label,
+    tone: RESULT_TONE[step.result],
+    meta: t("admin.dunning.notice.meta", {
+      step: t(`billing.rail.step.${step.key}` as MessageKey, { day: String(step.day) }),
+      // The channels that delivered, where any did; otherwise the ones that were tried.
+      channels: formatList(
+        [...new Set((step.deliveredOn.length > 0 ? step.deliveredOn : step.deliveries.map((d) => d.channel)).map(channelWordOf))],
+      ),
+      when: formatDateShort(when),
+    }),
+    templateHref: missing ? `/admin/notifications?t=${missing.event}.${missing.channel}#template` : null,
+  };
+}
+
+const channelWordOf = (channel: string) => t(`notifications.channel_word.${channel}` as MessageKey);
 
 export default async function DunningPage() {
   const seat = await requireStaff();
@@ -79,6 +106,10 @@ export default async function DunningPage() {
     */
     drops: dropsLabel(row.dropsToFreeAt, now),
     dropsTitle: row.dropsToFreeAt ? formatDateShort(row.dropsToFreeAt) : null,
+    lastNotice: lastNoticeOf(row),
+    steps: railLines(row.rail, { gatewayLive: queue.gatewayLive, cancelled: row.cancelledAt !== null, audience: "staff" }),
+    cancelled: row.cancelledAt ? t("admin.dunning.cancelled", { when: formatDateShort(row.cancelledAt) }) : null,
+    urgent: row.urgent,
   }));
 
   /*
@@ -108,10 +139,25 @@ export default async function DunningPage() {
             ? t("admin.dunning.meta_none")
             : live === 0
               ? t("admin.dunning.meta_all_dropped", { count: formatCount(rows.length) })
-              : t("admin.dunning.meta", {
-                  count: formatCount(live),
-                  amount: formatAED(atRisk / FILS_PER_AED, { style: "exact" }),
-                })}
+              : [
+                  t("admin.dunning.meta", {
+                    count: formatCount(live),
+                    amount: formatAED(atRisk / FILS_PER_AED, { style: "exact" }),
+                  }),
+                  /*
+                     P-07's count that matters: who changes plan within three
+                     days, and how many of them were never told. Said only when
+                     there is somebody to count.
+                  */
+                  queue.notices.changingSoon > 0
+                    ? t("admin.dunning.meta_soon", { count: queue.notices.changingSoon })
+                    : null,
+                  queue.notices.changingSoon > 0
+                    ? t("admin.dunning.meta_not_told", { count: queue.notices.notTold })
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
         </span>
       }
     >

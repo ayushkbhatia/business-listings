@@ -52,6 +52,8 @@ export interface CancelCardProps {
   endsAt: string | null;
   /** The last paid day — when the picker closes. Null outside the banner. */
   chooseBy: string | null;
+  /** Past due: the drop date, which is when a cancellation would land (T9.1). */
+  dropsOn?: string | null;
   /** One row per kind there is anything to choose between. */
   keepLinks: readonly KeepLink[];
   /** The `Resume Pro` island, rendered only in the scheduled state. */
@@ -65,6 +67,7 @@ export function CancelCard({
   withinFreeCap,
   endsAt,
   chooseBy,
+  dropsOn = null,
   keepLinks,
   resume,
 }: CancelCardProps) {
@@ -128,9 +131,13 @@ export function CancelCard({
            rather than "10 of 4 products stay live". The board's figures are one
            seller's; the sentence has to hold for every seller.
         */}
-        {withinFreeCap
-          ? t("billing.cancel.consequence_within", { enquiries })
-          : t("billing.cancel.consequence", { keeps, used, enquiries })}
+        {dropsOn
+          ? withinFreeCap
+            ? t("billing.cancel.consequence_within_on", { enquiries, when: dropsOn })
+            : t("billing.cancel.consequence_on", { keeps, used, enquiries, when: dropsOn })
+          : withinFreeCap
+            ? t("billing.cancel.consequence_within", { enquiries })
+            : t("billing.cancel.consequence", { keeps, used, enquiries })}
       </p>
       <Link
         href="/dashboard/billing/cancel"

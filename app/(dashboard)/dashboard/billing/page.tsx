@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { buttonClassName } from "@/components/primitives";
-import { Alert, StatusBadge, type StatusTone } from "@/components/display";
+import { StatusBadge, type StatusTone } from "@/components/display";
 import { Card, Panel } from "@/components/structure";
 import { prisma } from "@/lib/db/client";
 import { billingSummary, type BillingSummary } from "@/lib/billing/summary";
@@ -13,6 +13,7 @@ import { mayChangePlan, mayManageBilling } from "@/lib/auth/guards";
 import { t } from "@/lib/i18n";
 import { getNavBadges, requireSellerSeat, SellerPage } from "../_shell";
 import { CancelCard, type KeepLink } from "./CancelCard";
+import { FailedPaymentBanner, RecoveredPaymentBanner } from "./FailedPaymentBanner";
 import { ResumeButton } from "./ResumeButton";
 
 /**
@@ -119,7 +120,8 @@ export default async function BillingPage() {
       }
     >
       <div className="flex flex-col gap-[var(--gutter)]">
-        {summary.failedPayment && <FailedPaymentBanner summary={summary} />}
+        {summary.failedPayment ? <FailedPaymentBanner failed={summary.failedPayment} /> : null}
+        {summary.recoveredPayment ? <RecoveredPaymentBanner recovered={summary.recoveredPayment} /> : null}
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_21.5rem]">
           <div className="flex min-w-0 flex-col gap-4">
@@ -143,6 +145,11 @@ export default async function BillingPage() {
                    its steps, derived from one value rather than stored twice.
                 */
                 chooseBy={summary.endsAt ? formatDate(lastPaidDay(summary.endsAt)) : null}
+                dropsOn={
+                  summary.failedPayment && summary.failedPayment.stage !== "dropped"
+                    ? formatDate(summary.failedPayment.dropsOn)
+                    : null
+                }
                 keepLinks={keepLinks(summary)}
                 resume={<ResumeButton label={t("billing.cancelling.resume", { plan: summary.plan.name })} />}
               />
@@ -151,56 +158,6 @@ export default async function BillingPage() {
         </div>
       </div>
     </SellerPage>
-  );
-}
-
-/**
- * The state neither board had.
- *
- * Criterion 12 is a promise about what does *not* happen — no downgrade and no
- * listing change during the grace period — so the banner has to be able to say
- * when the grace ends. `dropsOn` comes from the same `SCHEDULE` the job runs on
- * rather than from a sentence written beside it. A seller whose card expired has
- * not decided to leave.
- */
-function FailedPaymentBanner({ summary }: { summary: BillingSummary }) {
-  const failed = summary.failedPayment;
-  if (!failed) return null;
-
-  return (
-    <Alert
-      tone="bad"
-      title={t("billing.failed.title", {
-        amount: aed(failed.amountFils),
-        when: formatDate(failed.failedOn),
-      })}
-      /*
-         No action, because there is not one to offer.
-
-         This was `Update payment method`, linking to `#payment-method` — a
-         panel whose own footer says no card capture exists and that the hand-off
-         to the PSP's form is not built. Honest at the destination and a dead
-         end at the button, on the one banner a seller reaches when their
-         payment has actually failed.
-
-         `Alert` takes `fix` for exactly this: what the reader does when the
-         answer is a sentence rather than a control. The control comes back the
-         day the PSP hand-off does.
-      */
-      fix={t("billing.failed.fix")}
-    >
-      <p>{failed.reason ? t("billing.failed.reason", { reason: failed.reason }) : t("billing.failed.no_reason")}</p>
-      {failed.retryAt && (
-        <p className="mt-1">{t("billing.failed.retry", { when: formatDate(failed.retryAt) })}</p>
-      )}
-      {/*
-         Always, not only on a retry step. Criterion 12 promises the plan does
-         not downgrade and the listing does not change during the grace period,
-         and a promise the seller cannot see the end of is not one they can act
-         on. `dropsOn` comes from the same `SCHEDULE` the job runs on.
-      */}
-      <p className="mt-1">{t("billing.failed.grace", { deadline: formatDate(failed.dropsOn) })}</p>
-    </Alert>
   );
 }
 
@@ -215,6 +172,7 @@ function PlanCard({
   isFree: boolean;
 }) {
   const { plan, annual, term } = summary;
+  const pastDue = summary.failedPayment && summary.failedPayment.stage !== "dropped" ? summary.failedPayment : null;
 
   return (
     <Card surface="card" padded>
@@ -224,8 +182,14 @@ function PlanCard({
             <span className="font-mono text-eyebrow uppercase tracking-[0.12em] text-moss">
               {plan.name}
             </span>
+            {/*
+               T9.2. "Active" above a banner saying the payment failed was two
+               statements about one account that could not both be read as true.
+            */}
             {summary.endsAt ? (
               <StatusBadge tone="warn">{t("billing.status.ending_badge")}</StatusBadge>
+            ) : pastDue ? (
+              <StatusBadge tone="bad">{t("billing.status.payment_failed")}</StatusBadge>
             ) : (
               <StatusBadge tone="ok">{t("billing.status.active")}</StatusBadge>
             )}
@@ -247,7 +211,10 @@ function PlanCard({
               ? t("billing.free_forever")
               : summary.endsAt
                 ? t("billing.ending", { when: formatDate(summary.endsAt) })
-                : annual && term === "monthly"
+                : pastDue
+                  ? // The renewal date a failed renewal never moved is behind today; say what happened on it.
+                    t("billing.renewal_failed", { when: formatDate(pastDue.failedOn) })
+                  : annual && term === "monthly"
                   ? t("billing.annual_offer", {
                       when: formatDate(summary.renewsAt),
                       price: formatAED(annual.priceAed),
@@ -402,7 +369,9 @@ function PeriodPanel({ summary }: { summary: BillingSummary }) {
 
         <div className="flex items-baseline justify-between gap-3">
           <dt className="text-caption font-medium text-ink">
-            {t("billing.period.due", { when: formatDate(period.dueAt) })}{" "}
+            {summary.failedPayment && summary.failedPayment.stage !== "dropped"
+              ? t("billing.period.owed", { when: formatDate(summary.failedPayment.failedOn) })
+              : t("billing.period.due", { when: formatDate(period.dueAt) })}{" "}
             <span className="font-normal text-muted">{t("billing.period.incl_vat")}</span>
           </dt>
           <dd className="text-h2 font-medium tracking-[-0.02em] tabular-nums text-ink">
@@ -468,9 +437,11 @@ function InvoicesPanel({ summary }: { summary: BillingSummary }) {
     return (
       <Panel title={t("billing.invoices")} padded>
         <p className="text-caption text-muted">
-          {summary.period
-            ? t("billing.invoices.none_yet", { when: formatDate(summary.period.dueAt) })
-            : t("billing.no_invoices")}
+          {summary.failedPayment && summary.failedPayment.stage !== "dropped"
+            ? t("billing.invoices.none_past_due")
+            : summary.period
+              ? t("billing.invoices.none_yet", { when: formatDate(summary.period.dueAt) })
+              : t("billing.no_invoices")}
         </p>
       </Panel>
     );

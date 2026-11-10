@@ -49,7 +49,22 @@ interface Seat {
   heading: string;
 }
 
-const SEATS: Record<"pro" | "free" | "services" | "facilities" | "opsLead" | "moderator" | "finance", Seat> = {
+const SEATS: Record<"pro" | "free" | "services" | "facilities" | "pastDue" | "opsLead" | "moderator" | "finance", Seat> = {
+  /*
+   * T9.7 — the money path. A seller nine days past due (`seedPastDueSeller`),
+   * on a seat of its own because `money-path.spec.ts` cancels and resumes the
+   * subscription, and any other billing spec reading the same seat would race
+   * it.
+   */
+  pastDue: {
+    email: "bl.e2e.pastdue.seller@gmail.com",
+    slug: "corniche-packaging-supplies-llc",
+    name: "E2E Past Due Seller",
+    roles: ["seller_owner"],
+    state: "tests/e2e/.auth/seller-past-due.json",
+    landing: "**/dashboard/leads",
+    heading: "Leads",
+  },
   pro: {
     email: "bl.e2e.seller@gmail.com",
     slug: "al-marwan-industrial-supplies-llc",
@@ -299,6 +314,10 @@ setup("sign in as a seller who sells work", async ({ page }) => {
 
 setup("sign in as a facilities seller who answers briefs", async ({ page }) => {
   await provision(page, SEATS.facilities);
+});
+
+setup("sign in as a seller whose payment failed", async ({ page }) => {
+  await provision(page, SEATS.pastDue);
 });
 
 setup("sign in as a seller on Free", async ({ page }) => {

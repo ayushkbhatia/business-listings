@@ -2,7 +2,9 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/db/client";
 import { runDunning } from "@/lib/billing/dunning-job";
-import { GRACE_AFTER_FINAL_DAYS, SCHEDULE } from "@/lib/billing/dunning";
+import { dropsToFreeAt, GRACE_AFTER_FINAL_DAYS, SCHEDULE } from "@/lib/billing/dunning";
+import { cancellationView, scheduleCancellation } from "@/lib/billing/cancellation";
+import { applyEndedCancellations, resumeSubscription } from "@/lib/billing/service";
 import { consoleProvider, setPaymentProvider, type PaymentProvider } from "@/lib/billing/provider";
 import {
   createPlan,
@@ -294,6 +296,101 @@ async function census(businessId: string) {
   ]);
   return { ...business, products, liveProducts, reviews, recipients, locations, media };
 }
+
+/**
+ * T9.1 — cancelling while a payment has failed. Spec S4.
+ *
+ * Three defects in one button: the end date came from a renewal date the
+ * failed renewal never advanced, so it was already behind today; confirming
+ * wrote `status: "active"` over `past_due` while the dunning stage stayed set;
+ * and on the drop day two jobs both owned the account.
+ */
+describe("T9.1 — a past-due cancellation ends on the drop date, once", () => {
+  it("dates Free from the drop, keeps the status, and drops the plan exactly once", async () => {
+    const { businessId, subscriptionId } = await payingListing("Cancel past due");
+    const seat = await prisma.user.create({
+      data: { id: randomUUID(), fullName: "Past Due Owner", roles: ["seller_owner"], businessId },
+      select: { id: true },
+    });
+    const owner: Actor = { id: seat.id, roles: ["seller_owner"], businessId };
+
+    const failed = new Date();
+    const day = (n: number) => new Date(failed.getTime() + n * 86_400_000 + 1000);
+    await runDunning(day(0));
+    await runDunning(day(SCHEDULE.emailed));
+    const { pastDueSince } = await prisma.subscription.findUniqueOrThrow({
+      where: { id: subscriptionId },
+      select: { pastDueSince: true },
+    });
+    const dropsOn = dropsToFreeAt(pastDueSince!);
+
+    const view = await cancellationView(owner, businessId, day(SCHEDULE.emailed + 1));
+    expect(view?.kind).toBe("cancellable");
+    if (view?.kind !== "cancellable") return;
+    // Not the renewal date, which is a day before the failure and behind today.
+    expect(view.freeStartsOn).toEqual(dropsOn);
+    expect(view.pastDue).toMatchObject({ dropsOn, finalNoticeSent: false });
+
+    const result = await scheduleCancellation(owner, businessId, { reason: "too_expensive" }, day(SCHEDULE.emailed + 1));
+    expect(result).toMatchObject({ ok: true, freeStartsOn: dropsOn });
+
+    const scheduled = await prisma.subscription.findUniqueOrThrow({
+      where: { id: subscriptionId },
+      select: { status: true, endsAt: true, dunningStage: true },
+    });
+    // Still past due: one button no longer clears it while the stage stays set.
+    expect(scheduled).toEqual({ status: "past_due", endsAt: dropsOn, dunningStage: "emailed" });
+
+    // The sequence stops: no reminder, no final notice, no drop by this job.
+    await runDunning(day(SCHEDULE.messaged));
+    await runDunning(day(SCHEDULE.final));
+    await runDunning(day(SCHEDULE.final + GRACE_AFTER_FINAL_DAYS));
+    expect(
+      await prisma.subscription.findUniqueOrThrow({ where: { id: subscriptionId }, select: { dunningStage: true, planId: true } }),
+    ).toEqual({ dunningStage: "emailed", planId });
+    expect(
+      await prisma.notificationDelivery.count({ where: { businessId, event: "payment_final_notice" } }),
+    ).toBe(0);
+
+    // The cancellation lands on the same day the drop would have, and ends the episode.
+    await applyEndedCancellations(new Date(dropsOn.getTime() + 1000));
+    const ended = await prisma.subscription.findUniqueOrThrow({
+      where: { id: subscriptionId },
+      select: { status: true, planId: true, dunningStage: true, pastDueSince: true },
+    });
+    expect(ended).toEqual({ status: "cancelled", planId: "free", dunningStage: "none", pastDueSince: null });
+
+    // And nothing afterwards drops it again.
+    await runDunning(new Date(dropsOn.getTime() + 2 * 86_400_000));
+    const churn = await prisma.mrrMovement.findMany({ where: { businessId, kind: "churn" }, select: { cause: true } });
+    expect(churn).toEqual([{ cause: "cancellation" }]);
+  });
+});
+
+describe("T9.1 — resuming a past-due cancellation puts it back in the sequence", () => {
+  it("keeps past_due, and the job picks it up where it stopped", async () => {
+    const { businessId, subscriptionId } = await payingListing("Resume past due");
+    const seat = await prisma.user.create({
+      data: { id: randomUUID(), fullName: "Resume Owner", roles: ["seller_owner"], businessId },
+      select: { id: true },
+    });
+    const owner: Actor = { id: seat.id, roles: ["seller_owner"], businessId };
+    const failed = new Date();
+    const day = (n: number) => new Date(failed.getTime() + n * 86_400_000 + 1000);
+    await runDunning(day(0));
+
+    expect(await scheduleCancellation(owner, businessId, { reason: "too_expensive" }, day(1))).toMatchObject({ ok: true });
+    expect(await resumeSubscription(owner, businessId)).toMatchObject({ ok: true });
+    expect(
+      await prisma.subscription.findUniqueOrThrow({ where: { id: subscriptionId }, select: { status: true, cancelledAt: true } }),
+    ).toEqual({ status: "past_due", cancelledAt: null });
+
+    await runDunning(day(SCHEDULE.emailed));
+    expect(
+      (await prisma.subscription.findUniqueOrThrow({ where: { id: subscriptionId }, select: { dunningStage: true } })).dunningStage,
+    ).toBe("emailed");
+  });
+});
 
 describe("dunning never takes anything away but the plan", () => {
   it("runs D0 to D14 and leaves the account whole", async () => {

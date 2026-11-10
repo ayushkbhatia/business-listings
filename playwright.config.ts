@@ -57,6 +57,11 @@ const SERVICES_SELLER_STATE = "tests/e2e/.auth/seller-services.json";
  */
 const FACILITIES_SELLER_STATE = "tests/e2e/.auth/seller-facilities.json";
 /*
+ * T9.7 — the money path, on a seller nine days past due. Its spec cancels and
+ * resumes the subscription, so it owns its seat.
+ */
+const PAST_DUE_SELLER_STATE = "tests/e2e/.auth/seller-past-due.json";
+/*
  * Two staff sessions. The moderator one exists to prove a negative — criterion
  * 9's claim that the console does not offer them the tier, credit or suspend
  * controls — and a negative asserted from an ops lead's session proves nothing.
@@ -85,12 +90,12 @@ export default defineConfig({
       // The dashboard needs a signed-in seller; the seller projects own it.
       // `pricing-seller` is a public page read with a session, which is the
       // same requirement for a different reason — board 1l criterion 10.
-      testIgnore: /(dashboard|overview|catalogue|listing|account|onboarding|admin|pricing-seller|services|lead-proposal)[\w-]*\.spec\.ts/,
+      testIgnore: /(dashboard|overview|catalogue|listing|account|onboarding|admin|pricing-seller|services|lead-proposal|money-path)[\w-]*\.spec\.ts/,
     },
     {
       name: "mobile",
       use: { ...devices["Pixel 7"] },
-      testIgnore: /(dashboard|overview|catalogue|listing|account|onboarding|admin|pricing-seller|services|lead-proposal)[\w-]*\.spec\.ts/,
+      testIgnore: /(dashboard|overview|catalogue|listing|account|onboarding|admin|pricing-seller|services|lead-proposal|money-path)[\w-]*\.spec\.ts/,
     },
     ...(canSignIn
       ? [
@@ -120,6 +125,12 @@ export default defineConfig({
             testMatch: /lead-proposal[\w-]*\.spec\.ts/,
             dependencies: ["setup"],
             use: { ...devices["Desktop Chrome"], storageState: FACILITIES_SELLER_STATE },
+          },
+          {
+            name: "seller-past-due",
+            testMatch: /money-path\.spec\.ts/,
+            dependencies: ["setup"],
+            use: { ...devices["Desktop Chrome"], storageState: PAST_DUE_SELLER_STATE },
           },
           {
             name: "staff",

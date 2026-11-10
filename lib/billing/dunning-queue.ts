@@ -1,6 +1,8 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
 import { paymentProvider } from "./provider";
+import { noticeDeliveries } from "./dunning-notices";
+import { dunningRail, type Rail } from "./dunning-rail";
 import { priceRenewal, RENEWAL_SELECT } from "./renewal-job";
 import {
   daysPastDue,
@@ -71,7 +73,25 @@ export interface DunningRow {
    * unverify a trade licence.
    */
   dropsToFreeAt: Date | null;
+  /** The five steps and what each did — T9.4, the same rail board 3m shows the seller. */
+  rail: Rail;
+  /** Set where the seller cancelled while past due: the sequence has stopped. T9.1. */
+  cancelledAt: Date | null;
+  /**
+   * Changes plan inside 72 hours and no notice has reached anybody. P-07: a
+   * `bad` left rule and the top of the list — the one row staff must act on
+   * before the date, by picking up a phone.
+   */
+  urgent: boolean;
 }
+
+/** P-07's header: who changes plan soon, and how many of them were never told. */
+export interface NoticeSummary {
+  changingSoon: number;
+  notTold: number;
+}
+
+const URGENT_MS = 72 * 3_600_000;
 
 export interface DunningQueue {
   rows: DunningRow[];
@@ -79,12 +99,14 @@ export interface DunningQueue {
   summary: QueueSummary;
   /** False when no gateway is configured, so the screen can say so. */
   gatewayLive: boolean;
+  notices: NoticeSummary;
 }
 
 const QUEUE_SELECT = {
   ...RENEWAL_SELECT,
   dunningStage: true,
   pastDueSince: true,
+  cancelledAt: true,
   business: { select: { displayName: true, slug: true } },
   /*
      One `orderBy` key, not two.
@@ -112,6 +134,12 @@ export async function dunningQueue(now = new Date()): Promise<DunningQueue> {
     select: QUEUE_SELECT,
   });
 
+  const deliveries = await noticeDeliveries(
+    subscriptions
+      .filter((subscription) => subscription.pastDueSince !== null)
+      .map((subscription) => ({ businessId: subscription.businessId, since: subscription.pastDueSince! })),
+  );
+
   const rows = await Promise.all(
     subscriptions.map(async (subscription): Promise<DunningRow> => {
       const stage = subscription.dunningStage as DunningStage;
@@ -128,6 +156,14 @@ export async function dunningQueue(now = new Date()): Promise<DunningQueue> {
       const since = subscription.pastDueSince ?? now;
       const attempts = episodeAttempts(subscription.attempts, subscription.pastDueSince);
       const failed = attempts.find((attempt) => !attempt.succeeded);
+      const rail = dunningRail({
+        pastDueSince: since,
+        stage,
+        attempted: attempts.length > 0,
+        cancelledAt: subscription.cancelledAt,
+        deliveries: deliveries.get(subscription.businessId) ?? [],
+      });
+      const drops = stage === "dropped" ? null : dropsToFreeAt(since);
       return {
         subscriptionId: subscription.id,
         businessId: subscription.businessId,
@@ -137,18 +173,36 @@ export async function dunningQueue(now = new Date()): Promise<DunningQueue> {
         planName: subscription.plan.name,
         stage,
         daysPastDue: daysPastDue(since, now),
-        next: nextAction(stage, since, now),
+        // A cancelled account is out of the sequence (T9.1); nothing is next.
+        next: subscription.cancelledAt ? { kind: "wait" } : nextAction(stage, since, now),
         attempts: attempts.length,
         lastAttemptFailed: failed?.providerMessage ?? null,
         amountFils:
           failed?.amountFils ??
           (stage === "dropped" ? null : (await priceRenewal(subscription, now)).chargeFils),
-        dropsToFreeAt: stage === "dropped" ? null : dropsToFreeAt(since),
+        dropsToFreeAt: drops,
+        rail,
+        cancelledAt: subscription.cancelledAt,
+        urgent: drops !== null && drops.getTime() - now.getTime() <= URGENT_MS && !rail.anyDelivered,
       };
     }),
   );
 
-  return { gatewayLive: paymentProvider().live, rows, summary: summariseQueue(rows, now) };
+  /*
+     Urgent first, then the order the read gave — oldest failure first. Stable,
+     so two urgent rows keep their relative order between loads.
+  */
+  const ordered = [...rows.filter((row) => row.urgent), ...rows.filter((row) => !row.urgent)];
+  const soon = ordered.filter(
+    (row) => row.dropsToFreeAt !== null && row.dropsToFreeAt.getTime() - now.getTime() <= URGENT_MS,
+  );
+
+  return {
+    gatewayLive: paymentProvider().live,
+    rows: ordered,
+    summary: summariseQueue(ordered, now),
+    notices: { changingSoon: soon.length, notTold: soon.filter((row) => !row.rail.anyDelivered).length },
+  };
 }
 
 /** The card's figures. The same object the page's header reads. */

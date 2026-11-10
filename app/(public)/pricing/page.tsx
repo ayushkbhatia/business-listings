@@ -18,7 +18,8 @@ import {
   purchasable,
   recommendedPlanId,
 } from "@/lib/billing/pricing";
-import { getPricingPlans, getRankingWeights, readViewerPlanId } from "@/lib/db/queries";
+import { getPricingPlans, getRankingWeights, readViewerPlanId, readViewerSnapshot } from "@/lib/db/queries";
+import { effectiveCaps } from "@/lib/plan/entitlements";
 import { formatCount } from "@/lib/format";
 import { MAX_ROWS } from "@/lib/import/csv";
 import { t } from "@/lib/i18n";
@@ -142,6 +143,22 @@ export default async function PricingPage() {
   const currentPlanId = sellerBusinessId ? await readViewerPlanId(sellerBusinessId) : null;
   const currentPlan = plans.find((plan) => plan.id === currentPlanId) ?? null;
 
+  /*
+     T9.5 — P-12's grandfathered state, in one sentence.
+
+     A subscription keeps the limits it started on (`entitlementSnapshot`) and
+     renews at the live price. Where the seller's own limits differ from the
+     card, the card is right for a new subscription and wrong for them, so the
+     page says which. Compared as the sentences the card prints, which is what
+     a seller would compare.
+  */
+  const viewer = sellerBusinessId && currentPlan ? await readViewerSnapshot(sellerBusinessId) : null;
+  const keptLimits =
+    viewer && currentPlan
+      ? featuresOf(effectiveCaps(currentPlan, viewer.snapshot)).map((f) => f.label).join("|") !==
+        featuresOf(currentPlan).map((f) => f.label).join("|")
+      : false;
+
   const recommendedId = recommendedPlanId(plans);
   const comparisonRows = comparisonRowsOf(plans, weights);
 
@@ -167,6 +184,9 @@ export default async function PricingPage() {
       features: featuresOf(plan),
       recommended,
       current: plan.id === currentPlanId,
+      ...(keptLimits && plan.id === currentPlanId
+        ? { keptNote: t("pricing.kept_limits", { plan: plan.name }) }
+        : {}),
       cta: {
         kind: cta.kind,
         variant: cta.variant,

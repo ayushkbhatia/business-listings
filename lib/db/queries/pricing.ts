@@ -94,6 +94,23 @@ export async function readRankingWeights() {
  * licence records have never chosen anything, and a business that has not
  * chosen is on the free plan by definition rather than on no plan.
  */
+/**
+ * The caps this reader's subscription froze when it started — T9.5, P-12.
+ *
+ * `entitlementSnapshot` holds a seller to the limits they signed up on; the
+ * price is not frozen, a renewal charges the live one. `/pricing` says so in one
+ * sentence where the two differ, because a Basic seller reading 150 products on
+ * a card while their own account allows 200 would otherwise believe the page or
+ * their dashboard, and either way one of them is wrong.
+ */
+export async function readViewerSnapshot(businessId: string): Promise<{ snapshot: unknown; capturedAt: Date | null } | null> {
+  const subscription = await prisma.subscription.findUnique({
+    where: { businessId },
+    select: { entitlementSnapshot: true, startedAt: true },
+  });
+  return subscription ? { snapshot: subscription.entitlementSnapshot, capturedAt: subscription.startedAt } : null;
+}
+
 export async function readViewerPlanId(businessId: string): Promise<string | null> {
   const business = await prisma.business.findUnique({
     where: { id: businessId },
