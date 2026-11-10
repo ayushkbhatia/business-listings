@@ -6714,6 +6714,7 @@ export const en = {
   "specimens.title": "Notification templates",
   "specimens.lede": "Every body that can still go out — live, with Meta, or drafted — rendered with the same sample values the console's preview uses. Kind is labelled, so a goods body and its services twin are read as two. Each one states what happened, what it is worth, and one action. None carries a buyer's phone number, email address or company name — asserted in tests/integration/notifications.test.ts, not left to a reading.",
   "specimens.no_action": "No action",
+  "specimens.dormant": "Nothing sends this event yet, so it has no values to fill. The body is shown as written.",
 
   // ── Seller: notification settings [7e] ──
   "alerts.title": "Settings",

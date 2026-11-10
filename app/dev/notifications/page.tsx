@@ -3,7 +3,7 @@ import { Card } from "@/components/structure";
 import { StatusBadge, type StatusTone } from "@/components/display/StatusBadge";
 import type { NotificationEvent } from "@/lib/db/generated/enums";
 import { render } from "@/lib/notify/render";
-import { sampleParams } from "@/lib/notify/params";
+import { isEmitted, sampleParams } from "@/lib/notify/params";
 import { siteUrl } from "@/lib/site";
 import { t, type MessageKey } from "@/lib/i18n";
 
@@ -74,7 +74,27 @@ export default async function NotificationSpecimens() {
             <h2 className="font-mono text-eyebrow uppercase text-muted">{event}</h2>
             <div className="mt-2 space-y-3">
               {group.map((template) => {
-                const params = sampleParams(template.event as NotificationEvent, origin);
+                /*
+                   An event nothing emits declares no placeholders, so there is
+                   nothing to fill its body with. The old page invented values
+                   for it; this one shows the body as written and says why —
+                   a specimen of a message nobody is sent.
+                */
+                const event = template.event as NotificationEvent;
+                if (!isEmitted(event)) {
+                  return (
+                    <Card key={template.id} padded as="article">
+                      <p className="font-mono text-caption text-muted">
+                        {template.channel} · v{template.version} · {t(`notifications.kind.${template.kind}` as MessageKey)}
+                      </p>
+                      <p className="mt-2 text-caption text-muted">{t("specimens.dormant")}</p>
+                      <p className="mt-1 max-w-[var(--measure-prose)] whitespace-pre-line font-mono text-caption text-body">
+                        {template.body}
+                      </p>
+                    </Card>
+                  );
+                }
+                const params = sampleParams(event, origin);
 
                 let rendered: ReturnType<typeof render> | null = null;
                 let failure: string | null = null;
